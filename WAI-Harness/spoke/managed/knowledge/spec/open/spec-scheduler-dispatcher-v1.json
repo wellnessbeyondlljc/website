@@ -1,0 +1,110 @@
+{
+  "id": "spec-scheduler-dispatcher-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T03:00:00Z",
+  "updated_at": "2026-06-09T03:00:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Scheduler/Dispatcher — the event→advisor orchestration layer that makes the wheel self-roll: event taxonomy + routing, latency/idempotency/backoff, cost circuit-breaker, failure recovery, hub-down behavior",
+  "title": "Scheduler / Dispatcher (the self-rolling coupling)",
+  "situation": "A blind review (S46, two independent reviewers) named this the SINGLE biggest build risk: v4's autonomy claim rests on event-driven dispatch ('event → wake the right advisor'), but the dispatcher was declared 'NEW' and never architected. Worse, it sat at build step 9 while every advisor (steps 3-10) structurally needs it to run — a hidden dependency cycle. Without it the harness has observability (events) and verification (gates) but no orchestration: you can watch the wheel fail and verify the failure but cannot make it roll on its own. The current solution confirmed the gap (audit S46: 'no centralized scheduler; manual Expediter/Autopilot invocation; relies on outer cron').",
+  "why": "The dispatcher IS the coupling that turns loosely-connected loops into a self-rolling wheel. It also owns the two safety properties the review flagged as missing: a COST CIRCUIT-BREAKER (a broken scout firing every 5s must not drain the budget) and IDEMPOTENCY/BACKOFF (one mutation must not thrash a full re-analysis). It must be built EARLY (phase 1) and have its own verification gate — the orchestrator that can't be observed or bounded is the most dangerous component.",
+  "audience": [
+    "Ozi — the dispatcher wakes advisors on Ozi's behalf; Ozi remains CoS",
+    "every advisor — declares the events it subscribes to + its analysis_trigger; the dispatcher routes to it",
+    "Autopilot — invoked by the dispatcher under budget governance",
+    "Observability spine — the dispatcher emits typed events for every dispatch decision (no silent orchestration)",
+    "User — the circuit-breaker + budget surface on the Attention panel"
+  ],
+  "event_taxonomy_and_routing": {
+    "principle": "A declarative event→advisor routing table (data, not hardcoded). Each advisor registers {subscribes_to:[event types], analysis_trigger, debounce_window, max_concurrency}. The dispatcher matches events to subscribers and wakes them within an SLA.",
+    "event_sources": ["lug_mutation (created/updated/state-change)", "scout_finding (bug filed)", "schedule_tick (cadence: nightly/weekly)", "gate_escalation", "workflow_halt", "hub_signal (incoming lug/teaching)", "manual (user trigger)"],
+    "routing_table_entry": {"event_type": "string", "advisor": "string", "condition": "optional filter expr", "priority": "int", "debounce_window_s": "int"},
+    "dispatch_latency_sla": "p95 < 60s from event to advisor wake for priority>=high; lower priorities batched on cadence"
+  },
+  "idempotency_and_thrash_control": {
+    "debounce": "N identical events within debounce_window collapse to one wake (e.g. 20 lug_mutations in 30s → one Expediter run, not 20)",
+    "idempotency_key": "event correlation + advisor; a wake already in-flight for the same key is not re-issued",
+    "data_sufficiency_respect": "the dispatcher honors each advisor's analysis_trigger floor — it does not wake an advisor below its minimum-signal threshold (no over-cycling)",
+    "max_concurrency": "per-advisor + global cap on simultaneous wakes; excess queued"
+  },
+  "cost_circuit_breaker": {
+    "principle": "Autonomy is budget-bounded with HARD breakers — the wheel must never roll into cost damage. (Review HIGH: 'a broken scout firing every 5s drains the budget in hours.')",
+    "rules": [
+      "rate cap: max wakes/hour per advisor + global; breach → pause that advisor + Attention alert",
+      "burn cap: if projected spend (provider_usage) exceeds the session/day budget threshold, the dispatcher PAUSES autonomous dispatch and raises an Attention item (alert at 80%, pause at 100%)",
+      "loop guard: an advisor that wakes->fails->re-emits the triggering event >K times in a window is circuit-broken (paused, escalated) — prevents self-perpetuating loops",
+      "all breaker trips emit typed events + land on the Attention surface with the reason + the projected/actual burn"
+    ]
+  },
+  "failure_recovery": {
+    "advisor_liveness": "heartbeat per running advisor; silence > 5m → presumed dead → dispatcher requeues its in-flight work + raises Attention",
+    "dispatcher_self_gate": "the dispatcher emits a dispatch-audit event per decision (event→matched advisors→wake/skip+reason); a Pattern Gate certifies the dispatcher's own health (it is not exempt from verification)",
+    "replay": "dispatch decisions are durable (event bus); after a crash the dispatcher replays unacked wakes from the journal (ties to event-bus durability, observability spec)",
+    "stuck_workflow": "a workflow with no step progress in its SLA is flagged halted → Attention",
+    "gate_retry_orchestration": "external review (read-only-gate contradiction): the Pattern Gate is Read+Bash and only EMITS halted/escalate events — it does NOT perform retry writes. The dispatcher CONSUMES those events and orchestrates the retry/remediation through a distinct WRITE-AUTHORIZED actor (re-dispatch the step to an executor), honoring the 2-cycle cap. Verify/observe and act/mutate are cleanly separated actors."
+  },
+  "hub_down_behavior": {
+    "principle": "The spoke wheel keeps rolling locally when the hub is unreachable (review MED: 'hub failure must not halt the fleet').",
+    "rules": [
+      "spoke-local dispatch + Autopilot + gates continue from the local copy + local SQLite",
+      "work needing the hub (fleet evolution canonicalization, cross-spoke delivery) queues with a hub_pending flag",
+      "the spoke self-certifies locally with a 'hub-unreachable' marker on its certification; reconciles on hub recovery",
+      "hub-down state is itself an observable surface (not silent)"
+    ]
+  },
+  "guidance_boundary": {
+    "autonomous_column": "dispatcher freely drains Expediter's 'autonomous' ready-queue under the breakers",
+    "attention_column": "needs-you / sign-off / escalation items are async-batched to the Attention surface, NEVER block the autonomous column",
+    "response_sla": "an Attention item unanswered for its SLA escalates (e.g. to Octo/Wilbur) rather than stalling silently (review MED)"
+  },
+  "constraints": [
+    "Routing is declarative data (table), not hardcoded — advisors register subscriptions",
+    "Built EARLY (phase 1), not late — it is a prerequisite for advisor autonomy, not a capstone",
+    "The dispatcher is NOT exempt from observability or verification — it emits dispatch-audit events and is gate-certified",
+    "Cost circuit-breakers are HARD (pause at 100% budget) — autonomy never overrides a breaker",
+    "Idempotency + debounce mandatory — one mutation never thrashes N analyses",
+    "Hub-down never halts local rolling; hub-dependent work queues, spoke self-certifies with a marker",
+    "Every breaker trip / liveness failure / SLA breach surfaces on Attention with a reason"
+  ],
+  "tests": [
+    "Routing: emit a lug_mutation → only subscribed advisors (Expediter) wake; an unsubscribed advisor does not",
+    "Debounce: emit 20 lug_mutations in the debounce window → exactly ONE Expediter wake",
+    "Idempotency: re-emit an event whose wake is in-flight → no second wake",
+    "Rate breaker: an advisor exceeding its wakes/hour cap → paused + Attention alert with the rate",
+    "Burn breaker: drive projected spend to 80% → alert; to 100% → autonomous dispatch PAUSES + Attention",
+    "Loop guard: an advisor that fails and re-emits its trigger K times → circuit-broken + escalated",
+    "Liveness: kill a running advisor → heartbeat silence >5m → its work requeued + Attention raised",
+    "Dispatcher self-gate: every dispatch produces a dispatch-audit event; a Pattern Gate certifies dispatcher health",
+    "Hub-down: make the hub unreachable → local dispatch/Autopilot/gates continue; hub-dependent work flagged hub_pending; spoke self-certifies with hub-unreachable marker",
+    "Attention SLA: an unanswered escalation past SLA escalates to Octo, does not stall silently"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none — spec only",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low — initial spec authored from blind-review finding",
+    "open_questions": [
+      "Dispatcher process model: long-running daemon vs cron-tick + event-journal drain vs git-hook triggers (proposed: event-journal drain on a short cadence tick — survives crashes, no daemon to babysit)",
+      "Budget thresholds: per-spoke fixed vs Navigator/Assessor-informed dynamic (proposed: Navigator-informed, with a hard per-spoke ceiling)",
+      "Heartbeat mechanism for subagent-style advisors that are not long-lived processes"
+    ]
+  },
+  "related_specs": [
+    "spec-observability-oversight-v1",
+    "spec-storage-layer-v1",
+    "spec-verification-quality-v1",
+    "spec-trainer-advisor-v1"
+  ],
+  "perceive": "Read this spec + spec-observability-oversight-v1 (event bus it routes) + the S46 autonomy audit (current loose coupling) + ozi_autopilot.py + spoke_expediter.py (current manual invocation it replaces). Read epic AC15 (advisor analysis_trigger it honors).",
+  "execute": "1. Define the declarative routing table + advisor subscription schema. 2. Implement event-journal drain (crash-safe) matching events→subscribers with debounce + idempotency + analysis_trigger respect. 3. Implement the cost circuit-breaker (rate cap, burn cap with 80%/100% thresholds, loop guard). 4. Implement advisor liveness (heartbeat + requeue). 5. Emit dispatch-audit events; add the dispatcher's own Pattern Gate. 6. Implement hub-down local-continue + self-certify marker. 7. Wire the Attention SLA escalation.",
+  "verify": "Run all tests[]. Confirm routing, debounce, idempotency, all three breakers (rate/burn/loop), liveness requeue, dispatcher self-gate, hub-down continuity, and Attention SLA escalation.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

@@ -1,0 +1,294 @@
+{
+  "wheel": {
+    "name": null,
+    "version": "0.1.0",
+    "framework_version": "3.0.0",
+    "initialized_at_version": null,
+    "framework_parity": 0,
+    "description": "Wheelwright-enabled project with canonical state management",
+    "hub_path": null,
+    "status": "active",
+    "tagline": "We aren't reinventing the wheel - we're evolving it faster than one person ever could.",
+    "type": null,
+    "created": null,
+    "last_updated": null,
+    "qualifiers": {
+      "project_types": [],
+      "languages": [],
+      "frameworks": [],
+      "domains": [],
+      "themes": []
+    }
+  },
+  "_wai_bootstrap": {
+    "_purpose": "Instructions for AI assistants to find or create Wheelwright components",
+    "find_framework": {
+      "check_order": [
+        "1. Read framework_path from wheelwright above",
+        "2. Look for ~/projects/wheelwright/framework",
+        "3. Look for ~/.wheelwright/framework",
+        "4. Ask user: 'Where is your Wheelwright framework installed?'"
+      ],
+      "if_not_found": "Ask user: 'Where is your Wheelwright framework installed? (git clone https://github.com/wheelwright-ai/framework)'"
+    },
+    "find_hub": {
+      "check_order": [
+        "1. Read hub_path from wheelwright above",
+        "2. Look for ~/wheelwright-hub",
+        "3. Look for ~/.wheelwright-hub",
+        "4. Check framework's connected_wheels for this project"
+      ],
+      "if_not_found": "Ask user where the hub is, or run (deprecated - auto-teaching on closeout) to initialize one"
+    },
+    "create_hub": {
+      "requires": "framework_path must be set",
+      "note": "Hub creation is manual — copy templates/HUB/ to your desired hub path and configure hub-profile.json",
+      "what_it_creates": [
+        "~/wheelwright-hub/ (or user-chosen path)",
+        "hub-profile.json (user preferences)",
+        ".WAI/ (hub's own state)",
+        ".WAI-registry/ (wheel tracking)",
+        "learnings/ (aggregated patterns)"
+      ]
+    },
+    "update_paths": {
+      "after_discovery": "Update framework_path and hub_path in wheelwright"
+    }
+  },
+  "_project_foundation": {
+    "completed": false,
+    "completed_at": null,
+    "completed_with": null,
+    "identity": {
+      "type": null,
+      "name": null,
+      "one_liner": null,
+      "success_looks_like": null
+    },
+    "boundaries": {
+      "in_scope": [],
+      "out_of_scope": [],
+      "constraints": []
+    },
+    "approach": {
+      "stack_or_tools": [],
+      "workflow": null,
+      "ai_collaboration_style": null,
+      "review_process": null
+    },
+    "philosophy": {
+      "core_principle": "AI as responsible partner, not just enabler",
+      "behaviors": [
+        "Detect scope drift and flag before enabling",
+        "Require explicit acknowledgment for direction changes",
+        "Complete foundation before starting work",
+        "Prefer 'are you sure?' over silent compliance"
+      ]
+    },
+    "evolution_log": []
+  },
+  "_session_state": {
+    "last_session_id": null,
+    "last_modified_by": null,
+    "last_modified_at": null,
+    "last_closeout": null,
+    "session_count": 0,
+    "current_session": null,
+    "track_path": null,
+    "protocol_completed": false,
+    "next_session_recommendation": null
+  },
+  "_work_queue": {
+    "enabled": true,
+    "vibe": null,
+    "last_scored_at": null,
+    "items": []
+  },
+  "_migration_state": {
+    "_purpose": "Tracks capability adoption and migration receipts for dual-read/single-write compatibility",
+    "framework_migrations_applied": [],
+    "capability_adoptions": [],
+    "migration_receipts": [],
+    "rollback_checkpoints": [],
+    "dual_read_capabilities": {
+      "state_format": "v3_canonical_with_v1_v2_compat",
+      "signal_storage": "canonical_lugs_with_signals_compat",
+      "track_storage": "canonical_sessions_with_flat_compat"
+    },
+    "adoption_markers": {
+      "canonical_runtime_baseline": {
+        "adopted": false,
+        "adopted_at": null,
+        "adopted_by": null,
+        "receipt_id": null,
+        "rollback_checkpoint": null
+      },
+      "canonical_state_migration": {
+        "adopted": false,
+        "adopted_at": null,
+        "adopted_by": null,
+        "receipt_id": null,
+        "rollback_checkpoint": null
+      }
+    },
+    "compatibility_notes": "This section enables dual-read during migration while maintaining single canonical write target",
+    "last_migration_check": null
+  },
+  "_closeout_state": {
+    "_purpose": "Tracks closeout operations for idempotency and replay safety",
+    "current_session_id": null,
+    "session_id_format": "session-YYYYMMDD-HHMMSS",
+    "closeout_receipts": [],
+    "completed_operations": [],
+    "duplicate_detection_keys": {
+      "session_summaries": [],
+      "signal_teachings": [],
+      "migration_receipts": [],
+      "version_increments": []
+    },
+    "concurrency_state": {
+      "active_locks": [],
+      "lock_timeout_seconds": 30,
+      "retry_backoff_seconds": 2
+    },
+    "last_closeout_check": null
+  },
+  "analytics": {
+    "sessions": {
+      "total_count": 0,
+      "total_turns": 0,
+      "total_duration_seconds": 0,
+      "avg_duration_seconds": 0
+    },
+    "token_efficiency": {
+      "total_tokens_used": 0,
+      "tokens_saved_estimate": 0,
+      "baseline_tokens_estimate": 0,
+      "context_limit": 200000,
+      "avg_tokens_per_session": 0
+    },
+    "quality_metrics": {
+      "decisions_count": 0,
+      "high_impact_count": 0
+    },
+    "time_tracking": {
+      "total_time_together_seconds": 0,
+      "total_time_ai_alone_seconds": 0
+    },
+    "baseline_mode": {
+      "enabled": false,
+      "total_tokens_used": 0,
+      "total_sessions": 0,
+      "description": "Track metrics without Wheelwright optimizations for comparison"
+    },
+    "ai_wins": [],
+    "last_updated": null
+  },
+  "feature_toggles": {
+    "_description": "Toggle marketing features for baseline comparison and testing",
+    "session_continuity": true,
+    "token_efficiency": true,
+    "analytics": true,
+    "closeout_processing": true,
+    "hub_learning": true,
+    "quality_gates": true
+  },
+
+  "hub": {
+    "summary": null,
+    "objectives": [],
+    "decisions": [],
+    "constraints": []
+  },
+  "spokes": {
+    "active": [],
+    "available": [
+      "meta-consultation",
+      "document-analysis",
+      "code-review"
+    ]
+  },
+  "context": {
+    "current_phase": null,
+    "next_actions": [
+      "Complete project foundation with AI assistant",
+      "Define project identity, boundaries, and approach",
+      "Begin development with clear context"
+    ],
+    "blockers": [],
+    "insights": []
+  },
+  "stack": [],
+  "features": [],
+  "decisions": [],
+  "bugs": [],
+  "ai_rules": {
+    "context_loading": "Read WAI-Spoke/WAI-Guide.md first, then WAI-State.json and WAI-State.md",
+    "session_state": "Update _session_state when making significant changes",
+    "foundation_enforcement": {
+      "on_incomplete": "CRITICAL: Guide user through foundation questions before any work. Do not skip.",
+      "on_drift_detected": "Present options, require explicit choice before proceeding",
+      "on_evolution": "Log change with rationale and acknowledgment in evolution_log"
+    },
+    "stewardship": {
+      "principle": "AI is the responsible partner, not just an enabler",
+      "behaviors": [
+        "Detect scope drift and flag before enabling",
+        "Require explicit acknowledgment for direction changes",
+        "Complete foundation before starting work",
+        "Prefer 'are you sure?' over silent compliance"
+      ]
+    },
+    "signals": {
+      "threshold": 8,
+      "instruction": "Signals are high-impact lugs (impact >= 8) stored in WAI-Lugs.jsonl and routed via hub bulletin"
+    }
+  },
+  "ai_context": {
+    "conversation_tracking": true,
+    "capacity_monitoring": true,
+    "alert_threshold": "80%",
+    "wai_commands": {
+      "time": "Intelligent token usage estimate with capacity warnings",
+      "rules": "List active rules and behavioral guidelines",
+      "closeout": "Provide updated WAI-State files for session end"
+    }
+  },
+  "environments": {
+    "_note": "Registry of environments that have worked on this project. Auto-populated by closeout."
+  },
+  "meta": {
+    "total_sessions": 0,
+    "total_turns": 0,
+    "last_closeout": null
+  },
+  "_compatibility": {
+    "_note": "Legacy fields retained for migration compatibility only. Canonical model is above.",
+    "wheelwright": {
+      "version": "1.0.0",
+      "structure_version": "v1",
+      "description": "Legacy wheelwright section - replaced by canonical wheel section",
+      "framework_path": null,
+      "hub_path": null
+    },
+    "workspace": {
+      "ide_cmd": null,
+      "run_cmd": null,
+      "cli_cmd": null,
+      "hub_cmd": null,
+      "paths": {
+        "primary": null,
+        "windows": {
+          "root": null,
+          "spoke": null,
+          "hub": null
+        },
+        "wsl": {
+          "root": null,
+          "spoke": null,
+          "hub": null
+        }
+      }
+    }
+  }
+}

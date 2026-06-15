@@ -1,0 +1,269 @@
+{
+  "id": "spec-storage-layer-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-08T22:06:32Z",
+  "updated_at": "2026-06-08T22:06:32Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "subject": "Storage Layer — SQLite+vec (spoke-local) + Hub Postgres (fleet) + GitNexus integration bridge",
+  "title": "Storage Layer — Spoke SQLite+vec, Hub Postgres, GitNexus Bridge",
+  "situation": "Harness v4 produces structured harness data (bolts, patterns, checks, gate events, CG/PG/TG entries, test results, session metadata) with no queryable home. Currently this data lands in flat JSONL files (gate-log.jsonl, track.jsonl) that require full-file scans, can't do semantic search, and have no cross-fleet aggregation. GitNexus provides a code knowledge graph but harness events that reference file paths cannot link to it. The storage layer closes both gaps: gives harness data a proper queryable home and bridges harness events to code intelligence.",
+  "why": "Without a storage layer: (1) pattern mining requires sequential file scans — O(n) per session, unusable at fleet scale; (2) CG semantic lookup is impossible without vector search; (3) cross-fleet halt detection requires hub-level aggregation that flat JSONL can't support; (4) GitNexus impact analysis cannot be triggered automatically when a pattern check references a failing file. With this spec: all four are solved with a clone-and-run spoke database, a hub aggregation tier, and a structured bridge to GitNexus.",
+  "audience": [
+    "Historian — queries gate_log + patterns to detect recurring halts and approval rate trends",
+    "Expediter — queries pg_entries to produce ready-queue and timeline",
+    "Ozi — reads bolt status to surface certification health at session open",
+    "Pattern Gate Subagent — writes patterns + checks + bolt-verifications after each gate pass",
+    "Hub Gardener — aggregates spoke SQLite into Hub Postgres nightly for fleet-wide view",
+    "Navigator — queries CG + ToolGraph to route model selection",
+    "GitNexus MCP — receives symbol lookups triggered by harness event file_paths"
+  ],
+  "use_cases": [
+    "Historian mining: SELECT flow_id, step_id, COUNT(*) FROM gate_log WHERE disposition='halted' GROUP BY flow_id, step_id HAVING COUNT(*) >= 3 across 3+ sessions → draft teaching candidate",
+    "CG semantic lookup: embed situation text → vector query cg_embeddings → return top-k CG entries by cosine similarity → agent knows what solutions exist for this situation",
+    "Bolt health check: SELECT b.status, COUNT(c.result) FROM bolts b JOIN checks c ON c.bolt_id=b.id WHERE b.session_id=$current → any check.result=0 → bolt.status=needs_review",
+    "GitNexus bridge: pattern check fails on file tools/verify_engine.py → INSERT INTO gitnexus_refs → gitnexus_impact(symbol) → enriched impact stored with the check record",
+    "Hub fleet view: Hub Postgres query for halt patterns appearing in 3+ spokes → fleet-wide teaching candidate; result lug delivered to hub historian",
+    "Cross-session pattern matching: embed pattern evidence text → vector query pattern_embeddings → find similar patterns from prior sessions → surface to Historian as recurring pattern"
+  ],
+  "schema": {
+    "spoke_database": {
+      "file": "WAI-Harness/spoke/managed/harness.db",
+      "engine": "SQLite + sqlite-vec extension",
+      "install_prerequisite": "sqlite-vec installed by Basher at session setup; session fails fast if extension missing",
+      "tables": {
+        "sessions": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "started_at": "TEXT NOT NULL",
+            "ended_at": "TEXT",
+            "model": "TEXT",
+            "tokens_in": "INTEGER",
+            "tokens_out": "INTEGER",
+            "lugs_touched": "JSON",
+            "advisor_reports": "JSON"
+          }
+        },
+        "bolts": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "session_id": "TEXT REFERENCES sessions(id)",
+            "certifier": "TEXT NOT NULL — session.sub-agent identity that verified",
+            "status": "TEXT CHECK(status IN ('open','in_progress','pass','needs_review'))",
+            "opened_at": "TEXT NOT NULL",
+            "closed_at": "TEXT — NULL until pattern completes; status only updated at close"
+          },
+          "note": "Bolt is opened at session start. Status is updated (not emitted) when the pattern closes. One bolt per session×certifier; one bolt covers many patterns."
+        },
+        "bolt_patterns": {
+          "columns": {
+            "bolt_id": "TEXT REFERENCES bolts(id)",
+            "pattern_id": "TEXT REFERENCES patterns(id)"
+          },
+          "note": "Join table — one bolt has many patterns; status reflects all checks across all patterns"
+        },
+        "patterns": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "flow_id": "TEXT NOT NULL",
+            "step_id": "TEXT NOT NULL",
+            "session_id": "TEXT REFERENCES sessions(id)",
+            "attempt": "INTEGER NOT NULL DEFAULT 1",
+            "disposition": "TEXT CHECK(disposition IN ('approved','halted','escalate'))",
+            "evidence_path": "TEXT",
+            "file_paths": "JSON — files this pattern step touches; used for GitNexus bridge",
+            "created_at": "TEXT NOT NULL"
+          }
+        },
+        "checks": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "pattern_id": "TEXT REFERENCES patterns(id)",
+            "check_name": "TEXT NOT NULL",
+            "criterion": "TEXT NOT NULL — expected condition",
+            "observed": "TEXT — what was actually observed",
+            "result": "INTEGER CHECK(result IN (0,1)) — 0=unverified(loose bolt), 1=bolt-verified(tight)",
+            "bolt_id": "TEXT REFERENCES bolts(id) — NULL if not yet bolt-verified"
+          },
+          "note": "Atomic unit. result=0 is a loose bolt. Every unverified check degrades spoke health."
+        },
+        "gate_log": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "flow_id": "TEXT NOT NULL",
+            "step_id": "TEXT NOT NULL",
+            "session_id": "TEXT REFERENCES sessions(id)",
+            "attempt": "INTEGER NOT NULL",
+            "disposition": "TEXT CHECK(disposition IN ('approved','halted','escalate'))",
+            "evidence": "TEXT",
+            "refinement": "TEXT — populated on halted disposition",
+            "created_at": "TEXT NOT NULL"
+          },
+          "note": "Denormalized from patterns for fast cross-session halt analysis. Append-only. Also mirrors to WAI-Harness/spoke/patterns/gate-log.jsonl for non-DB readers."
+        },
+        "cg_entries": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "situation": "TEXT NOT NULL — the triggering scenario (searchable via vector)",
+            "solution": "TEXT NOT NULL — how this is addressed",
+            "tier": "TEXT CHECK(tier IN ('mandated','recommended','awareness'))",
+            "owner_advisor": "TEXT",
+            "file_paths": "JSON — files that implement this capability",
+            "symbol_refs": "JSON — GitNexus symbol names that implement this capability",
+            "source": "TEXT CHECK(source IN ('hub','group','local'))",
+            "created_at": "TEXT NOT NULL",
+            "updated_at": "TEXT NOT NULL"
+          }
+        },
+        "pg_entries": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "object_type": "TEXT CHECK(object_type IN ('lug','initiative'))",
+            "object_id": "TEXT NOT NULL",
+            "status": "TEXT NOT NULL",
+            "title": "TEXT NOT NULL",
+            "initiative_id": "TEXT",
+            "created_at": "TEXT NOT NULL",
+            "completed_at": "TEXT"
+          },
+          "note": "PathGraph (PG) — spoke narrative trajectory. Past=completed, future=open. Read by Expediter and Ozi."
+        },
+        "tg_profiles": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "party": "TEXT NOT NULL UNIQUE — e.g. 'mario', 'icp-1'",
+            "preferences": "JSON — framing, tone, level of detail, preferred formats",
+            "updated_at": "TEXT NOT NULL"
+          },
+          "note": "TasteGraph (TG) — communication optimization per target party."
+        },
+        "test_results": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "test_id": "TEXT NOT NULL",
+            "owner_type": "TEXT CHECK(owner_type IN ('lug','flow','advisor'))",
+            "owner_id": "TEXT NOT NULL",
+            "result": "TEXT CHECK(result IN ('pass','fail'))",
+            "run_at": "TEXT NOT NULL",
+            "version": "TEXT — owner version at time of run",
+            "output": "TEXT"
+          }
+        },
+        "gitnexus_refs": {
+          "columns": {
+            "id": "TEXT PRIMARY KEY",
+            "object_type": "TEXT CHECK(object_type IN ('check','cg_entry','pattern'))",
+            "object_id": "TEXT NOT NULL",
+            "symbol": "TEXT NOT NULL — GitNexus symbol name",
+            "ref_type": "TEXT CHECK(ref_type IN ('impacts','owns','tests','fails_in'))",
+            "impact_radius": "JSON — cached result from gitnexus_impact; refreshed on index update"
+          },
+          "note": "Bridge table. Populated when harness events reference file paths. Enables: check fails in file X → gitnexus_impact(X) → what else breaks."
+        }
+      },
+      "search_baseline": {
+        "engine": "SQLite FTS5 — built in, zero dependency, offline",
+        "rule": "FTS5 full-text search is the ALWAYS-ON baseline for cg_entries.situation, pattern evidence, and session summaries. Vector search is an enhancement layer on top. If no embedding provider is available, semantic queries degrade gracefully to FTS5 — they never fail. Observability never depends on a network call."
+      },
+      "vector_tables": {
+        "dimension": "384 (default) — bge-small-en-v1.5 / MiniLM class",
+        "embedder_default": "fastembed (ONNX runtime) — light, respects the project 'no heavy dependencies' constraint; no torch",
+        "embedder_routing": "Embedding generation is ToolGraph-routed: if the spoke's access_matrix declares a hosted embedder (e.g. openai-embedding), use it; else use local fastembed; else disable vector tables and fall back to FTS5",
+        "cg_embeddings": "vec_f32(384) — embedding of cg_entries.situation text; enables semantic CG lookup",
+        "session_embeddings": "vec_f32(384) — embedding of session summary; enables 'find sessions like this one'",
+        "pattern_embeddings": "vec_f32(384) — embedding of pattern evidence text; enables cross-session recurring pattern detection"
+      }
+    },
+    "hub_database": {
+      "engine": "Postgres",
+      "tables": "Same schema as spoke SQLite with added wheel_id TEXT NOT NULL column on every table for spoke attribution",
+      "hosting": "Supabase-hosted Postgres + pgvector. Rationale: supabase-rest is already in the fleet ToolGraph access_matrix; pgvector is symmetric with the spoke's sqlite-vec; MCP-friendly; zero self-hosting ops burden. Self-hosting was rejected — adds an ops surface that fights 'remove friction'.",
+      "sync": "Spoke pushes new rows to Hub Postgres nightly via Basher sync job. Hub Postgres is a nightly aggregation target — NOT a real-time replica.",
+      "mcp_exposure": "Hub runs a Supabase/Postgres MCP server. Spokes query it for: fleet-wide gate_log halt patterns, mandated CG entries to sync into spoke SQLite, fleet bolt certification scores. Spoke degrades gracefully if hub is unreachable (uses local cache, marks sync-pending)."
+    }
+  },
+  "gitnexus_integration": {
+    "principle": "Complement, not duplicate. GitNexus owns code intelligence (symbols, relationships, call graphs, execution flows). SQLite+vec owns harness data. They compose via reference — harness events carry file_paths[], GitNexus resolves impact, enriched results stored back in SQLite+vec.",
+    "bridge_rules": [
+      "When a pattern check disposition=halted and file_paths[] is non-empty: emit gitnexus_refs rows with ref_type=fails_in; trigger gitnexus_impact for each symbol in those files; cache in gitnexus_refs.impact_radius",
+      "When a CG entry references implementation symbols: populate cg_entries.symbol_refs[]; emit gitnexus_refs rows with ref_type=owns",
+      "When a test_result fails and the test references a file: emit gitnexus_refs rows with ref_type=fails_in",
+      "gitnexus_refs.impact_radius is a cache: refreshed when gitnexus index is updated (detect via gitnexus_detect_changes())"
+    ],
+    "prerequisite": "GitNexus index must be current before bridge queries run. If stale (gitnexus_detect_changes() returns changes), re-index before populating impact_radius."
+  },
+  "write_concurrency": {
+    "principle": "Event-driven advisors fire concurrently and all write harness.db; SQLite serializes writes (SQLITE_BUSY) and will contend/drop telemetry under load (external review CRITICAL B1).",
+    "rules": [
+      "on init: PRAGMA journal_mode=WAL (concurrent readers + one writer) + PRAGMA busy_timeout=5000",
+      "SINGLE-WRITER QUEUE: all DB mutations go through one sequential writer worker (owned by Ozi/dispatcher); advisor processes stay non-blocking — they enqueue events, the worker drains them in order. No advisor writes harness.db directly.",
+      "the JSONL event journal is the durable floor (append-only, crash-safe); the SQLite write worker indexes from it, so a busy/locked DB never loses an event (it replays from the journal)",
+      "GitNexus mutations + DB updates that must be consistent are sequenced through the same worker with a compensating-rollback marker (no silent half-commit across the two stores)"
+    ]
+  },
+  "retention_policy": {
+    "principle": "'Every event emitted' + 'clone-and-run/offline' will bloat local SQLite unboundedly, degrading FTS5/vector + memory on Historian sweeps (external review HIGH B2). Bound it.",
+    "two_tier": {
+      "raw_tier": "atomic/trace events (checks, low-level gate/test events): auto-aggregated into daily metric summaries + pruned after 14 days locally (configurable)",
+      "durable_tier": "high-level entities (lugs, sessions, bolts, decisions, verdicts, certifications): preserved long-term",
+      "hub_archive": "raw events optionally shipped to Hub Postgres before local prune for fleet history; local stays lean"
+    },
+    "rule": "pruning is itself a logged, observable action (a retention workflow), never silent deletion; aggregates preserve the trend signal Historian needs"
+  },
+  "workflow_state_telemetry_table": "ADD table workflow_state_telemetry {workflow_id, step, status, actor, started_at, ended_at, span_ms, correlation_id, boundary_context} — explicit physical state-machine tracing so causality chains (observability spec) rest on real state rows, not just reconstructed event headers (external review A).",
+  "constraints": [
+    "SQLite WAL mode + busy_timeout + a single-writer queue are mandatory — advisors never write harness.db directly (external review CRITICAL)",
+    "Raw/trace events auto-prune after a retention window (default 14d) with aggregation; durable entities preserved; pruning is logged not silent",
+    "SQLite+vec is spoke-local and clone-and-run — no network dependency; works offline",
+    "Hub Postgres requires hub connectivity; spokes must degrade gracefully if hub is unreachable",
+    "Schema migrations use versioned migration files under managed/migrations/; no destructive ALTER TABLE without a version bump",
+    "Vector extension (sqlite-vec) must be installed by Basher at session setup; session fails fast (not silently) if missing",
+    "Agents write to spoke SQLite only; they never write directly to Hub Postgres (Basher sync owns that path)",
+    "gate_log is append-only in both SQLite and JSONL mirror; no UPDATE or DELETE on gate_log rows",
+    "bolt.status is only updated (not set at creation) when the pattern that the bolt covers is completed",
+    "Checks with result=0 (loose bolts) must surface in spoke health report at session open — never silently ignored"
+  ],
+  "stacking_inheritance": "CG entries support stacking inheritance: hub-sourced mandated entries propagate to spoke SQLite on sync; spoke local entries can addend (new entries) or override (same id, source=local wins on configuration axis). Mandated tier always wins on behavior axis regardless of source.",
+  "tests": [
+    "Fresh install: schema creation script creates all tables + vector indexes; all expected columns present; sqlite-vec SELECT works",
+    "Bolt lifecycle: open bolt → attach 3 checks (result=0) → verify 2 checks (result=1) → bolt.status=in_progress; verify 3rd → bolt.status=pass; reopen with 1 check.result=0 → bolt.status=needs_review",
+    "Loose bolt health report: session open with 2 unverified checks → wakeup brief shows 'N loose bolts' under certification health",
+    "CG semantic query: insert 5 CG entries with distinct situation text; embed each; vector query for a novel situation → top-2 results by cosine similarity returned correctly",
+    "Gate log: insert 5 halted events for same flow_id+step_id; Historian query returns count=5 → qualifies as halt pattern",
+    "GitNexus bridge: create check with file_paths=['tools/verify_engine.py'] and result=0 → gitnexus_refs row created with ref_type=fails_in; gitnexus_impact queried and impact_radius populated",
+    "Hub sync: spoke SQLite has 10 new gate_log rows since last sync; Basher sync pushes to Hub Postgres → 10 rows appear with correct wheel_id",
+    "Hub MCP query: spoke queries Hub Postgres via MCP for halt patterns in flow='closeout-v1' → returns aggregated count across fleet",
+    "Stacking: hub-sourced mandated CG entry synced to spoke → present in spoke cg_entries with source=hub; spoke adds local addendum with same situation → both present; query returns local addendum first",
+    "Graceful hub-unreachable: Hub Postgres MCP unavailable → spoke continues from local cache; session closeout marks sync_pending=true; no crash or data loss"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none — spec only; impl lugs not yet created",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low — initial spec",
+    "resolved_decisions": [
+      "Embedding model: 384-dim (bge-small/MiniLM class) via fastembed (ONNX, no torch) as local default; ToolGraph-routable to a hosted embedder; FTS5 always-on baseline so semantic search degrades gracefully and never depends on a network call. (S46)",
+      "Hub Postgres: Supabase-hosted + pgvector — aligns with existing fleet ToolGraph, symmetric with spoke sqlite-vec, MCP-friendly, zero ops burden. Self-hosting rejected. (S46)"
+    ],
+    "open_questions": [
+      "Migration file runner: inline Python in spoke tools/, or Basher-managed? Prefer Basher-managed to keep managed/ authoritative.",
+      "Pattern embeddings: embed the full evidence text or a summary? Full text risks noise; summary risks loss of signal. Start with full text, recalibrate after first Historian mining pass."
+    ]
+  },
+  "related_specs": [
+    "spec-toolgraph-v1",
+    "spec-harness-operational-traces-v1",
+    "spec-initiative-work-contracts-v1",
+    "spec-vector-library-v1"
+  ],
+  "routed_to": "FRAMEWORK",
+  "perceive": "Read this spec fully. Check if WAI-Harness/spoke/managed/harness.db exists (probably not). Read spec-toolgraph-v1 for ToolGraph access_matrix (embedding model + Postgres access). Run gitnexus_detect_changes() to confirm GitNexus index is current. Read WAI-Spoke/advisors/historian/scan_state.json to understand current gate-log scan baseline.",
+  "execute": "1. Create tools/create_harness_db.py — idempotent schema creation script (all tables + vector indexes). 2. Create managed/migrations/001_initial.sql — the canonical schema migration. 3. Run create_harness_db.py on this spoke — harness.db created. 4. Backfill gate_log table from existing WAI-Spoke/patterns/gate-log.jsonl if present. 5. Backfill pg_entries from WAI-Spoke/lugs/ (lug objects) and WAI-Spoke/advisors/ozi/ (initiatives) if present. 6. Create tools/gitnexus_bridge.py — watches for new pattern rows with file_paths[], triggers gitnexus_impact, populates gitnexus_refs. 7. Create tools/hub_sync.py — reads new rows since last_sync_at, pushes to Hub Postgres via MCP. 8. Update Basher distribution manifest to include sqlite-vec install step. 9. Deliver impl lugs for each step to own incoming/.",
+  "verify": "1. python3 tools/create_harness_db.py runs without error; harness.db created; all tables present via .schema check. 2. Bolt lifecycle test passes (see tests). 3. CG semantic query returns correct top-2 results. 4. gitnexus_bridge.py: create synthetic check row with file_paths=['tools/verify_engine.py'] → gitnexus_refs populated. 5. hub_sync.py: stub Hub Postgres MCP response → 10 rows pushed correctly. 6. All 10 tests in tests[] pass.",
+  "execution_mode": "impl",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

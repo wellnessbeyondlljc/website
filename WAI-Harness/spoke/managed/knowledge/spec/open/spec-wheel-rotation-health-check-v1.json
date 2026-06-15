@@ -1,0 +1,196 @@
+{
+  "id": "spec-wheel-rotation-health-check-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-01T06:35:00Z",
+  "updated_at": "2026-06-01T06:35:00Z",
+  "gb": "claude-sonnet-4-6 (session-20260601-1650)",
+  "fw_ver": "2.0.249",
+  "impact": 9,
+  "subject": {
+    "kind": "tool",
+    "id": "wheel-rotation-health-check",
+    "label": "Wheel Rotation Health Check Verifier"
+  },
+  "title": "Wheel Rotation Health Check \u2014 6-checkpoint verifier that confirms the Navigator\u2192AP\u2192Hub loop is actually closing",
+  "what": "A post-Autopilot verification script (tools/wheel_rotation_health_check.py) that runs 6 timestamped checks against file artifacts to confirm the full Navigator\u2192AP\u2192Hub intelligence loop completed correctly. On any checkpoint failure, it writes a bug lug to WAI-Spoke/lugs/bytype/bug/open/ naming the failing checkpoint and broken link. Outputs rotation-check-latest.json with pass/fail per checkpoint and a loop_closed boolean. Can be invoked manually or wired to a post-AP hook.",
+  "why": "The 5 broken links (L1-L5) in the wheel turning loop are invisible during normal operation \u2014 everything appears to 'run fine' even when AP ignores Navigator, or Hub never processes completion events. Without explicit timestamped checks that verify each link closed, the wheel can silently degrade back to broken state after any Basher update or config change. The health check makes the loop's closure a measurable, auditable property \u2014 not an assumption.",
+  "audience": [
+    "basher",
+    "ozi",
+    "admin"
+  ],
+  "checkpoints": [
+    {
+      "id": "V1",
+      "name": "navigator_profile_loaded",
+      "broken_link": "L1",
+      "source": "AP run log (last entry in WAI-Spoke/advisors/ozi/autopilot-log.jsonl or --ap-log flag)",
+      "pass_condition": "AP log entry has navigator_profile_used key with non-null value AND generated_at of recommendations-current.json is within 48h of AP run start_ts",
+      "failure_message": "Autopilot did not load Navigator profile \u2014 L1 (Navigator\u2194AP) still broken"
+    },
+    {
+      "id": "V2",
+      "name": "phase1_teachings_ran",
+      "broken_link": "L2",
+      "source": "AP run log",
+      "pass_condition": "AP log entry has teachings_adopted key (value 0 is acceptable \u2014 key absence means Phase 1 is still a stub)",
+      "failure_message": "AP Phase 1 teachings key absent from log \u2014 L2 (Phase 1 stub) still broken"
+    },
+    {
+      "id": "V3",
+      "name": "completion_event_emitted",
+      "broken_link": "L3",
+      "source": "hub spoke-completion-events dir: {hub_path}/WAI-Spoke/advisors/gardener/spoke-completion-events/",
+      "pass_condition": "At least one .json file in that dir has completed_at >= AP run start_ts AND spoke_id matches this spoke",
+      "failure_message": "No completion event found in hub for this AP run \u2014 L3 (Phase 5 emit) still broken"
+    },
+    {
+      "id": "V4",
+      "name": "hub_advisory_refresh_ran",
+      "broken_link": "L5",
+      "source": "{hub_path}/WAI-Spoke/advisors/gardener/advisory-refresh-log.jsonl",
+      "pass_condition": "Log has at least one entry with processed_at >= AP run start_ts",
+      "failure_message": "Hub advisory refresh log has no entry since AP run \u2014 L5 (process_completion_events mocked) still broken"
+    },
+    {
+      "id": "V5",
+      "name": "navigator_republished",
+      "broken_link": "L1+L5 full loop",
+      "source": "WAI-Spoke/advisors/navigator/recommendations-current.json (read from this spoke's local copy)",
+      "pass_condition": "recommendations-current.json.generated_at > V4 hub advisory refresh processed_at (Navigator ran AFTER hub refreshed)",
+      "failure_message": "Navigator has not republished since last hub advisory refresh \u2014 full loop not closing"
+    },
+    {
+      "id": "V6",
+      "name": "pathgraph_trace_written",
+      "broken_link": "harness (separate from L1-L5)",
+      "source": "WAI-Spoke/pathgraph/history.jsonl",
+      "pass_condition": "At least one entry with ts >= AP run start_ts exists",
+      "failure_message": "No PathGraph trace from this AP run \u2014 harness operational traces (impl-harness-traces-basher-v1) not yet implemented"
+    }
+  ],
+  "how": {
+    "trigger": "Post-AP invocation: manual via CLI or wired to Stop hook after AP completes",
+    "cli": "python3 tools/wheel_rotation_health_check.py --spoke-path <path> [--ap-log <path>] [--hub-path <path>] [--json]",
+    "steps": [
+      "1. Resolve spoke_path (--spoke-path arg or cwd), hub_path (--hub-path arg or read from WAI-State.json wheel.hub_path)",
+      "2. Find AP run log: try WAI-Spoke/advisors/ozi/autopilot-log.jsonl, fall back to --ap-log flag. Read last entry. Extract start_ts and spoke_id.",
+      "3. Run V1: load recommendations-current.json, check generated_at freshness. Load AP log last entry, check navigator_profile_used key present.",
+      "4. Run V2: check AP log last entry has teachings_adopted key (any value including 0).",
+      "5. Run V3: scan {hub_path}/WAI-Spoke/advisors/gardener/spoke-completion-events/*.json, find entry matching spoke_id with completed_at >= start_ts.",
+      "6. Run V4: read {hub_path}/WAI-Spoke/advisors/gardener/advisory-refresh-log.jsonl, find entry with processed_at >= start_ts.",
+      "7. Run V5: compare recommendations-current.json.generated_at to the V4 refresh timestamp. Pass if Navigator ran after refresh.",
+      "8. Run V6: scan WAI-Spoke/pathgraph/history.jsonl, find entry with ts >= start_ts.",
+      "9. Compute loop_closed: V1 AND V2 AND V3 AND V4 AND V5 all pass (V6 is advisory only \u2014 harness may not yet be wired).",
+      "10. Write rotation-check-latest.json to WAI-Spoke/advisors/health/rotation-check-latest.json.",
+      "11. If any core checkpoint (V1-V5) fails: write bug lug to WAI-Spoke/lugs/bytype/bug/open/bug-rotation-check-{checkpoint_id}-{yyyymmdd}.json.",
+      "12. Print human-readable summary to stdout. Exit 0 if loop_closed, exit 1 if not."
+    ],
+    "constraints": [
+      "Never fail hard on missing files \u2014 missing AP log = skip all checks, write rotation-check-latest.json with error: no_ap_log_found",
+      "Missing hub_path = log warning, skip V3/V4/V5, do not fail the script",
+      "V6 failure does not set loop_closed=false \u2014 it is advisory (harness traces are separate from the wiring initiative)",
+      "Bug lugs must not be created on repeat runs for the same checkpoint failure on the same day \u2014 check if today's bug lug already exists before writing",
+      "Script is idempotent: safe to run multiple times after the same AP run"
+    ]
+  },
+  "schema": {
+    "rotation_check_latest": {
+      "path": "WAI-Spoke/advisors/health/rotation-check-latest.json",
+      "description": "Written after every health check run. Overwritten each run.",
+      "fields": {
+        "run_ts": "ISO-8601 timestamp of this health check run",
+        "ap_run_start_ts": "ISO-8601 timestamp from AP run log (null if log not found)",
+        "spoke_id": "string \u2014 spoke identifier",
+        "checkpoints": {
+          "V1": "true/false \u2014 navigator_profile_loaded",
+          "V2": "true/false \u2014 phase1_teachings_ran",
+          "V3": "true/false \u2014 completion_event_emitted",
+          "V4": "true/false \u2014 hub_advisory_refresh_ran",
+          "V5": "true/false \u2014 navigator_republished",
+          "V6": "true/false \u2014 pathgraph_trace_written (advisory)"
+        },
+        "loop_closed": "boolean \u2014 V1 AND V2 AND V3 AND V4 AND V5 all true",
+        "broken_links": [
+          "list of L-id strings for failed checkpoints"
+        ],
+        "error": "null or string \u2014 populated if log not found or runtime error",
+        "advisory_only_failures": [
+          "list of advisory checkpoint IDs that failed but don't affect loop_closed"
+        ]
+      }
+    },
+    "bug_lug_on_failure": {
+      "path": "WAI-Spoke/lugs/bytype/bug/open/bug-rotation-check-{checkpoint_id}-{yyyymmdd}.json",
+      "fields": {
+        "id": "bug-rotation-check-{checkpoint_id}-{yyyymmdd}",
+        "type": "bug",
+        "status": "open",
+        "title": "Wheel rotation checkpoint {checkpoint_id} failed: {failure_message}",
+        "broken_link": "L-id from checkpoint definition",
+        "detected_at": "ISO timestamp of detection",
+        "ap_run_start_ts": "timestamp of the AP run that triggered the check",
+        "parent_initiative": "initiative-wheel-rotation-wiring-v1"
+      }
+    }
+  },
+  "impl_lugs": [
+    "impl-wheel-rotation-health-check-v1"
+  ],
+  "blocked_by": null,
+  "blocked_by_note": "Verifier is meaningful only after all 5 broken links are wired (Waves 1-2 complete). The spec can be implemented in Wave 3.",
+  "tests": [
+    {
+      "id": "test-all-pass-when-loop-closed",
+      "description": "With a valid AP log showing navigator_profile_used, a completion event in hub dir, a fresh advisory-refresh entry, and Navigator timestamp > refresh timestamp \u2014 all 5 core checkpoints pass and loop_closed=true",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-loop-closed-false-on-missing-completion-event",
+      "description": "With valid AP log but no matching completion event in hub dir \u2014 V3 fails, loop_closed=false, bug lug created for L3",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-no-crash-on-missing-hub-path",
+      "description": "When hub_path is not resolvable, V3/V4/V5 are skipped with warning \u2014 script exits without crash",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-v6-advisory-only",
+      "description": "With pathgraph/history.jsonl absent, V6 fails but loop_closed can still be true (V6 failure is advisory) \u2014 verify loop_closed not affected by V6",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-no-duplicate-bug-lugs",
+      "description": "Running health check twice on same day with same failure does not create a second bug lug for that checkpoint",
+      "type": "mechanical"
+    }
+  ],
+  "health": {
+    "test_coverage": "runtime",
+    "test_file": "tools/wheel_rotation_health_check.py",
+    "test_count": 6,
+    "last_impl_lug_completed": "impl-wheel-rotation-health-check-v1",
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": "2026-06-02T00:26:37Z",
+    "verification_note": "All 6 checkpoints (V1-V6) pass. loop_closed=true confirmed. rotation-check-latest.json written. AP log path is WAI-Spoke/advisors/autopilot/activity-log.jsonl (run summaries + per-lug dispatch entries mixed). Hub path reads from WAI-State.json wheel.hub_path."
+  },
+  "routed_to": "LOCAL",
+  "execution_mode": "gastown",
+  "perceive": "Read this spec in full. Read initiative-wheel-rotation-wiring-v1 to understand wave sequencing \u2014 this spec is Wave 3 (after Waves 1+2 complete). Read impl-wheel-rotation-health-check-v1 for implementation detail. Check open_questions in health section and resolve by reading ozi_autopilot.py Phase 5 output section before implementing.",
+  "execute": "Do not implement until Wave 1 and Wave 2 of initiative-wheel-rotation-wiring-v1 are confirmed complete. When unblocked: create one impl lug (impl-wheel-rotation-health-check-v1 exists) and route to BASHER. Verifier must be pure Python stdlib only \u2014 no external dependencies.",
+  "verify": "All 5 tests in tests[] pass. Run on a spoke where all 5 broken links are confirmed wired. rotation-check-latest.json shows loop_closed: true. Script exits 0.",
+  "related_specs": [
+    "spec-harness-operational-traces-v1",
+    "spec-harness-self-maintaining-wheel-v1"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

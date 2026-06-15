@@ -1,0 +1,20 @@
+{
+  "blacklisted_patterns": [
+    "rm -rf",
+    "git push --force",
+    "exfiltrate",
+    "jailbreak"
+  ],
+  "warning_patterns": [
+    "override system",
+    "ignore previous instructions"
+  ],
+  "excluded_paths": [
+    "tests/"
+  ],
+  "scan_targets": [
+    "WAI-Spoke/advisors/*/context_prompt.md",
+    "hub/teachings_repo/spoke/current/*.teaching",
+    "WAI-Spoke/lugs/bytype/**/*.json"
+  ]
+}

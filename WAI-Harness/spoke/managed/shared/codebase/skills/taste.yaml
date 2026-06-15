@@ -1,0 +1,169 @@
+id: taste
+name: "Taste Files"
+role: configuration
+model_tier: any
+
+description: >
+  Taste files capture user preferences and project direction that shape
+  agent behavior. Two files: taste.user (hub-level, crosses all spokes)
+  and taste.spoke (project-specific). Both are nudge-updated by the
+  Historian — proposed entries require user approval before activation.
+
+# ---------------------------------------------------------------------------
+# FILE LOCATIONS
+# ---------------------------------------------------------------------------
+
+locations:
+  taste_user:
+    path: "Hub/taste.user.yaml"
+    scope: "All spokes. General user preferences not tied to any project."
+    loaded_at: "Wakeup Step 6a, after hub connection check"
+
+  taste_spoke:
+    path: "WAI-Spoke/taste.spoke.yaml"
+    scope: "This spoke only. Project-specific preferences."
+    loaded_at: "Wakeup Step 6a, after hub connection check"
+
+# ---------------------------------------------------------------------------
+# SCHEMA
+# ---------------------------------------------------------------------------
+
+schema:
+  format: "YAML"
+  description: >
+    Each taste file contains entries organized by category. Entries have
+    a status (proposed, accepted, rejected) and a source (who proposed it).
+
+  structure: |
+    # taste.spoke.yaml (or taste.user.yaml)
+    ---
+    entries:
+      - id: "taste-001"
+        category: "communication"
+        preference: "Keep responses concise. Don't over-explain."
+        status: "accepted"
+        source: "historian-review-20260315-1400"
+        proposed_at: "2026-03-15T14:00:00Z"
+        accepted_at: "2026-03-15T15:30:00Z"
+
+      - id: "taste-002"
+        category: "workflow"
+        preference: "Always run test bench before declaring a teaching deployable."
+        status: "accepted"
+        source: "user-direct"
+        proposed_at: "2026-03-12T22:00:00Z"
+        accepted_at: "2026-03-12T22:00:00Z"
+
+      - id: "taste-003"
+        category: "approach"
+        preference: "Prefer YAML over JSON for human-edited config files."
+        status: "proposed"
+        source: "historian-review-20260320-0900"
+        proposed_at: "2026-03-20T09:00:00Z"
+
+  categories:
+    communication: "How the agent talks — tone, detail level, pacing"
+    workflow: "How work gets done — processes, gates, habits"
+    approach: "Technical preferences — tools, formats, patterns"
+    boundaries: "What the user doesn't want — things to avoid"
+    philosophy: "Higher-level values about AI collaboration"
+
+  entry_fields:
+    id: "Unique identifier: taste-NNN"
+    category: "One of the defined categories"
+    preference: "The actual preference statement. Clear, actionable."
+    status: "proposed | accepted | rejected"
+    source: "Who proposed it: historian-review-{id}, user-direct, or session-{id}"
+    proposed_at: "ISO-8601 timestamp"
+    accepted_at: "ISO-8601 timestamp (null if not yet accepted)"
+    rejected_at: "ISO-8601 timestamp (null if not rejected)"
+    rejection_reason: "Why rejected (optional, helps Historian learn)"
+
+# ---------------------------------------------------------------------------
+# LIFECYCLE
+# ---------------------------------------------------------------------------
+
+lifecycle:
+  proposal:
+    who: "Historian advisor, or user directly"
+    how: "Append entry with status: proposed"
+    rule: "Never overwrite existing entries. Append only."
+
+  review:
+    trigger: "On wakeup, if taste file has proposed entries"
+    action: >
+      Present proposed entries to user:
+      "Historian suggests: {preference}. Accept / Reject?"
+    rule: "Do not apply proposed preferences until accepted."
+
+  acceptance:
+    action: "Set status: accepted, set accepted_at timestamp"
+    effect: "Agent begins following this preference immediately"
+
+  rejection:
+    action: "Set status: rejected, set rejected_at, optionally add rejection_reason"
+    effect: "Historian notes rejection — avoids proposing similar nudges"
+
+  evolution:
+    description: >
+      Preferences can be superseded. If a new entry contradicts an accepted
+      entry, the new entry should reference the old one. The old entry
+      status changes to 'superseded' with a pointer to the new entry.
+
+# ---------------------------------------------------------------------------
+# HOW AGENTS USE TASTE
+# ---------------------------------------------------------------------------
+
+agent_behavior:
+  on_wakeup:
+    - "Load taste.spoke.yaml (if exists)"
+    - "Load taste.user.yaml from hub (if hub connected and file exists)"
+    - "Read all entries with status: accepted"
+    - "Apply preferences to session behavior"
+    - "If proposed entries exist, present to user for review"
+
+  during_session:
+    - "Accepted taste entries inform behavior (tone, approach, workflow)"
+    - "Taste is advisory, not override — user instructions in conversation take precedence"
+    - "If agent notices behavior that contradicts a taste entry, flag it"
+
+  on_conflict:
+    - "taste.spoke overrides taste.user for project-specific matters"
+    - "User's direct instruction overrides both taste files"
+    - "When in doubt, ask the user"
+
+# ---------------------------------------------------------------------------
+# EXAMPLES
+# ---------------------------------------------------------------------------
+
+examples:
+  taste_user:
+    description: "General preferences that apply everywhere"
+    entries:
+      - category: communication
+        preference: "Don't use emojis unless I ask."
+      - category: workflow
+        preference: "Always confirm before pushing to remote."
+      - category: philosophy
+        preference: "Be a responsible partner, not just an enabler."
+      - category: boundaries
+        preference: "Don't add docstrings to code I didn't ask you to touch."
+
+  taste_spoke:
+    description: "Project-specific preferences"
+    entries:
+      - category: approach
+        preference: "This project uses YAML for all config. No JSON config files."
+      - category: workflow
+        preference: "Run test bench before declaring teachings deployable."
+      - category: boundaries
+        preference: "Don't modify spoke implementations — framework only teaches protocols."
+      - category: communication
+        preference: "When discussing architecture, use the wheel/hub/spoke metaphor."
+
+notes:
+  - "Taste files are the personality layer. They shape HOW the agent works, not WHAT it works on."
+  - "Start empty. Let the Historian propose entries based on observed patterns."
+  - "Users can also add entries directly — not everything needs to come from the Historian."
+  - "The rejection_reason field helps the Historian learn what NOT to propose."
+  - "Keep entries actionable — 'be concise' is better than 'communicate efficiently'."

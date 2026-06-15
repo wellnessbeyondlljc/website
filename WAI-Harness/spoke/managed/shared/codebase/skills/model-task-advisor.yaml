@@ -1,0 +1,194 @@
+id: model-task-advisor
+name: "Model-Task Awareness Advisor"
+role: guardian
+model_tier: lightweight  # This skill itself runs on any model — it's about self-awareness
+
+trigger: "on_session_start AND on_architectural_signal"
+
+description: >
+  Agents cannot switch their own model — only the user can via /model.
+  But agents CAN detect when a task exceeds their model tier's judgment
+  capability and prompt the user to consider switching. This prevents
+  wasted sessions where a lightweight model builds on wrong assumptions.
+
+scope:
+  reads:
+    - "Current model identity (from environment)"
+    - "Task context (what the user is asking)"
+    - "WAI-State.json model_log (prior mismatch history)"
+
+  writes:
+    - "WAI-State.json model_log (append current session's model usage)"
+
+prerequisites:
+  - "Agent must know its own model name"
+  - "Agent must be able to detect architectural signals in user requests"
+
+output:
+  on_signal_detected: "Prompt user once: consider /model switch for design work"
+  on_no_signal: "Silent — no unnecessary interruption"
+  on_closeout: "Log model usage and task types to model_log"
+
+algorithm:
+  step_1_identify_current_model:
+    description: "On session start, note which model is active"
+    action: |
+      Read model identity from environment context.
+      Note it in the session briefing header (already standard in WAI wakeup).
+      Check WAI-State.json model_log for prior mismatch history on this project.
+
+  step_2_watch_for_architectural_signals:
+    description: "During the session, watch for signals that task needs stronger judgment"
+
+    signals:
+      - "User is correcting fundamental assumptions about system design"
+      - "Task involves defining new protocols, boundaries, or architectural patterns"
+      - "Decisions will affect multiple spokes or the entire wheel"
+      - "Task requires 'should we?' judgment, not 'how do we?' execution"
+      - "Agent catches itself making assumptions about projects it hasn't verified"
+      - "Agent is about to create multiple new artifacts without user validation"
+      - "User asks 'why did you do X?' — indicating reasoning wasn't surfaced"
+      - "Task involves reviewing or critiquing prior work for correctness"
+      - "Conversation is about meta-process (how we work) not implementation (what we build)"
+
+    not_signals:
+      - "Normal file creation following an established plan"
+      - "Git operations, commits, status checks"
+      - "Running existing skills (wakeup, closeout, teach)"
+      - "Bug fixes with clear scope"
+      - "Data collection or reporting"
+
+  step_3_prompt_user_if_detected:
+    description: "Flag once per session — not repeatedly"
+
+    prompt: >
+      This work involves architectural decisions. I'm running as {model_name}.
+      For design-level work where judgment and assumption-checking matter,
+      consider /model to switch to Sonnet or Opus.
+
+    rules:
+      - "Flag ONCE per session when first architectural signal detected"
+      - "Do NOT repeat the prompt if user chooses to stay on current model"
+      - "Do NOT block work — this is advisory, not a gate"
+      - "Do NOT apologize or be self-deprecating — just state the fact"
+      - "If user says 'proceed' or ignores, respect their choice"
+
+  step_4_log_on_closeout:
+    description: "Record model usage for retrospective analysis"
+
+    log_entry:
+      session: "session number"
+      date: "ISO date"
+      switches:
+        - model: "model identifier"
+          task_type: "execution | design | review | mixed"
+          turns: "range"
+          notes: "brief description of what this model segment did"
+      mismatch_detected: "true | false"
+      mismatch_description: "what went wrong, if anything"
+      lesson: "what we learned about model-task fit"
+
+    location: "WAI-State.json model_log.entries (append)"
+
+model_tier_guidance:
+  haiku:
+    strengths:
+      - "Fast execution of established plans"
+      - "File creation, git operations, data processing"
+      - "Following clear instructions with known patterns"
+      - "Running tests, collecting metrics"
+    weaknesses:
+      - "May not question assumptions"
+      - "Treats design tasks as execution tasks"
+      - "Can produce volume without judgment"
+      - "May miss scope drift or architectural tension"
+    use_when: "Plan is clear, patterns established, execution is the bottleneck"
+
+  sonnet:
+    strengths:
+      - "Balanced judgment and execution"
+      - "Good for most daily development work"
+      - "Can handle moderate design decisions"
+      - "Code review, refactoring, feature work"
+    weaknesses:
+      - "May miss novel architectural issues with no precedent"
+      - "Can be verbose in planning"
+    use_when: "Default for most work. Switch to Opus if design gets complex."
+
+  opus:
+    strengths:
+      - "Strong architectural judgment"
+      - "Questions assumptions before building"
+      - "Catches tensions between stated goals and implementation"
+      - "Good at reviewing prior work for correctness"
+      - "Synthesizes complex multi-system implications"
+    weaknesses:
+      - "Higher token cost"
+      - "Can over-think simple execution tasks"
+    use_when: "Architectural design, protocol definition, reviewing prior work, meta-process decisions"
+
+use_cases:
+  - scenario: "Haiku session drifts into architecture"
+    trigger: "User asks to 'define the protocol for how spokes communicate'"
+    signal: "Defining new protocols — architectural signal detected"
+    agent_action: "Prompts: 'This involves architectural decisions. I'm running as Haiku. Consider /model for Sonnet or Opus.'"
+    user_response: "User switches to Opus"
+    result: "Better design decisions, fewer iterations"
+
+  - scenario: "User corrects a fundamental assumption"
+    trigger: "User says 'No, the framework doesn't do that — it teaches protocols'"
+    signal: "Fundamental assumption correction — architectural signal"
+    agent_action: "If still on Haiku, prompts for model switch"
+    result: "User decides whether to switch based on remaining work"
+
+  - scenario: "Execution task stays on Haiku — no signal"
+    trigger: "User says 'commit this and run the tests'"
+    signal: "None — this is pure execution"
+    agent_action: "Silent. No prompt needed."
+    result: "Haiku handles execution efficiently"
+
+  - scenario: "Session review reveals mismatch"
+    trigger: "On closeout, agent reviews what happened"
+    action: "Logs model usage to model_log"
+    notes: "If mismatch was detected mid-session, it's recorded for future reference"
+    result: "model_log grows, patterns emerge over time"
+
+  - scenario: "Prior mismatch history informs new session"
+    trigger: "Agent wakes up, reads model_log"
+    sees: "Last 3 design sessions on Haiku all had mismatch"
+    action: "Mentions in briefing: 'Note: prior sessions show design work benefits from Opus'"
+    result: "User proactively switches before problems occur"
+
+tests:
+  - name: "Architectural signal detected"
+    input: "User asks to define new protocol"
+    expected: "Agent prompts once about model consideration"
+
+  - name: "No signal on execution"
+    input: "User asks to commit files"
+    expected: "Silent — no prompt"
+
+  - name: "Prompt only once"
+    input: "Multiple architectural signals in one session"
+    expected: "Agent prompts on first signal only"
+
+  - name: "Model log recorded on closeout"
+    input: "Session ends"
+    expected: "model_log entry appended to WAI-State.json"
+
+  - name: "Prior history referenced on wakeup"
+    input: "New session, model_log has mismatch history"
+    expected: "Briefing mentions: design work benefits from Opus"
+
+notes:
+  - "This skill is taught to ALL spokes — every agent should be self-aware about model fit"
+  - "The user always controls the model switch — agent only advises"
+  - "model_log enables data-driven decisions about which model to use when"
+  - "Born from incident: Sessions 15-17 used Haiku for architecture, cost 3 sessions of rework"
+  - "Lug-based messaging is used to distribute this skill to all spokes via teaching files"
+
+origin:
+  incident: "Sessions 15-17 (2026-03-12)"
+  problem: "Haiku built 3 phases of prescriptive work on wrong architectural model"
+  detection: "User switched to Opus, which caught 6 issues immediately"
+  resolution: "This skill — so agents flag the mismatch before it costs sessions"

@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PathGraph Aspiration Record",
+  "description": "A single aspiration record in the PathGraph index. Extracted from session tracks by the Historian advisor.",
+  "type": "object",
+  "required": ["id", "source_session", "extracted_at", "module", "text", "confidence", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^aspiration-",
+      "description": "Unique ID for this aspiration record. Format: aspiration-{slug}-{hex8}"
+    },
+    "source_session": {
+      "type": "string",
+      "description": "Session ID where this aspiration was stated. Format: session-YYYYMMDD-HHMM"
+    },
+    "extracted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this aspiration was extracted by PathGraph"
+    },
+    "module": {
+      "type": "string",
+      "enum": [
+        "minder-core",
+        "minder-web",
+        "minder-telegram",
+        "minder-forge",
+        "minder-fleet",
+        "minder-ideas",
+        "minder-tracks",
+        "framework",
+        "hub",
+        "basher",
+        "cross-module"
+      ],
+      "description": "Which spoke module this aspiration targets"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 10,
+      "description": "The stated intent — verbatim quote or faithful paraphrase from track"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["explicit", "inferred", "contextual"],
+      "description": "explicit: Mario stated it directly. inferred: implied by pattern of decisions. contextual: suggested by adjacent tradeoffs."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "fulfilled", "drifted", "abandoned"],
+      "description": "open: active aspiration. fulfilled: addressed by completed lug. drifted: gap confirmed, no progress. abandoned: >30 sessions, no progress (requires human confirmation)."
+    },
+    "drift_level": {
+      "type": ["string", "null"],
+      "enum": ["minor", "significant", "critical", null],
+      "description": "minor: partially addressed. significant: no meaningful progress. critical: blocking other work. Null when status is not drifted."
+    },
+    "fulfilled_session": {
+      "type": ["string", "null"],
+      "description": "Session ID where this aspiration was fulfilled. Null until fulfilled."
+    },
+    "fulfilled_lug": {
+      "type": ["string", "null"],
+      "description": "Lug ID that fulfilled this aspiration. Null until fulfilled."
+    },
+    "superseded_by": {
+      "type": ["string", "null"],
+      "description": "ID of aspiration record that supersedes this one. Null if not superseded."
+    },
+    "spirit_extraction": {
+      "type": ["object", "null"],
+      "description": "Spirit metadata extracted from the source track event",
+      "additionalProperties": false,
+      "properties": {
+        "mood": {
+          "type": "string",
+          "description": "Tone and emotional signal of the originating session"
+        },
+        "implied_constraints": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Constraints that shaped decisions in this session"
+        },
+        "tradeoffs_made": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "What was sacrificed for what in this session"
+        },
+        "core_intent": {
+          "type": "string",
+          "description": "The underlying goal beneath the surface action"
+        }
+      }
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Computed weight: recency x frequency. Updated on each PathGraph refactor pass."
+    },
+    "mention_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of sessions where this aspiration (or near-duplicate) was stated"
+    },
+    "related_lug_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Lug IDs related to this aspiration (partial implementations, blocked work, etc.)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Free-form tags for grouping and filtering aspirations"
+    }
+  }
+}

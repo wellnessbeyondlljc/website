@@ -1,0 +1,114 @@
+{
+  "id": "spec-harness-development-control-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-08T23:40:00Z",
+  "updated_at": "2026-06-08T23:40:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Harness development & extension control — MyWheel as master, empower-but-control remote changes via mandatory registry + native incorporation, spoke creation from any node",
+  "title": "Harness Development & Extension Control (MyWheel master + change registry + spoke creation)",
+  "situation": "v4 makes MyWheel/WAI-Harness/ the single distribution master and decommissions the framework repo. This raises three governance needs the current model does not fully cover: (1) every harness change (spoke- or hub-side) must land in MyWheel or it is not canonical and gets overwritten on next pull; (2) spokes should be EMPOWERED to make remote adjustments to other spokes and to the harness, but those changes must be CONTROLLED — registered so the receiving (native) agent incorporates and maintains them correctly rather than being silently mutated; (3) new-spoke creation must be possible from ANY existing spoke and the hub, not only a central authority. Without this spec, the master drifts, remote changes become untracked mutations, and spoke creation is bottlenecked.",
+  "why": "Empower without control = untracked drift and silent divergence (the failure the bubble-up/curator model exists to prevent). Control without empower = bottleneck; only one node can evolve the fleet. This spec sets the balance: any node can contribute, but the change registry is the mandatory control plane and the native agent owns final incorporation + ongoing maintenance. MyWheel-as-master makes 'where does a harness change go' unambiguous. Spoke-creation-from-anywhere removes the central bottleneck while keeping the new spoke registered and certified.",
+  "audience": [
+    "Basher — distributes from MyWheel master; enforces own-copy pull + upgrade-when-newer",
+    "Every spoke's Ozi (native agent) — incorporates and MAINTAINS registered remote changes per its own policies",
+    "Trainer (hub) — canonicalizes harness-level proposals into the MyWheel master",
+    "Any spoke + hub — may originate remote changes and may bootstrap new spokes",
+    "Hub registry — records spoke creation, version, and change-registry entries"
+  ],
+  "principles": {
+    "mywheel_is_master": "All harness changes (spoke or hub) MUST be applied to MyWheel/WAI-Harness/. Basher distributes from there. A change applied only to a downstream copy is non-canonical and is overwritten on the spoke's next pull. To make a harness change durable: land it in MyWheel.",
+    "empower": "Any spoke (and the hub) may originate a change to another spoke or to the harness master. Contribution is not gated to one authority (curator model).",
+    "control": "Every remote change is mediated by the change REGISTRY. A remote change is never a silent file write that the target forgets about. The registry entry is mandatory and travels with the change.",
+    "native_incorporation": "The receiving spoke's own agent (Ozi) incorporates the registered change per its own policies and OWNS its ongoing maintenance. The originator proposes + registers; the native agent accepts/adapts/maintains. Cross-spoke sovereignty holds: changes arrive as registered work, the native agent integrates.",
+    "no_direct_peer_writes": "CRITICAL (external review A1, split-brain): a spoke NEVER writes another spoke's filesystem directly — that plus standalone SQLite = collisions/split-brain that local DBs can't reconcile. ALL cross-spoke mutations are submitted as immutable, append-only change-proposal events through the central Hub (Supabase), where they are SERIALIZED and assigned a globally unique sequence id, then PULLED by the target spoke and applied by its native agent. 'Empower' = originate a proposal; it is never a direct remote write. (This hardens the existing sovereignty rule into a serialized transport.)",
+    "basher_update_staging_gate": "CRITICAL (external review A): a managed/ update that breaks a local/ extension would crash the spoke on boot with no rollback. So Basher applies an incoming update to an OFFLINE SHADOW copy first, runs the spoke's local verification suite against the new manifest, and only swaps it in on green; a detected local regression aborts the swap + flags Attention (keeps the working copy). Own-copy upgrades are staged + verified, never blind-overwrite.",
+    "creation_from_anywhere": "New-spoke bootstrapping is a capability available from any existing spoke and the hub — pull the spoke blueprint from MyWheel, run cold-start, register in the hub registry."
+  },
+  "change_registry": {
+    "_purpose": "The control plane for empowered remote development — every cross-spoke or harness change is recorded so it is verifiable, attributable, and maintainable by the native agent",
+    "entry_schema": {
+      "change_id": "string",
+      "origin": {"spoke": "wheel_id", "session": "session fingerprint", "actor_kind": "user | agent"},
+      "target": "wheel_id | MyWheel (for harness master changes)",
+      "scope": "spoke-file | harness-managed | harness-hub | new-spoke",
+      "what_changed": "string — files + summary",
+      "why": "string",
+      "files": ["relative paths"],
+      "commit": "sha | null",
+      "delivery": "lug-reference (the change-lug / receipt delivered to target incoming)",
+      "incorporation_status": "registered | accepted | adapted | rejected | maintained",
+      "incorporated_by": "native agent session | null",
+      "maintenance_owner": "wheel_id — always the TARGET spoke after incorporation",
+      "registered_at": "ISO-8601"
+    },
+    "concurrent_edit_resolution": "review: who wins when two actors edit the same lug concurrently? (1) CROSS-spoke is already serialized — all cross-spoke mutations are hub-sequenced append-only proposals (no_direct_peer_writes), so there is one global order. (2) SAME-spoke concurrent sessions edit in isolated worktrees (concurrency primitive) + reconcile at closeout with a file-update notice (no silent clobber). (3) Objects carry a version (schema_version + a monotonic rev); a write against a stale rev is rejected with a reconcile prompt (optimistic concurrency, last-write-wins is BANNED for lugs — divergence must be surfaced, not silently resolved).",
+    "rules": [
+      "A remote change without a registry entry is a protocol violation (silent mutation) — flagged and reverted",
+      "Lug writes use optimistic concurrency (check rev); a stale-rev write is rejected + surfaced for reconcile — never silent last-write-wins",
+      "incorporation_status is advanced ONLY by the native agent (originator cannot self-mark accepted)",
+      "maintenance_owner is always the target spoke once incorporated — originators do not own maintenance of another spoke's tree",
+      "harness-master changes (target=MyWheel) require Trainer canonicalization before distribution",
+      "reuse existing write_change_receipt.py + spec-cross-spoke-sovereignty-v1 + spec-remote-spoke-modification-protocol-v1 — this spec generalizes them into one registry, it does not reinvent them"
+    ]
+  },
+  "spoke_creation": {
+    "_purpose": "Bootstrap a new spoke from any node — removes the central bottleneck, keeps the new spoke registered + certified",
+    "from": ["any existing spoke", "the hub"],
+    "flow": [
+      "1. Pull the spoke blueprint from MyWheel/WAI-Harness/spoke/managed/ (own-copy)",
+      "2. Run cold-start sequence (onboarding interview → goals/KPIs → roadmap + working agreement → bootstrap core advisors → initial certification scouts)",
+      "3. Register the new spoke in the hub registry (path, version, advisors, initiatives, certification score)",
+      "4. Emit a change-registry entry (scope=new-spoke) recording origin + new wheel_id",
+      "5. New spoke reports certification status to hub"
+    ],
+    "constraint": "A new spoke is not 'live' in the fleet until registered in the hub registry and reporting a certification score (degraded is allowed; unregistered is not)."
+  },
+  "constraints": [
+    "MyWheel/WAI-Harness/ is the only canonical harness master; downstream-only changes are non-canonical",
+    "No silent remote mutation: every remote change carries a registry entry + change-lug to the target incoming",
+    "Native agent owns incorporation + maintenance; originator owns proposal + registration only",
+    "Harness-master (MyWheel) changes pass Trainer canonicalization before Basher distributes",
+    "Spoke creation requires hub-registry registration + certification reporting",
+    "Own-copy distribution: clone-and-run/offline preserved; Basher upgrades a spoke's copy when the master is newer",
+    "Never write secret values into MyWheel or any distributed copy"
+  ],
+  "tests": [
+    "Master discipline: apply a harness change to a downstream spoke copy only → on next Basher pull it is overwritten (proves MyWheel-is-master); apply the same change to MyWheel → it propagates and persists",
+    "Empower: spoke A originates a change targeting spoke B → a change-lug + registry entry are produced; B's incoming receives it",
+    "Control: a remote file write to spoke B with NO registry entry → flagged as silent mutation and reverted",
+    "Native incorporation: B's Ozi advances incorporation_status to accepted/adapted; A cannot set it; maintenance_owner=B",
+    "Harness-master gate: a change with target=MyWheel is NOT distributed until Trainer canonicalizes it",
+    "Spoke creation from a spoke: spoke A bootstraps new spoke C → C pulls blueprint, runs cold-start, registers in hub, emits new-spoke registry entry; C reports a certification score",
+    "Spoke creation from hub: same flow initiated at the hub",
+    "Own-copy upgrade: master version bumps → Basher upgrades a spoke's managed/ copy on next spin-up; spoke local/ untouched"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none — spec only",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low — initial spec",
+    "open_questions": [
+      "Change registry storage: per-spoke registry.jsonl + hub-aggregated, or central in hub Postgres? (lean: per-spoke local + nightly hub aggregation, consistent with storage layer)",
+      "Spoke-creation capability: a managed tool (harness_init.py successor) callable from any spoke, or a skill? (lean: managed tool + thin skill wrapper)",
+      "Confirm MyWheel path: /home/mario/projects/wheelwright/MyWheel/"
+    ]
+  },
+  "related_specs": [
+    "spec-v4-migration-home-map-v1",
+    "spec-trainer-advisor-v1",
+    "spec-cross-spoke-sovereignty-v1",
+    "spec-remote-spoke-modification-protocol-v1"
+  ],
+  "perceive": "Read this spec + spec-v4-migration-home-map-v1 (MyWheel master) + spec-trainer-advisor-v1 (canonicalization). Read existing write_change_receipt.py and the two sovereignty specs — this generalizes them, does not replace them. Confirm MyWheel path.",
+  "execute": "1. Implement the change registry (per-spoke registry.jsonl + entry schema; reuse write_change_receipt.py). 2. Add the silent-mutation guard (remote write without registry entry → flag + revert) — ties to self-healing AC22. 3. Implement spoke-creation capability callable from any spoke + hub (managed tool + skill wrapper) running the cold-start flow + hub registration. 4. Wire harness-master changes through Trainer canonicalization before Basher distribution. 5. Deliver hub-directed pieces (registry aggregation, Trainer gate) to hub incoming.",
+  "verify": "Run all tests[]. Confirm master discipline, registry-mandatory control, native incorporation ownership, Trainer gate on master changes, and spoke creation from both a spoke and the hub.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

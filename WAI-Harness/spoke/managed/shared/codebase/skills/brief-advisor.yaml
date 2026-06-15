@@ -1,0 +1,153 @@
+name: brief-advisor
+role: advisor
+model: standard
+description: "BRIEF alignment checker and apprenticeship engine - learns from user decisions"
+
+trigger:
+  events:
+    - pre_decision
+    - post_decision
+    - on_demand
+  conditions:
+    - "agent makes significant decision (impact >= 7) OR"
+    - "user invokes /check-brief OR"
+    - "decision Lug resolved (for learning)"
+
+scope:
+  reads:
+    - "BRIEF.md (hub, project, spoke cascade)"
+    - "WAI-Lugs.jsonl (past decisions)"
+    - "current agent decision context"
+  writes:
+    - "decision Lug (if new decision)"
+    - "observations.jsonl (pattern learnings)"
+
+prerequisites:
+  - "BRIEF.md exists (at least hub-level)"
+  - "access to past decision Lugs"
+
+behavior:
+  cascade_reading: |
+    Read BRIEF files in hierarchy (Hub → Project → Spoke):
+    1. Read hub/BRIEF.md (required, universal rules)
+    2. Read project/BRIEF.md (optional, shared rules)
+    3. Read spoke/BRIEF.md (optional, local rules)
+    4. Merge rules:
+       - Hub "always/never" cannot be overridden (highest priority)
+       - Project "always/never" cannot be overridden by spoke
+       - Preferences: Spoke > Project > Hub (lowest level wins)
+    5. Return merged rules for alignment checking
+
+    See: docs/BRIEF-CASCADE.md for complete algorithm
+
+  on_pre_decision: |
+    1. Read BRIEF cascade (hub → project → spoke) using cascade_reading
+    2. Extract decision context from agent
+    3. Search past decisions for similar scenarios:
+       - Same topic/category
+       - Similar alternatives_considered
+       - Related resolution_reason
+    4. Compare proposed decision with:
+       - BRIEF constraints (always/never rules from cascade)
+       - Past decisions (what was chosen before and why)
+    5. Advise agent:
+       - If aligned with BRIEF + past: "Consistent with prior decisions"
+       - If conflicts with BRIEF: "WARNING: Violates BRIEF rule: {rule}"
+       - If conflicts with past: "NOTE: Different from decision {id} - {reason}"
+
+  on_post_decision: |
+    1. Record decision as Lug (type: decision)
+    2. Capture: alternatives_considered, chosen option, reasoning
+    3. Extract patterns:
+       - If similar decisions cluster: Create pattern observation
+       - If user consistently overrides suggestion: Update learned preferences
+    4. Update apprenticeship model (what user values)
+
+  apprenticeship_learning: |
+    Over time, brief-advisor learns:
+    - User's decision patterns (prefers simplicity vs features)
+    - Risk tolerance (conservative vs aggressive changes)
+    - Trade-off preferences (speed vs quality, etc.)
+    - Domain-specific rules (this project never uses X)
+
+    Uses decision Lugs with resolution_reason to build preference model.
+
+output:
+  pre_decision_advice:
+    type: "decision_advice"
+    data:
+      alignment: "aligned" / "warning" / "note"
+      message: "Consistent with prior decisions"
+      relevant_past: ["{lug_id}: {summary}"]
+  post_decision_learning:
+    type: "pattern_learned"
+    data:
+      pattern: "User prefers lightweight solutions over complex ones"
+      supporting_decisions: ["{lug_id1}", "{lug_id2}"]
+      confidence: "3 decisions"
+
+use_cases:
+  - scenario: "Agent proposes adding a new dependency (lodash)"
+    what_happens: "brief-advisor checks BRIEF.md for dependency policy, checks past decisions"
+    why_it_matters: "If BRIEF says 'minimize dependencies', agent knows before proposing"
+    user_trigger: "pre_decision event (agent thinking about dependency)"
+
+  - scenario: "User has rejected 3 complex solutions, accepted 2 simple ones"
+    what_happens: "brief-advisor learns pattern: this user values simplicity"
+    why_it_matters: "Future decisions pre-weighted toward simple solutions"
+    origin: "Apprenticeship pattern - agent learns conductor's preferences"
+
+  - scenario: "BRIEF.md says 'Never: Use global state', agent proposes singleton"
+    what_happens: "brief-advisor warns: 'Violates BRIEF never-rule: global state'"
+    why_it_matters: "Catches BRIEF violations before implementation"
+    user_trigger: "Automatic pre_decision check"
+
+  - scenario: "Similar decision made 6 months ago with detailed reasoning"
+    what_happens: "brief-advisor surfaces past decision: 'In lug abc123, we chose X because Y'"
+    why_it_matters: "Institutional memory - don't repeat analysis, reference past reasoning"
+    reference: "Decision Lugs as apprenticeship engine"
+
+  - scenario: "User consistently overrides advisor's suggestion to add tests"
+    what_happens: "brief-advisor stops suggesting test additions (learned preference)"
+    why_it_matters: "Adapts to user's actual behavior vs stated preferences"
+    user_trigger: "Pattern detection after 5+ overrides"
+
+  - scenario: "BRIEF cascade: Hub forbids X, project allows X, spoke silent"
+    what_happens: "brief-advisor enforces hub-level rule (hub policy wins)"
+    why_it_matters: "Cascade hierarchy prevents spoke from violating hub policies"
+    reference: "Phase 4 - BRIEF cascade formalized"
+
+tests:
+  - name: "Detects BRIEF never-rule violations"
+    setup: "BRIEF.md contains 'Never: Use eval()'"
+    action: "Agent proposes code using eval()"
+    expected: "Warning issued before decision made"
+
+  - name: "Surfaces relevant past decisions"
+    setup: "Past decision Lug about authentication strategy"
+    action: "Agent considers new auth-related decision"
+    expected: "Past decision referenced in advice"
+
+  - name: "Learns user preference patterns"
+    setup: "User accepts 3 simple solutions, rejects 2 complex ones"
+    action: "brief-advisor analyzes resolutions"
+    expected: "Pattern learned: preference for simplicity"
+
+  - name: "Respects BRIEF cascade hierarchy"
+    setup: "Hub BRIEF forbids X, spoke BRIEF silent"
+    action: "Check alignment with X"
+    expected: "Hub rule enforced, spoke can't override"
+
+notes: |
+  Standard model needed for:
+  - Semantic alignment checking (does decision violate BRIEF intent?)
+  - Pattern recognition across decision Lugs
+  - Natural language reasoning about past decisions
+
+  Implements "decision records as apprenticeship" - the more decisions made,
+  the better the advisor understands user preferences.
+
+  Works best with:
+  - Well-maintained BRIEF.md (clear always/never rules)
+  - Consistent decision Lug creation (capture reasoning)
+  - Long-term use (patterns emerge over time)

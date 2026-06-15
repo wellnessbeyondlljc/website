@@ -1,0 +1,36 @@
+{
+  "advisor_id": "hank",
+  "name": "Hank — Cruft Hygiene",
+  "role": "Watch each spoke for cruft + misplaced files and remediate safely; self-heal writes aimed at deprecated v3 paths.",
+  "owned_files": [
+    "WAI-Harness/spoke/advisors/hank/scan_state.jsonl",
+    "WAI-Harness/spoke/advisors/hank/remediation-plan.json"
+  ],
+  "owned_data": [
+    "the spoke home-map (v3->v4 categories)",
+    "on-disk file inventory vs home-map homes"
+  ],
+  "schedule": "event-driven (on closeout + file-write events) + periodic floor",
+  "escalation_path": "ozi -> human (Drop/trash requires a guidance sign-off)",
+  "analysis_trigger": {
+    "type": "time_since_last",
+    "threshold": 86400,
+    "minimum_floor_seconds": 3600
+  },
+  "tooling": {
+    "module": "tools/hygiene.py",
+    "redirect_path": "AC22 self-heal — deprecated v3 WAI-Spoke writes redirected to v4 home",
+    "detect_misplaced": "AC34 detect — files not under their home-map home",
+    "plan_remediation": "AC34 act — DRY-RUN plan: relocate->home; cruft->trash_bin (NEVER rm)"
+  },
+  "patterns_dir": "WAI-Harness/spoke/advisors/hank/patterns",
+  "act_policy": "DRY-RUN plan first; relocate misplaced to home-map home; route cruft to trash_bin preserving relative path (NEVER rm under ~/projects); Drop/decommission is human-gated via guidance.py sign-off (staged-until-ack).",
+  "kpis": [
+    "misplaced_files_open",
+    "stale_path_redirects",
+    "cruft_bytes_recoverable",
+    "remediations_awaiting_signoff"
+  ],
+  "schema_version": 4,
+  "source": "spoke"
+}

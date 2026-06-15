@@ -1,0 +1,70 @@
+---
+id: skill-wai-improve-thrift-v1
+type: skill
+object: wai-improve.md
+version: 1
+created_at: 2026-03-25T04:30:00Z
+safe_to_auto_adopt: true
+framework_version: "3.0.0"
+summary: "wai-improve.md slimmed 656→380 lines (-42%). Verbose templates moved to wai-improve-reference.md. All behavioral steps (0-6) preserved."
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| WAI-Spoke/commands/ exists | `test -d WAI-Spoke/commands && echo PASS \|\| echo FAIL` | Cannot place files |
+
+## Batch Sequence
+
+**Batch:** skill-thrift-tier1
+**Apply order:** 2 of 2
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes — touches different files than T-01
+**Full batch order:** skill-wai-lug-schema-thrift-v1 → skill-wai-improve-thrift-v1
+
+---
+
+## What This Teaching Provides
+
+`wai-improve.md` has been slimmed from 656 to 380 lines (-42%) following the Skill Thrift Principle. All behavioral steps (0 through 6) are preserved. Templates and examples moved to `wai-improve-reference.md`.
+
+**What changed:**
+- Fit report template (Step 2e) moved to reference
+- Terminology reconciliation examples table moved to reference
+- Full idea lug JSON template (Step 5) moved to reference
+- Step 6e user approval presentation template moved to reference
+- Backlog review output template moved to reference
+- Step 6c dogfood audit detailed criteria moved to reference
+- Worked challenge→hypothesis→lug example moved to reference
+
+**What stayed:**
+- All protocol steps (0-6) with full behavioral instructions
+- Scoring dimensions and priority classification tables
+- Phase adjustment rules and override rules
+- Normalization pipeline and Jaccard matching protocol (Step 3b)
+- Reframe protocol, agent-initiated ideas, distribution note
+
+**Why it matters:** Every session that loads this skill saves ~11KB of context. Reference only loaded when user needs template examples or scoring detail.
+
+## Migration Instructions
+
+1. Replace `WAI-Spoke/commands/wai-improve.md` with the slimmed version
+2. Create `WAI-Spoke/commands/wai-improve-reference.md` alongside it
+3. If spoke has `WAI-Spoke/skills/improve/` folder: copy both files there too
+
+### Verification
+
+```bash
+wc -l WAI-Spoke/commands/wai-improve.md
+# Expected: ~380 lines (vs original 656)
+grep -c "wai-improve-reference" WAI-Spoke/commands/wai-improve.md
+# Expected: 3 or more pointer lines
+grep "Fit Report Template" WAI-Spoke/commands/wai-improve-reference.md && echo PASS || echo FAIL
+# Expected: PASS (template in reference)
+```
+
+## Files to Apply
+
+See framework `templates/commands/wai-improve.md` and `templates/commands/wai-improve-reference.md` for canonical content. Copy to spoke's `WAI-Spoke/commands/` directory.

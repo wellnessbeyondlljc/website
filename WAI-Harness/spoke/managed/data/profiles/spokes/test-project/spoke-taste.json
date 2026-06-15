@@ -1,0 +1,65 @@
+{
+  "spoke_name": "test-project",
+  "version": "1.0.0",
+  "created_at": "2026-04-09T16:03:00Z",
+  "last_updated": "2026-04-09T16:03:00Z",
+  "inherited_from": "hub",
+  "overrides": {
+    "python": {
+      "max_line_length": 120,
+      "target_version": "3.12",
+      "type_checking": "strict"
+    },
+    "testing": {
+      "framework": "pytest",
+      "min_coverage": 95,
+      "test_style": "property_based"
+    },
+    "documentation": {
+      "docstring_style": "google",
+      "api_docs_required": false,
+      "changelog_format": "none"
+    },
+    "quality": {
+      "linting": {
+        "tool": "pylint",
+        "strict_mode": true,
+        "exclude_patterns": ["__pycache__/*", ".pytest_cache/*"]
+      },
+      "formatting": {
+        "tool": "black",
+        "line_length": 120,
+        "target_version": "py312"
+      }
+    },
+    "workflow": {
+      "ci_cd": "github_actions",
+      "branch_protection": true,
+      "required_reviews": 0
+    }
+  },
+  "spoke_specific": {
+    "testing": {
+      "property_based": "hypothesis",
+      "mutation_testing": "mutpy",
+      "performance_testing": "pytest-benchmark"
+    },
+    "development": {
+      "local_environment": "poetry",
+      "dependency_management": "poetry",
+      "virtual_environments": true,
+      "pre_commit_hooks": true
+    },
+    "packaging": {
+      "build_system": "setuptools",
+      "distribution_format": "wheel",
+      "publish_to": "pypi"
+    }
+  },
+  "metadata": {
+    "description": "Test project taste profile focused on quality assurance and packaging",
+    "inherits_from_hub": true,
+    "conflicts_resolved": 1,
+    "last_hub_sync": "2026-04-09T16:03:00Z"
+  }
+}

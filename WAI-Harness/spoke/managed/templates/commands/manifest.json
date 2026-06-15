@@ -1,0 +1,58 @@
+{
+  "version": "2.1.0",
+  "description": "WAI session commands - consistent across all AI integrations",
+  "skill_registry": "WAI-Spoke/WAI-Skills.jsonl",
+  "_note": "Commands are the instructions layer. WAI-Skills.jsonl is the skill registry with full metadata (24 skills registered).",
+  "_skill_system_version": "1.0.0",
+  "_registry_schema": "JSONL with fields: id, name, type, lifecycle, scope, safety_level, advisory, watchers, objects, use_cases, command_file, description",
+  "commands": [
+    {
+      "name": "wai",
+      "file": "wai.md",
+      "description": "Wakeup - load context, verify, brief",
+      "aliases": ["WAI", "wakeup"]
+    },
+    {
+      "name": "wai-status",
+      "file": "wai-status.md",
+      "description": "Health check + recommendations",
+      "aliases": ["Status", "status"]
+    },
+    {
+      "name": "wai-time",
+      "file": "wai-time.md",
+      "description": "Token capacity check",
+      "aliases": ["Time", "time"]
+    },
+    {
+      "name": "wai-rules",
+      "file": "wai-rules.md",
+      "description": "Show boundaries and protocols",
+      "aliases": ["Rules", "rules"]
+    },
+    {
+      "name": "wai-closeout",
+      "file": "wai-closeout.md",
+      "description": "End session ceremony",
+      "aliases": ["Closeout", "closeout"]
+    },
+    {
+      "name": "wai-learn",
+      "file": "wai-learn.md",
+      "description": "Auto-process inbox on wakeup",
+      "aliases": ["Learn", "learn"]
+    },
+    {
+      "name": "wai-wayfinder",
+      "file": "wai-wayfinder.md",
+      "description": "Scout expedition skill — generate and run scout jobs, file findings, issue cycle-completion lug",
+      "aliases": ["Wayfinder", "wayfinder"]
+    }
+  ],
+  "integration_notes": {
+    "claude_code": "Copy to .claude/commands/",
+    "cursor": "Append to .cursorrules as command reference",
+    "vscode": "Reference in settings.json custom instructions",
+    "generic": "Append to AI-INSTRUCTIONS.md"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "purpose": "Developer profile for AI agents - credentials, preferences, environment",
+    "audience": "AI agents",
+    "managed_by": "User (manual configuration)",
+    "last_updated": null
+  },
+  "github": {
+    "username": "{{github_username}}",
+    "organizations": [],
+    "ssh_key_path": "{{home_dir}}/.ssh/",
+    "primary_key": "id_ed25519",
+    "remote_url_format": "SSH",
+    "ssh_test_command": "ssh -T git@github.com",
+    "expected_response": "Hi {{github_username}}! You've successfully authenticated",
+    "examples": {
+      "clone": "git clone git@github.com:{{org}}/{{repo}}.git",
+      "remote_add": "git remote add origin git@github.com:{{org}}/{{repo}}.git",
+      "remote_fix_https_to_ssh": "git remote set-url origin git@github.com:{{org}}/{{repo}}.git"
+    }
+  },
+  "preferences": {
+    "autonomy_level": "YOLO_APPROVED",
+    "shell_commands": "approved_without_asking",
+    "git_operations": "approved_without_asking",
+    "file_operations": "approved_without_asking",
+    "ask_first_for": [
+      "destructive git operations (reset --hard, clean -f, force push to main)",
+      "system changes (apt install, brew install)",
+      "external service deployments",
+      "data deletion"
+    ]
+  },
+  "environment": {
+    "os": "linux/wsl",
+    "shell": "bash",
+    "editor": "vim",
+    "home": "{{home_dir}}",
+    "projects_root": "{{projects_root}}"
+  }
+}

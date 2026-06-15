@@ -1,0 +1,224 @@
+# Teaching: WAI Closeout v2 — Adoption Marker Sync + Hub Signal Bulletin
+
+**Type:** Protocol Enhancement
+**Version:** 2.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** true
+**Affects:** Closeout protocol, WAI-State.json adoption markers, hub signal distribution
+**Supersedes:** wai-closeout-step9b-sender-v1.md.teaching (additive, not replacing)
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone and has no dependencies.
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 5 of 6
+**Depends on:** none
+**Required before:** skill-wai-wakeup-hub-bulletin-v1 (T-06) — T-06 relies on hub bulletin dirs this teaching creates
+**Parallel safe:** yes
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Provides
+
+Two new steps added to the closeout protocol:
+
+1. **Step 5b — Adoption Marker Sync**: Automatically flips `_migration_state.adoption_markers` in WAI-State.json when implementation lugs reach `implemented` status. Prevents markers from staying `false` after migrations are done.
+
+2. **Step 9c — Hub Signal Bulletin**: Publishes high-impact lugs (impact > 7) to the hub's `WAI-Hub/Signals/incoming/` directory at closeout for cross-spoke visibility.
+
+---
+
+## Why This Matters
+
+### Adoption Marker Sync
+
+Prior to this change, adoption markers had no automatic enforcement mechanism. A migration could be fully implemented (implementation lug at `status: "implemented"`) while the corresponding `adoption_markers[x].adopted` stayed `false`. Every future agent waking up would read the false marker and think the migration was still pending — silently misleading them into re-running work that was done.
+
+Root cause: nothing linked "implementation lug reached implemented" to "flip the adoption marker." This step closes that loop at every session end.
+
+### Hub Signal Bulletin
+
+Goal-state defines `WAI-Hub/Signals/incoming/` and `processed/` as the cross-spoke bulletin board. High-impact signals from one spoke should be visible to agents on other spokes at wakeup. Without this step, signals were trapped locally.
+
+---
+
+## What Changed in templates/commands/wai-closeout.md
+
+### Step 5b — Adoption Marker Sync (inserted after Step 5)
+
+```
+### Step 5b — Adoption Marker Sync
+
+For each lug in WAI-Lugs.jsonl where type = "implementation" and status = "implemented":
+1. Derive the expected adoption marker key from the lug id
+   (e.g. "implementation-canonical-state-migration-v1" → "canonical_state_migration")
+2. Check _migration_state.adoption_markers[<key>].adopted in WAI-State.json
+3. If adopted = false: update to true, set adopted_at = current UTC, set adopted_by = current agent
+4. Log: "Synced adoption marker: <key>"
+
+If no mismatches found: output "Adoption markers current — no sync needed"
+```
+
+### Step 9c — Hub Signal Bulletin (inserted after Step 9b)
+
+```
+### Step 9c — Hub Signal Bulletin
+
+Read hub_path from WAI-State.json at wheel.hub_path.
+
+If hub_path is null or hub not accessible: Skip silently.
+
+If hub is accessible:
+  For each lug in WAI-Lugs.jsonl where impact > 7 and status != "archived":
+    1. Check if {hub_path}/WAI-Hub/Signals/incoming/{lug-id}.json already exists
+    2. If not: write the full lug JSON as {hub_path}/WAI-Hub/Signals/incoming/{lug-id}.json
+    3. Log: "Published to hub bulletin: {lug-id} (impact={impact})"
+
+  If no qualifying lugs: log "Hub bulletin: no lugs with impact > 7 to publish"
+```
+
+---
+
+## Resolving {framework_path}
+
+`{framework_path}` is the root of the Wheelwright framework repository. Resolve it from `WAI-State.json` at `wheel.framework_path`, or ask the user.
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+```
+
+---
+
+## Adoption Marker Key Derivation Rule
+
+Step 5b derives the adoption marker key from the implementation lug id using this algorithm:
+1. Strip the `implementation-` prefix
+2. Strip the version suffix (e.g., `-v1`, `-v2`)
+3. Replace remaining `-` with `_`
+
+Example: `implementation-canonical-state-migration-v1` → `canonical_state_migration`
+
+Note: not every `implementation-` lug has a corresponding adoption marker. Only lugs that represent capability migrations (affecting WAI-State.json schema or protocol behavior) have entries in `_migration_state.adoption_markers`. If no matching marker key exists, skip that lug.
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — Update closeout command file
+
+```bash
+cp "$FRAMEWORK_PATH/templates/commands/wai-closeout.md" WAI-Spoke/commands/wai-closeout.md
+```
+
+### Step 2 — Create hub bulletin directories (if hub connected)
+
+If `wheel.hub_path` is set and accessible:
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+mkdir -p "$HUB_PATH/WAI-Hub/Signals/incoming"
+mkdir -p "$HUB_PATH/WAI-Hub/Signals/processed"
+```
+
+If hub is not connected, skip — Step 9c handles the null case gracefully.
+
+### Step 3 — One-time sync of pre-existing mismatches
+
+This script lists adoption marker mismatches and fixes them in one pass:
+
+```bash
+python3 << 'EOF'
+import json, re
+from datetime import datetime, timezone
+
+with open('WAI-Spoke/WAI-State.json') as f:
+    state = json.load(f)
+
+markers = state.get('_migration_state', {}).get('adoption_markers', {})
+
+# Load implementation lugs
+impl_lugs = []
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try:
+            l = json.loads(line.strip())
+            if l.get('type') == 'implementation' and l.get('status') == 'implemented':
+                impl_lugs.append(l)
+        except: pass
+
+synced = []
+for lug in impl_lugs:
+    lug_id = lug.get('id', '')
+    # Derive marker key: strip prefix + version suffix, replace - with _
+    key = re.sub(r'^implementation-', '', lug_id)
+    key = re.sub(r'-v\d+$', '', key)
+    key = key.replace('-', '_')
+    if key in markers and not markers[key].get('adopted'):
+        markers[key]['adopted'] = True
+        markers[key]['adopted_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        markers[key]['adopted_by'] = 'canonical-evolution-teaching-sync'
+        synced.append(key)
+        print(f'Synced: {key}')
+
+if synced:
+    with open('WAI-Spoke/WAI-State.json', 'w') as f:
+        json.dump(state, f, indent=2)
+    print(f'Updated {len(synced)} markers')
+else:
+    print('Adoption markers current — no sync needed')
+EOF
+```
+
+### Step 4 — Move teaching to processed
+
+```bash
+mv WAI-Spoke/seed/ingest/skill-wai-closeout-v2.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+**Step 5b runs at every session end.** If you never implement migrations, this step runs in ~1ms (no mismatches) and outputs one line. Zero overhead.
+
+**Step 9c runs at every session end.** If hub is not connected, it skips silently. If connected, it only writes files that don't already exist — idempotent, no duplicate writes.
+
+The bulletin is advisory, not automatic adoption. The wakeup protocol surfaces hub signals in the briefing; the user decides whether to act on them.
+
+---
+
+## Verification
+
+After applying:
+
+```bash
+# 1. Step 5b is present in closeout
+grep -q "Adoption Marker Sync" WAI-Spoke/commands/wai-closeout.md && echo "PASS — Step 5b present" || echo "FAIL — Step 5b missing"
+
+# 2. Step 9c is present in closeout
+grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai-closeout.md && echo "PASS — Step 9c present" || echo "FAIL — Step 9c missing"
+
+# 3. Run closeout and confirm output contains adoption marker check line
+# Should see: "Adoption markers current — no sync needed" or "Synced adoption marker: X"
+```
+
+---
+
+## Backward Compatibility
+
+- Both steps fail gracefully when their preconditions are absent
+- Step 5b: if no implementation lugs exist, outputs one line and continues
+- Step 9c: if hub_path is null, skips silently — no error, no blocking
+- No changes to existing closeout behavior (Steps 1-5, 6-9b, 10-12 unchanged)
+
+---
+
+**Teaching Package:** skill-wai-closeout-v2
+**Safe to Auto-Adopt:** Yes
+**Impact:** Structural improvement — prevents silent state corruption at session end

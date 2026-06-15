@@ -1,0 +1,225 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Test mode'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - baseline-comparison
+          - phase
+
+jobs:
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate shell script line endings
+        run: |
+          CRLF_FILES=$(find . -type f -name "*.sh" -print0 | xargs -0 grep -Il $'\r' || true)
+          if [ -n "$CRLF_FILES" ]; then
+            echo "CRLF line endings found in shell scripts:"
+            echo "$CRLF_FILES"
+            exit 1
+          fi
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run integration tests
+        run: |
+          ./run-integration-tests.sh --mode=all --json=results.json
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-py${{ matrix.python-version }}
+          path: results.json
+          retention-days: 30
+
+      - name: Generate test report
+        if: always()
+        run: |
+          python3 tests/integration/runner.py --mode=all --output=report.txt
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-report-py${{ matrix.python-version }}
+          path: report.txt
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+
+            try {
+              report = fs.readFileSync('report.txt', 'utf8');
+            } catch (e) {
+              report = 'Report generation failed';
+            }
+
+            const body = `## Integration Test Results (Python ${{ matrix.python-version }})\n\n\`\`\`\n${report}\n\`\`\``;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  baseline-comparison:
+    name: Baseline Comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run on main branch or manual trigger
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate shell script line endings
+        run: |
+          CRLF_FILES=$(find . -type f -name "*.sh" -print0 | xargs -0 grep -Il $'\r' || true)
+          if [ -n "$CRLF_FILES" ]; then
+            echo "CRLF line endings found in shell scripts:"
+            echo "$CRLF_FILES"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run baseline comparison
+        run: |
+          ./run-integration-tests.sh --mode=baseline-comparison --json=baseline-results.json
+
+      - name: Upload baseline comparison results
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-comparison-results
+          path: baseline-results.json
+          retention-days: 90
+
+      - name: Extract token savings metrics
+        run: |
+          python3 -c "
+          import json
+          with open('baseline-results.json') as f:
+              data = json.load(f)
+
+          summary = data.get('comparison_summary', {})
+          print(f\"Baseline tests passed: {summary.get('baseline_tests_passed', 0)}\")
+          print(f\"Conclusion: {summary.get('conclusion', 'N/A')}\")
+          "
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate summary
+        run: |
+          echo "# Integration Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Results by Python Version" >> $GITHUB_STEP_SUMMARY
+
+          for file in integration-test-results-*/results.json; do
+            if [ -f "$file" ]; then
+              echo "Processing $file" >> $GITHUB_STEP_SUMMARY
+              python3 -c "
+          import json
+          import sys
+
+          with open('$file') as f:
+              data = json.load(f)
+
+          summary = data.get('summary', {})
+          total = summary.get('total_tests', 0)
+          passed = summary.get('passed', 0)
+          failed = summary.get('failed', 0)
+          skipped = summary.get('skipped', 0)
+
+          print(f'- **Total Tests:** {total}')
+          print(f'- **✅ Passed:** {passed}')
+          print(f'- **❌ Failed:** {failed}')
+          print(f'- **⏭️ Skipped:** {skipped}')
+          print('')
+              " >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Check for failures
+        run: |
+          # Check if any test run failed
+          FAILURES=0
+          for file in integration-test-results-*/results.json; do
+            if [ -f "$file" ]; then
+              FAILED=$(python3 -c "
+          import json
+          with open('$file') as f:
+              data = json.load(f)
+          print(data.get('summary', {}).get('failed', 0))
+              ")
+              FAILURES=$((FAILURES + FAILED))
+            fi
+          done
+
+          if [ $FAILURES -gt 0 ]; then
+            echo "❌ $FAILURES test(s) failed"
+            exit 1
+          else
+            echo "✅ All tests passed"
+          fi

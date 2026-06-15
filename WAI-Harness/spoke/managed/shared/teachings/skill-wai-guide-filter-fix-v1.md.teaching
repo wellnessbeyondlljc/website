@@ -1,0 +1,179 @@
+# Teaching: WAI Guide Filter Fix — status "published" → "open or in_progress"
+
+**Type:** Bug Fix
+**Version:** 1.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** true
+**Affects:** WAI-Guide.md quick-reference, agent lug queries at session start
+**Urgency:** High — broken filter returns zero results, agents following it see empty backlog
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone and has no dependencies.
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 4 of 6
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Fixes
+
+`WAI-Guide.md` is listed as the first file agents should read at session start (`ai_rules.context_loading`). It contains a sample lug filter that agents use to query their active backlog:
+
+**Old (broken):**
+```bash
+cat WAI-Spoke/WAI-Lugs.jsonl | python3 -m json.tool | grep '"status": "published"'
+```
+or the jq equivalent:
+```
+select(.status == "published")
+```
+
+`"published"` is a v1-era status value. No current lugs use it. An agent following this guide literally will query for active work and get nothing — not knowing why.
+
+**Fixed:**
+```bash
+cat WAI-Spoke/WAI-Lugs.jsonl | python3 -c "
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if line:
+        try:
+            l = json.loads(line)
+            if l.get('status') in ('open', 'in_progress', 'active', 'o', 'p'):
+                print(l.get('id', l.get('i', '?')), '-', l.get('title', l.get('t', '')))
+        except: pass
+"
+```
+
+---
+
+## What Else Was Fixed
+
+Stale references to `WAI-Signals.jsonl` in the guide were updated to reflect canonical signal storage:
+
+**Old:**
+```
+WAI-Signals.jsonl — High-impact signals (UPDATE)
+```
+
+**New:**
+```
+WAI-Lugs.jsonl — High-impact signals stored as lugs with impact >= 8 (APPEND — WAI-Signals.jsonl is retired)
+```
+
+---
+
+## Resolving {framework_path}
+
+`{framework_path}` is the root of the Wheelwright framework repository. Resolve from `WAI-State.json` at `wheel.framework_path`, or ask the user.
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+```
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — Update WAI-Guide.md
+
+Check if your guide has the stale filter:
+```bash
+grep -n "published" WAI-Spoke/WAI-Guide.md
+```
+
+**Option A — Automatic (sed replacement, safe for standard guide):**
+```bash
+# Replace stale filter in-place
+sed -i 's/select(.status == "published")/select(.status == "open" or .status == "in_progress")/g' WAI-Spoke/WAI-Guide.md
+sed -i 's/"status": "published"/"status": "open" or "status": "in_progress"/g' WAI-Spoke/WAI-Guide.md
+```
+
+**Option B — Full replace (only if your spoke uses the unmodified standard guide):**
+```bash
+# Note: the framework's spoke guide lives at WAI-Spoke/WAI-Guide.md, not templates/
+# The framework spoke dogfoods itself, so its WAI-Guide.md is the live canonical version.
+cp "$FRAMEWORK_PATH/WAI-Spoke/WAI-Guide.md" WAI-Spoke/WAI-Guide.md
+```
+
+**Option C — Manual edit:** Open `WAI-Spoke/WAI-Guide.md`, find `published`, replace with `open or in_progress`.
+
+**Warning:** If your spoke has custom sections in WAI-Guide.md, use Option A (sed) rather than Option B (full replace).
+
+### Step 2 — Remove WAI-Signals.jsonl references from guide
+
+```bash
+grep -n "WAI-Signals" WAI-Spoke/WAI-Guide.md
+# If any found, update to WAI-Lugs.jsonl with signal note
+```
+
+### Step 3 — Verify the fix works
+
+```bash
+python3 -c "
+import json
+count = 0
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try:
+            l = json.loads(line.strip())
+            if l.get('status') in ('open','in_progress','active','o','p'):
+                count += 1
+        except: pass
+print(f'{count} active lugs found')
+# Note: zero results on a new spoke with no active lugs is expected — not a failure.
+# Zero results on an established spoke indicates either the filter is still broken
+# or all lugs are genuinely closed. Check a few lug statuses to distinguish.
+print('FILTER WORKING' if count > 0 else 'Zero results — expected on new spoke; verify manually on established spoke')
+"
+```
+
+### Step 4 — Move teaching to processed
+
+```bash
+mv WAI-Spoke/seed/ingest/skill-wai-guide-filter-fix-v1.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+Agents that read WAI-Guide.md at wakeup will now get non-empty backlog queries. This directly affects:
+- Wakeup briefing completeness (active work section)
+- Agent ability to self-orient without user prompting
+- Continuity when resuming after session interruption
+
+---
+
+## Verification
+
+```bash
+# Guide no longer contains stale "published" filter
+grep -q '"published"' WAI-Spoke/WAI-Guide.md && echo "FAIL — stale filter still present" || echo "PASS — filter clean"
+
+# Guide no longer references WAI-Signals.jsonl
+grep -q "WAI-Signals.jsonl" WAI-Spoke/WAI-Guide.md && echo "FAIL — stale ref still present" || echo "PASS — clean"
+```
+
+---
+
+## Backward Compatibility
+
+- No structural changes — edit only to WAI-Guide.md
+- Existing lugs unaffected
+- Filter fix is purely a query string update
+
+---
+
+**Teaching Package:** skill-wai-guide-filter-fix-v1
+**Safe to Auto-Adopt:** Yes
+**Impact:** Bug fix — without this, agents see empty backlog and cannot self-orient

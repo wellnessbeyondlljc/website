@@ -1,0 +1,110 @@
+# Teaching: skill-wai-shipit-benchmark-v1
+
+**Family:** skill-wai-shipit-benchmark
+**Version:** v1
+**Type:** skill
+**safe_to_auto_adopt:** true
+**Source:** templates/commands/wai-shipit.md (Step 6)
+**Session:** session-20260323-0806
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone. Requires benchmarks/runner/benchmark_runner.py to exist for the behavior to activate.
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes — touches only Step 6 of wai-shipit.md
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Provides
+
+Updates Step 6 (Benchmark Execution) in `wai-shipit.md` to detect and run the Wheelwright WEI benchmark runner instead of generic benchmark detection.
+
+**Before:** Step 6 used a generic `if [ -f "benchmark.py" ]` check that never matched the actual Wheelwright benchmark runner.
+
+**After:** Step 6 explicitly detects `benchmarks/runner/benchmark_runner.py` and runs small + medium tiers with `--persist`, appending WEI scores to `benchmarks/benchmark-results.jsonl`. Large tier is skipped by default (400MB generation too slow for routine shipit).
+
+---
+
+## Apply Instructions
+
+In `templates/commands/wai-shipit.md`, replace the existing **Step 6** benchmark detection block:
+
+**Find:**
+```bash
+# Auto-detect benchmarks
+if [ -f "benchmark.py" ]; then
+    python3 benchmark.py --profile=all
+elif [ -d "benchmarks/" ] && [ -f "benchmarks/pytest" ]; then
+    pytest benchmarks/ -v
+elif [ -f "package.json" ] && grep -q "benchmark" package.json; then
+    npm run benchmark
+else
+    echo "ℹ️ No benchmarks detected - SKIP"
+fi
+```
+
+**Replace with:**
+```bash
+# Wheelwright WEI benchmark (preferred)
+if [ -f "benchmarks/runner/benchmark_runner.py" ]; then
+    echo "Running Wheelwright WEI benchmark (small + medium tiers)..."
+    python3 benchmarks/runner/benchmark_runner.py small --persist
+    python3 benchmarks/runner/benchmark_runner.py medium --persist
+    # Note: large tier generates 400MB reference files — skip in shipit unless explicitly requested
+    echo "WEI scores appended to benchmarks/benchmark-results.jsonl"
+else
+    # Fallback: detect other benchmark runners
+    if [ -f "benchmark.py" ]; then
+        python3 benchmark.py --profile=all
+    elif [ -f "package.json" ] && grep -q "benchmark" package.json; then
+        npm run benchmark
+    else
+        echo "No benchmarks detected - SKIP"
+    fi
+fi
+```
+
+Also add the regression analysis block immediately after:
+
+```bash
+# Compare latest WEI score against prior run
+if [ -f "benchmarks/benchmark-results.jsonl" ]; then
+    python3 -c "
+import json
+lines = [l for l in open('benchmarks/benchmark-results.jsonl') if l.strip()]
+if len(lines) >= 2:
+    prev = json.loads(lines[-2])
+    curr = json.loads(lines[-1])
+    delta = curr['wei'] - prev['wei']
+    flag = 'REGRESSION' if delta < -2 else 'OK'
+    print(f'WEI: {prev[\"wei\"]:.1f} -> {curr[\"wei\"]:.1f} ({delta:+.1f}) [{flag}]')
+else:
+    print('First run — no baseline to compare')
+"
+fi
+```
+
+**Verify:**
+```bash
+grep -q "benchmark_runner.py small --persist" templates/commands/wai-shipit.md && echo PASS || echo FAIL
+```
+
+---
+
+## Context
+
+The Wheelwright benchmark runner lives at `benchmarks/runner/benchmark_runner.py`. Three tiers:
+- **small:** 25 files, 20MB reference, 3,902x token efficiency
+- **medium:** ~50 files, 100MB reference, 7,844x token efficiency  
+- **large:** 75 files, 400MB runtime-generated reference, 85,599x token efficiency
+
+`benchmark-results.jsonl` in `benchmarks/` tracks longitudinal WEI scores per run.

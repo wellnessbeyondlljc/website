@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "spec-intra-agent-comms-v1",
+  "supabase_table": "agent_messages",
+  "columns": {
+    "id": {"type": "uuid", "primary_key": true, "default": "gen_random_uuid()"},
+    "thread_id": {"type": "uuid", "nullable": false, "note": "groups multi-turn conversations; initiator creates via gen_random_uuid()"},
+    "session_id": {"type": "text", "nullable": false},
+    "from_spoke": {"type": "text", "nullable": false, "note": "wheel_id of sending spoke"},
+    "to_spoke": {"type": "text", "nullable": false, "note": "wheel_id of target spoke"},
+    "message_type": {"type": "text", "nullable": false, "enum": ["consult", "handoff", "collaborative", "response", "ack"]},
+    "message": {"type": "jsonb", "nullable": false, "note": "structured body per message_type; see message-body.schema.json"},
+    "status": {"type": "text", "nullable": false, "default": "pending", "enum": ["pending", "responded", "acknowledged", "expired"]},
+    "ts": {"type": "timestamptz", "nullable": false, "default": "now()"},
+    "responded_at": {"type": "timestamptz", "nullable": true},
+    "response": {"type": "jsonb", "nullable": true, "note": "populated by responder session"},
+    "ttl_hours": {"type": "integer", "default": 2, "note": "message expires if not responded within this window"}
+  },
+  "indexes": [
+    {"columns": ["to_spoke", "status"], "note": "Herald poll query"},
+    {"columns": ["thread_id"], "note": "conversation grouping"},
+    {"columns": ["ts"], "note": "TTL expiry sweep"}
+  ]
+}

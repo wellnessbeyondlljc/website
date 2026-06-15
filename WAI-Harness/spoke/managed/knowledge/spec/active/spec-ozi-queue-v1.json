@@ -1,0 +1,125 @@
+{
+  "id": "spec-ozi-queue-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 9,
+  "subject": {
+    "kind": "feature",
+    "id": "ozi-queue",
+    "label": "Ozi Work Queue"
+  },
+  "title": "Ozi Work Queue — automated overnight lug dispatch",
+  "what": "Ozi is the automated overnight work queue that dispatches implementation lugs to Claude agents without human involvement. Each nightly run scores all open lugs by ROI (impact/effort), respects urgency tiers and blocked_by constraints, routes each lug to the appropriate model tier (haiku/sonnet/opus based on model_fit), and records execution results.",
+  "why": "Without Ozi, humans must manually review and dispatch every lug. Ozi enables continuous spoke improvement during idle hours - high-ROI haiku-tier work executes automatically while the user sleeps.",
+  "audience": [
+    "admin",
+    "agent"
+  ],
+  "use_cases": [
+    {
+      "title": "Overnight haiku batch execution",
+      "trigger": "User marks impl lugs with model_fit=haiku and status=open",
+      "outcome": "Ozi dispatches all eligible lugs at next nightly run, each completes or records failure",
+      "persona": "admin"
+    },
+    {
+      "title": "Blocked lug skip",
+      "trigger": "Lug has non-empty blocked_by referencing an unresolved lug",
+      "outcome": "Ozi skips the lug for this run - re-evaluated next night after blocker resolves",
+      "persona": "agent"
+    },
+    {
+      "title": "ROI-based ordering",
+      "trigger": "Multiple eligible lugs in queue",
+      "outcome": "Ozi dispatches by urgency tier first, then ROI descending within each tier",
+      "persona": "agent"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Haiku-first automation",
+      "description": "Model lugs as haiku-executable when possible so Ozi can dispatch without human approval"
+    },
+    {
+      "name": "ROI-gated dispatch",
+      "description": "Set effort score carefully - it directly affects when a lug gets dispatched relative to peers"
+    }
+  ],
+  "how": {
+    "trigger": "Nightly cron schedule (Minder-owned) or explicit wakeup with gardener mode",
+    "steps_summary": [
+      "1. Score all open lugs: roi = impact / effort, sort by urgency tier then roi",
+      "2. Filter: skip lugs with non-empty blocked_by referencing unresolved IDs",
+      "3. For each eligible lug in order: route to model per model_fit field",
+      "4. Execute the lug (agent reads perceive/execute/verify fields)",
+      "5. On success: move lug to completed/, record completion_evidence",
+      "6. On failure: record error, leave in open/ or in_progress/, increment retry count"
+    ],
+    "constraints": [
+      "model_fit must be set (haiku/sonnet/opus) for Ozi to dispatch",
+      "blocked_by references must resolve to empty or all-completed for dispatch eligibility",
+      "Ozi never modifies lugs it cannot complete - no partial execution"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "nightly cron schedule",
+      "explicit gardener mode wakeup"
+    ],
+    "not_when": [
+      "Mid-session (Ozi is batch, not interactive)"
+    ],
+    "frequency": "Once per night"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/lugs/bytype/*/open/*.json - open lugs scanned",
+      "WAI-Spoke/WAI-LugIndex.jsonl - fast lookup"
+    ],
+    "outputs": [
+      "Completed lugs moved to bytype/*/completed/",
+      "Ozi run report",
+      "session-summary lug for each dispatched lug"
+    ],
+    "state_changes": [
+      "Lug status: open to in_progress to completed (or stays open on failure)",
+      "WAI-LugIndex.jsonl: regenerated post-run"
+    ]
+  },
+  "constraints": [
+    "Ozi is Minder-owned - Framework never runs or simulates Tender/Minder manually",
+    "model_fit=haiku is required for auto-dispatch; sonnet/opus require explicit approval"
+  ],
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "What retry limit before a lug is parked?"
+    ]
+  },
+  "subject_id": "ozi-queue",
+  "body": "Ozi is the overnight automated work queue that dispatches implementation lugs to Claude agents without human involvement. Each nightly run is Minder-owned and cron-scheduled. The dispatch sequence is: score all open lugs by ROI (impact / effort), sort by urgency tier ascending then ROI descending within each tier, evaluate blocked_by and execute_when gates, then route each eligible lug to the appropriate model tier per its model_fit field. model_fit=haiku enables automatic dispatch; model_fit=sonnet or opus requires explicit user approval before Ozi will dispatch. Lugs are loaded from bytype/*/open/ and bytype/*/in_progress/. Blocked lugs (blocked_by referencing unresolved IDs, or execute_when.all_completed not satisfied) are skipped for the current run and re-evaluated the next night. On success, the lug moves from open/ to completed/ and a session-summary lug is created. On failure, the lug stays in open/ or in_progress/ with an incremented retry counter and an error note appended to execution_notes. Ozi never partially executes a lug — if the perceive/execute/verify cycle cannot be completed, it records the failure and moves on. The Interactive Work Queue Monitor (wai-ozi-work-queue-monitor skill) extends Ozi to monitor in real time during user sessions: it watches for new lugs, detects status changes, identifies stale work (in_progress >4h with no activity), and processes incoming teachings. Auto-dispatch only activates when the session has /wai-auto-on enabled. The work queue display at wakeup shows top-3 ready items by ROI with [W]ork / [A]uto-chain / [P]arallel dispatch options.",
+  "done_when": [
+    "A lug with model_fit=haiku, non-empty perceive/execute/verify, and empty blocked_by is dispatched automatically on the next nightly run without user input",
+    "A lug with non-empty blocked_by where the referenced ID is still in open/ is skipped by Ozi and its skip is recorded in the run report",
+    "After a successful lug execution, the lug JSON is in bytype/*/completed/ and a session-summary lug exists for the same run",
+    "The wakeup work queue display shows urgency=1 lugs before any urgency=2 lugs regardless of their relative ROI scores",
+    "A lug with model_fit=sonnet does not dispatch automatically and appears in the wakeup queue with a 'requires approval' annotation"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-score-backlog-v1",
+    "spec-advisor-system-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

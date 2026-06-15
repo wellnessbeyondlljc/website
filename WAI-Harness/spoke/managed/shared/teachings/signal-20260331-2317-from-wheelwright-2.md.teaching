@@ -1,0 +1,28 @@
+# Teaching: Signal — Track integrity check false-positive: closeout-event track entries use event+sum
+
+**Type:** signal
+**safe_to_auto_adopt:** true
+
+---
+
+## What This Teaching Does
+
+Appends a high-impact signal to `WAI-Spoke/lugs/bytype/signal/undelivered/` on this spoke.
+
+## Embedded Signal
+
+```json
+{
+  "timestamp": "2026-03-31T23:17:31Z",
+  "session_id": "session-20260331-1535",
+  "signal": "Track integrity check false-positive: closeout-event track entries use event+summary schema (no turn or completed fields). Wakeup check tests d.get(completed) which fails, flagging valid closeout sessions as INTERRUPTED. Fix: check for event==closeout OR completed==true when determining track health.",
+  "impact": 8,
+  "rationale": "False INTERRUPTED detection causes unnecessary recovery prompts at wakeup, erodes trust in the integrity check, and may cause redundant recovery work.",
+  "by": "claude-sonnet-4-6",
+  "fw_ver": "2.0.137"
+}
+```
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

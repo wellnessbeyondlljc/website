@@ -1,0 +1,95 @@
+{
+  "id": "spec-object-quality-v4-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T01:15:00Z",
+  "updated_at": "2026-06-09T01:15:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Object quality standard v4 — full context + background, no summary where detail is needed, specific areas defined; completeness-over-brevity enforced by the cold-reader gate; applies to all harness objects",
+  "title": "Object Quality Standard v4 (lugs, specs, advisor defs, patterns)",
+  "situation": "Harness objects (lugs especially) are the durable memory of the system — an agent reading one months later, with no other context, must understand WHY it exists and execute it with no gaps. Today objects too often carry SUMMARY information where full context + background are required, leave 'specific areas' vague ('figure it out', partial paths, 'etc.', 'as needed'), and rely on context that lives only in the authoring session's head. This is the placeholder-lug / thin-lug failure mode. v4 makes completeness a hard, enforced authoring standard, not a hope.",
+  "why": "Summary-where-detail-is-needed is invisible debt: the object looks done but a later agent (or a Haiku executor) hits an ambiguity it cannot resolve and silently defers, guesses wrong, or stalls. Full context at authoring time is far cheaper than reconstruction later. This standard reinforces the Haiku-executable rule (exact schemas inline, no runtime ambiguity), the cold-reader test, and 'buildable at creation'. It is the content-completeness axis (is the object rich enough?) — complementary to the verification spine (is it tested?). The two together are what 'quality' means in v4.",
+  "audience": [
+    "every authoring agent — meets this bar when creating any object",
+    "lug-reviewer subagent — enforces the cold-reader + completeness gate before draft→open",
+    "Ozi — will not promote an object that fails the standard",
+    "Pattern Gate — completeness is a pre-gate precondition for dispatch"
+  ],
+  "core_principle": "Completeness over brevity for context. If a reader needs background, rationale, or a specific definition to act, it lives IN the object — not summarized, not referenced vaguely, not assumed. Brevity is for prose-to-the-user; objects are for cold readers and machine executors.",
+  "standards": {
+    "full_context_and_background": "Every object carries the full circumstance that warranted it: what triggered it, the state at creation, what problem it solves, and enough background that a no-context reader understands WHY without asking. A one-line summary where a paragraph of context is needed is a defect.",
+    "no_summary_where_detail_needed": "Do not summarize the parts a reader must act on. Acceptance criteria, file targets, schemas, steps, and rationale are stated in full. Summary is permitted ONLY for genuinely peripheral context, never for the executable core.",
+    "specific_areas_defined": "No vagueness in actionable areas: complete relative-from-root file paths (never partial — partial paths cause look-locally-fail-skip), schemas inline (exact keys/types), exact pass/fail criteria, named targets. Banned tokens in actionable fields: 'etc.', 'as needed', 'figure it out', 'TBD', 'and so on', '...'.",
+    "self_contained": "An object resolves without its authoring session. Context that lived only in the agent's head at authoring time (active epics, what advisor triggered it, alternatives weighed) is stamped into the object.",
+    "haiku_executable": "Implementation objects are executable by a Haiku-tier model with zero ambiguity to resolve at runtime — granular steps, exact inline schemas, explicit targets."
+  },
+  "mandatory_fields_v4": {
+    "situation": "the observable condition that warranted this object — must reference the concrete trigger, NOT just the advisor that surfaced it ('Expediter flagged this' is insufficient; 'closeout halted 3 sessions on the same step X' is sufficient)",
+    "decision_rationale": "why THIS approach over alternatives; the reasoning, in full",
+    "alternatives_considered": "what was evaluated and why rejected — captured at decision time, never confabulated at review",
+    "deferral_context": "if deferred: the state at deferral + what must change to make it relevant",
+    "context_snapshot": "active epics/initiatives at creation (auto-stamped)",
+    "triggering_session": "session id that prompted creation (auto-stamped)",
+    "relevant_context": "one sentence per related epic/initiative explaining WHY it is relevant (not a bare list)"
+  },
+  "cold_reader_gate": "lug-reviewer asks: 'Can an agent 6 months from now, with NO other context, understand why this exists and execute it with no gaps?' Fail = stays in draft. This is a hard gate, not a suggestion — no object moves draft→open without passing. Pairs with the verification spine's test-at-birth gate (content-complete AND test-covered are both required for promotion).",
+  "applies_to": {
+    "lug": "all mandatory_fields_v4 + complete perceive/execute/verify + file_targets (complete paths) + acceptance_criteria (each testable)",
+    "spec": "situation/why + full schema (inline, not referenced) + constraints + tests + perceive/execute/verify",
+    "advisor_def": "domain, owned files/data, schedule, escalation path, analysis_trigger — all explicit (no 'manages relevant files')",
+    "pattern": "every action listed with its expected result/criterion; null result = incomplete, flagged"
+  },
+  "anti_patterns": [
+    "Summary stub where full context is needed (looks done, hits ambiguity later)",
+    "Partial/relative-ambiguous file paths (reader looks locally, fails, silently skips)",
+    "Vague actionable fields ('figure it out', 'etc.', 'as needed', 'TBD')",
+    "Context that lives only in the authoring session (not stamped into the object)",
+    "situation that names only the advisor, not the observable condition",
+    "alternatives_considered confabulated at review instead of captured at decision time",
+    "Placeholder lug — created without complete PEV, criteria, effort, file targets"
+  ],
+  "constraints": [
+    "No object moves draft→open without passing the cold-reader + completeness gate",
+    "Banned tokens ('etc.','TBD','as needed','figure it out','...') in actionable fields fail the gate",
+    "File paths must be complete and relative-from-root",
+    "Schemas are inline and exact, never referenced as 'the usual shape'",
+    "Completeness is the content axis; the verification spine is the test axis — BOTH gate promotion",
+    "This standard is dogfooded: every v4 lug/spec authored for this epic meets it"
+  ],
+  "tests": [
+    "Cold-reader gate: a lug with a one-line situation that names only an advisor FAILS the gate; rewriting situation to the observable condition passes",
+    "Banned-token check: a lug with 'figure it out' in execute[] FAILS; removing it passes",
+    "Partial-path check: a file_target like 'config.json' (no path) FAILS; 'WAI-Harness/spoke/managed/config/config.json' passes",
+    "Self-contained check: a lug referencing 'the plan from this session' without inlining the relevant content FAILS",
+    "Schema-inline check: a spec that says 'standard lug shape' instead of the explicit schema FAILS",
+    "Dual gate: a content-complete lug with NO verification_test still FAILS promotion (both axes required)",
+    "Haiku-executable: a Haiku model runs a sample impl lug end-to-end with zero clarifying questions"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none — spec only",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low — initial spec",
+    "open_questions": [
+      "Banned-token list: hard-fail vs warn-with-justification? (proposed: hard-fail in actionable fields, warn elsewhere)",
+      "Auto-stamping context_snapshot/triggering_session: at creation tool vs lug-reviewer backfill (proposed: creation tool)",
+      "schema_version gating: v4 standard applies to schema_version:4 lugs; pre-v4 get a migration prompt not a hard reject"
+    ]
+  },
+  "related_specs": [
+    "spec-verification-quality-v1",
+    "spec-v4-migration-home-map-v1",
+    "spec-trainer-advisor-v1"
+  ],
+  "perceive": "Read this spec + epic AC10-12 (lug quality v4) + the placeholder-lug / buildable-at-creation anti-patterns in CLAUDE.md. Read the existing lug-reviewer subagent definition.",
+  "execute": "1. Extend lug-reviewer with the cold-reader + completeness gate (mandatory fields present + min specificity, banned-token scan, complete-path check, schema-inline check). 2. Add creation-time template that forces all mandatory_fields_v4 before the object file is written. 3. Auto-stamp context_snapshot + triggering_session at creation. 4. Wire the dual gate: promotion requires content-complete (this spec) AND test-at-birth (spec-verification-quality-v1). 5. Add schema_version:4 stamping; pre-v4 objects get a migration prompt.",
+  "verify": "Run all tests[]. Confirm the cold-reader gate blocks an advisor-only situation, banned tokens, partial paths, and non-self-contained references; confirm the dual gate blocks a content-complete-but-untested lug.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

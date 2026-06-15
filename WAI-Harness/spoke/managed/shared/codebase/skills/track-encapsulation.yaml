@@ -1,0 +1,251 @@
+id: track-encapsulation
+name: "Track Encapsulation"
+role: core
+model_tier: any
+
+trigger: "always_on"
+
+description: >
+  Core behavioral skill for all spokes. This skill governs the "Active-Collection"
+  protocol. Recording session data is NOT a secondary task; it is a mandatory
+  part of the agent's operating contract.
+
+  MANDATORY CONTRACT: After completing your response to the user, you MUST append 
+  a point to the Track file. This is the final step of every response cycle. 
+  A response without a recorded point is incomplete and violates your 
+  operating contract.
+
+scope:
+  reads:
+    - "WAI-Spoke/WAI-State.json (_session_state for session ID and track_path)"
+    - "Previous session tracks (for resume/recovery on wakeup)"
+
+  writes:
+    - "WAI-Spoke/sessions/track_YYYYMMDD-HHMM.jsonl (append-only, one point per turn)"
+    - "WAI-Spoke/WAI-State.json (_session_state.track_path)"
+
+  creates:
+    - "WAI-Spoke/sessions/ (directory, created once on first use)"
+
+# ---------------------------------------------------------------------------
+# POINT SCHEMA
+# ---------------------------------------------------------------------------
+
+point_schema:
+  description: >
+    Each point is one JSONL line. Priority is FIDELITY and CONTEXT RECOVERY.
+    Budget: 800-1000 tokens for substantive turns; 300-500 tokens for light turns.
+    The floor is ~150-200 tokens (the six required fields).
+
+  required_fields:
+    turn:
+      type: integer
+      description: "Sequential within session, starting at 1"
+    ts:
+      type: string
+      format: "ISO-8601 UTC"
+      description: "Timestamp when point was written"
+    phase:
+      type: string
+      enum: ["orientation", "exploration", "planning", "execution", "review", "recovery"]
+      description: "Current work phase."
+    focus:
+      type: string
+      description: "Descriptive topic thread (e.g. 'Refactoring historian dual-watermark logic')"
+    action:
+      type: string
+      description: "Detailed summary of observable outcomes and specific changes made."
+    thinking:
+      type: string
+      description: >
+        Mandatory reasoning. 3 sentences minimum, 8 sentences maximum. 
+        Capture reasoning proportional to complexity. 3 sentences for 
+        clarification; 8 for major architectural decisions.
+
+  conditional_fields:
+    session_metadata:
+      type: object
+      description: >
+        ONLY on first point (turn 1) of each session. Contains session identity
+        and predecessor chain information for cross-session continuity.
+      properties:
+        started_at: {type: string, format: "ISO-8601 UTC"}
+        environment: {type: string, description: "Tool/IDE name (e.g., 'claude-code', 'chatgpt-web')"}
+        model: {type: string, description: "AI model used (e.g., 'claude-sonnet-4.5')"}
+        has_predecessor: {type: boolean}
+        predecessor:
+          type: object
+          description: "Links to previous session in conversation chain"
+          properties:
+            session_id: {type: string}
+            source_file: {type: string, description: "Track filename (e.g., 'WAI_Track-20260317-2100-Claude-claude-opus-4-6.jsonl')"}
+            last_turn: {type: integer}
+            last_timestamp: {type: string, format: "ISO-8601 UTC"}
+            detected_from: {type: string, enum: ["context", "file", "manual"]}
+    evolution:
+      type: string
+      description: "previous_phase -> current_phase: reason for shift"
+    activity:
+      type: array
+      items: string
+      description: >
+        Log tool calls by name with specifics. 
+        Example: "Read file src/config.ts lines 1-50" or "Executed: npm test".
+        If no tools used: ["conversational response only"].
+    decisions:
+      type: array
+      items: string
+      description: "Choices made this turn."
+    insights:
+      type: array
+      items: string
+      description: "New understanding that emerged."
+    fossils:
+      type: array
+      items: object
+      description: "Concepts abandoned or superseded on this turn."
+      properties:
+        concept: {type: string}
+        replaced_by: {type: string}
+        reason: {type: string}
+    open:
+      type: array
+      items: object
+      description: "Unresolved threads or questions (typed)."
+    files_in:
+      type: array
+      items: object
+      description: "Metadata for files provided by the user."
+    files_out:
+      type: array
+      items: object
+      description: "Metadata for files generated/modified by the agent."
+    context_health:
+      type: object
+      description: "Include when estimated context usage exceeds 70%."
+      properties:
+        usage_estimate: {type: number}
+        warning: {type: string}
+    recovered:
+      type: boolean
+      description: "True only on catch-up points for previously missed turns."
+
+# ---------------------------------------------------------------------------
+# TRACK CHAIN PROTOCOL
+# ---------------------------------------------------------------------------
+
+track_chain_protocol:
+  description: >
+    Enables portable session continuity across tools/environments.  Users can
+    load a track file from a previous session into a new environment, continue
+    the conversation, and generate a new track that links to the predecessor.
+  
+  detection:
+    when: "Session start (during wakeup or first user message)"
+    scan_for:
+      - "JSON lines format in conversation context"
+      - "Required fields: turn, ts, phase, focus, action, thinking"
+      - "Sequential turn numbers starting at 1"
+      - "Valid ISO-8601 timestamps"
+    
+    on_detected:
+      steps:
+        - "Extract session_id from first point"
+        - "Extract last turn number"
+        - "Extract last timestamp"
+        - "Extract source file name (if available in context)"
+        - "Store detection result for session use"
+      report_to_user: |
+        ### Track Predecessor Detected
+        - Session: {session_id}
+        - Turns: {turn_count}
+        - Last activity: {last_timestamp}
+        - Source: {source_file}
+        
+        New session will link to this predecessor.
+  
+  linking:
+    description: "First point of new session includes predecessor metadata"
+    rules:
+      - "turn numbers restart at 1 for each session (not cumulative)"
+      - "session_metadata only appears on turn 1"
+      - "predecessor info comes from detection or manual specification"
+      - "chains can be arbitrarily deep (A→B→C→...)"
+  
+  generation:
+    description: "Generate track file for current session on-demand"
+    command: "/wai-track-generate or 'Generate track for this conversation'"
+    behavior:
+      - "Check if predecessor was detected"
+      - "Generate points for THIS session only (not duplicating loaded content)"
+      - "First point includes session_metadata with predecessor link"
+      - "Output as downloadable file or code block"
+    output_format: |
+      Track file generated: WAI_Track-{YYYYMMDD}-{HHMM}-{Provider}-{Model}.jsonl
+      
+      Contains:
+      - {turn_count} turns (this session only)
+      - Links to predecessor: {predecessor_file}
+      - Total conversation spans {session_count} sessions ({total_turns} turns)
+  
+  reconstruction:
+    description: "Report full conversation chain when loading track with predecessors"
+    when: "Track file with session_metadata.predecessor loaded"
+    report: |
+      ### Conversation Chain Detected
+      
+      This track is part of a {N}-session chain:
+      
+      [For each session in chain]
+      Session {ID} ({filename})
+      ├─ Turns: {first}-{last}
+      ├─ Started: {timestamp}
+      ├─ Environment: {tool}
+      └─ Links to: {predecessor or "origin"}
+      
+      Total conversation: {total_turns} turns across {N} sessions
+
+# ---------------------------------------------------------------------------
+# RECOVERY PROTOCOL
+# ---------------------------------------------------------------------------
+
+recovery_protocol:
+  description: >
+    If you realize you failed to record a point for a previous turn, 
+    immediately emit a catch-up point.
+  rules:
+    - "Set 'recovered': true"
+    - "Reconstruct what you can from conversation"
+    - "Do not silently skip turns"
+    - "Thinner data is acceptable for recovery points"
+
+# ---------------------------------------------------------------------------
+# SESSION LIFECYCLE
+# ---------------------------------------------------------------------------
+
+session_lifecycle:
+  on_wakeup:
+    steps:
+      - "Generate session ID and ensure WAI-Spoke/sessions/ exists"
+      - "First point written after wakeup (phase: orientation)"
+
+  on_turn:
+    steps:
+      - "Construct point from current context AFTER response is ready"
+      - "Append as final step of every response cycle"
+      - "Self-check for missing points before finishing"
+
+  on_closeout:
+    steps:
+      - "Final point records closeout activity (phase: review)"
+      - "Track file is the permanent record"
+
+tests:
+  - name: "Minimum Viable Point"
+    expected: "Points always contain turn, ts, phase, focus, action, thinking"
+  - name: "Activity Precision"
+    expected: "Tool calls logged by name and range, not description"
+  - name: "Fossils Capture"
+    expected: "Rejected concepts recorded in fossils array"
+  - name: "Recovery Mode"
+    expected: "Missed turns reconstructed with recovered:true"

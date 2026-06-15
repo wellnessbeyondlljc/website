@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Scout Job",
+  "type": "object",
+  "required": ["id", "name", "description", "owner", "scope", "status", "prompt_template", "model_class"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "owner": {"type": "string"},
+    "scope": {"type": "string"},
+    "status": {"type": "string"},
+    "prompt_template": {"type": "string"},
+    "input_shape": {"type": "string"},
+    "input_source": {"type": "object"},
+    "model_class": {"type": "string"},
+    "verification_gate": {"type": "object"},
+    "category": {"type": "string"},
+    "signal_level": {"type": "string"},
+    "expected_duration_seconds": {"type": "integer"},
+    "created_at": {"type": "string"},
+    "created_by": {"type": "string"}
+  }
+}

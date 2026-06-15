@@ -1,0 +1,6 @@
+{
+  "base_version": "3.0.0",
+  "cap": 10,
+  "patches": [],
+  "note": "Patches against base 3.0.0. Adopt base first, then these in order. Cap 10."
+}

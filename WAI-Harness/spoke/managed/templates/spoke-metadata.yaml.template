@@ -1,0 +1,78 @@
+---
+# .spoke-metadata.yaml — Spoke Self-Declaration
+# Each spoke maintains this file to declare what it is and what it does.
+# Hub's registry-refresh skill reads this on wakeup and aggregates into the live registry.
+# DO NOT manually edit this unless you know what you're doing.
+# Run the self-registry skill to update automatically.
+
+metadata_version: "2.0"
+last_updated: "YYYY-MM-DDTHH:MM:SSZ"  # ISO-8601, updated by self-registry skill
+last_updated_by: "spoke-name or agent"
+
+# Identity & Mission
+identity:
+  path: "project/spoke"  # e.g., "wheelwright/framework" or "ezorg/email"
+  type: "spoke"  # spoke | hub | archive
+  status: "active"  # active | archived | suspended
+  name: "Human-readable name"
+  mission: "One sentence: why does this spoke exist? What is its core purpose?"
+
+# Scope & Expertise
+scope:
+  domains:
+    - "domain1"  # e.g., "WAI framework", "email management", "auth patterns"
+    - "domain2"
+  boundaries:
+    - "what we explicitly do NOT do"
+    - "scope limitations"
+    - "out-of-scope questions get redirected elsewhere"
+
+expertise:
+  offers:  # What this spoke specializes in
+    - "capability1"
+    - "capability2"
+  stack:  # Technologies, languages, tools used
+    - "tech1"
+    - "tech2"
+  team_model: "How agents collaborate (e.g., 'single agent per session', 'multi-agent colony', 'research focus')"
+
+# Framework & Infrastructure
+framework:
+  version: "2.0.0"  # Framework version this spoke uses
+  skills_loaded:  # Skills loaded in this spoke
+    - "safe-refactor"
+    - "qc-check"
+    - "help"  # For asking questions
+  teaching_files_count: "number of teaching files in this spoke"
+
+# Activity & Business Intelligence
+activity:
+  created_at: "YYYY-MM-DDTHH:MM:SSZ"  # When this spoke was created
+  last_modified: "YYYY-MM-DDTHH:MM:SSZ"  # Last time anything changed
+
+  git_metrics:
+    commits_last_30_days: "number"
+    last_commit_date: "YYYY-MM-DDTHH:MM:SSZ"
+    active_branches: "number"
+
+  lug_metrics:
+    lugs_created_30_days: "number"
+    open_lugs: "number"
+    decisions_made: "number"
+    teaching_files_created_30d: "number"
+
+  session_metrics:
+    last_session: "YYYY-MM-DDTHH:MM:SSZ"  # Last time an agent worked here
+    session_count: "total sessions"
+    days_since_last_activity: "number"
+
+  health_status: "active | slow | inactive"  # Based on activity
+
+# Instructions for Human Review
+instructions:
+  - "This file is maintained by the self-registry skill"
+  - "Run 'self-registry' skill when you make major changes (new capabilities, status change, etc.)"
+  - "Hub queries this file on wakeup to maintain the live registry"
+  - "Be honest about scope and boundaries—help system depends on accuracy"
+  - "Activity metrics are auto-updated by self-registry"
+  - "If this file seems stale, run self-registry to refresh"

@@ -1,0 +1,115 @@
+# Teaching: Track Reliability v1.0 — Canonical Path + Per-Turn Discipline
+
+**Type:** Behavioral upgrade + path standardization
+**Target:** All spokes
+**Version:** 1.0
+**Created:** 2026-03-17
+**safe_to_auto_adopt:** false
+
+---
+
+## What This Teaching Does
+
+Fixes two failure modes in track encapsulation:
+
+1. **Path conflict** — Two teachings created incompatible paths (`session-YYYYMMDD-HHMM/track.jsonl` vs `sessions/track_session-YYYYMMDD-HHMM.jsonl`). This teaching establishes a single canonical path.
+2. **Context-pressure dropout** — Under high token load or fast-paced turns, agents skip track writes entirely. This teaching establishes a minimal "fast path" point and explicit recovery rules.
+
+**This is NOT:** A replacement for track-encapsulation.md.teaching. That teaching installed the system. This one fixes reliability in the field.
+
+---
+
+## Root Cause
+
+**Path conflict:** `track-encapsulation.md.teaching v1.0` specified:
+```
+WAI-Spoke/session-YYYYMMDD-HHMM/track.jsonl
+```
+
+`spoke-wai-update-v1.md.teaching` updated `wai.md` to use:
+```
+WAI-Spoke/sessions/track_session-YYYYMMDD-HHMM.jsonl
+```
+
+Agents were writing to one path, wakeup was reading from the other. Old sessions exist in both formats.
+
+**Context-pressure dropout:** Track writing is scheduled "after each turn" but has no enforcement. When agents are under token pressure or context load, it gets skipped silently.
+
+---
+
+## Canonical Path (Apply Immediately)
+
+**The canonical path is:**
+```
+WAI-Spoke/sessions/track_session-YYYYMMDD-HHMM.jsonl
+```
+
+- Single `sessions/` directory (not one dir per session)
+- Filename includes full session ID: `track_session-20260317-0739.jsonl`
+- Enables: `WAI-Spoke/sessions/track_*.jsonl` glob for all sessions
+
+**On wakeup:** Read `WAI-State.json._session_state.track_path` for the active session's file. If missing, generate from session ID.
+
+**Legacy paths:** `WAI-Spoke/session-YYYYMMDD-HHMM/track.jsonl` files are still valid historical records. Do NOT migrate them. Wakeup should check both patterns when looking for prior sessions.
+
+---
+
+## Per-Turn Discipline (Apply Immediately)
+
+### Rule 1: Write before ending each response
+
+Track writing happens as the **last action before finishing your response text**, not after. If you write the track after producing the response, it gets skipped when the turn ends.
+
+Pattern:
+1. Think
+2. Use tools
+3. Produce response
+4. Write track point ← do this before submitting response
+
+### Rule 2: Use the fast path under pressure
+
+When context is high (>80%) or pace is fast, use the minimal point format:
+
+```json
+{"turn":N,"ts":"ISO-UTC","focus":"brief topic","action":"what happened","thinking":"one sentence","activity":[],"decisions":[],"insights":[],"open":[],"phase":"execution","evolution":"prev -> curr: reason"}
+```
+
+**Full point is preferred.** Fast path is the fallback — never skip entirely.
+
+### Rule 3: Never skip two consecutive turns
+
+If a turn is missed, catch up on the next turn:
+- Write the missed point first (with approximate timestamp)
+- Then write the current point
+- Note `"evolution":"catch-up: missed turn N"`
+
+### Rule 4: Track write failures are non-blocking
+
+If the write fails (permissions, disk), note it in your response and continue. Do NOT let track write failures block the user. Retry next turn.
+
+---
+
+## Wakeup: Reading Prior Sessions
+
+On wakeup, search for prior tracks in this order:
+
+1. Check `WAI-Spoke/sessions/track_*.jsonl` — new canonical format
+2. Check `WAI-Spoke/session-*/track.jsonl` — legacy format
+
+Show the most recent track regardless of format. Present resume/recovery decision to user as specified in wai.md.
+
+---
+
+## Embedded Lug
+
+Append to `WAI-Lugs.jsonl` (skip if `teaching-track-reliability-v1` already exists):
+
+```json
+{"i":"teaching-track-reliability-v1","t":"Installed track reliability v1.0 — canonical path + per-turn discipline","ty":"signal","s":"c","ca":"2026-03-17T00:00:00Z","gb":"teaching-file","impact":8,"content":{"what":"Fixed path conflict between track-encapsulation and spoke-wai-update teachings. Canonical path is now WAI-Spoke/sessions/track_session-YYYYMMDD-HHMM.jsonl. Installed per-turn discipline: write track before ending response, fast-path for high-pressure turns, no two consecutive skips.","source":"track-reliability-v1.md.teaching v1.0"},"_behavior_directive":{"what_this_is":"Record that this spoke has track reliability v1.0 installed.","what_this_is_NOT":"An instruction to re-process this teaching or to migrate legacy track files."}}
+```
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/processed/` (or `seed/ingest/processed/`).

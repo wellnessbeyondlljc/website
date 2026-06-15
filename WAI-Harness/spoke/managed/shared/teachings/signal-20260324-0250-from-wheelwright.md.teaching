@@ -1,0 +1,20 @@
+# Teaching: Signal — Closeout Step 9c type-filter bug fix
+
+**Type:** signal
+**safe_to_auto_adopt:** true
+
+---
+
+## What This Teaching Does
+
+Appends a high-impact signal to WAI-Lugs.jsonl on this spoke.
+
+## Embedded Signal
+
+```json
+{"id": "signal-step9c-type-filter-fix-20260324", "type": "signal", "impact": 8, "timestamp": "2026-03-24T02:50:00Z", "session_id": "session-20260324-0235", "signal": "Closeout Step 9c bug: hub bulletin was publishing ALL high-impact lugs (impact>7) regardless of type — epics, tasks, implementations, session summaries all accumulated in WAI-Hub/Signals/incoming/. Fix: added type==\"signal\" filter. 155 files cleared to processed.", "rationale": "Silent protocol error — no crash, just accumulation. Any spoke running the old closeout is polluting the hub bulletin with non-signal content every session.", "created_by": "claude-sonnet-4-6"}
+```
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

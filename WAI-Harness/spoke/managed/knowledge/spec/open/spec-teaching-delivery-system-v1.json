@@ -1,0 +1,258 @@
+{
+  "id": "spec-teaching-delivery-system-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-04T00:00:00Z",
+  "updated_at": "2026-06-04T00:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.266",
+  "impact": 9,
+  "subject": {
+    "kind": "protocol",
+    "id": "teaching-delivery-system",
+    "label": "Teaching Delivery System"
+  },
+  "title": "Teaching Delivery System \u2014 Priority Tiers, Nightly Base Cut, Verified Spoke Upgrade",
+  "what": "A two-tier teaching delivery protocol for the WAI-Spoke operational folder. P0/P1 teachings (adopt_asap) are hot-patched directly to spokes on the next session start. P2+ teachings are held in hub staging and never delivered individually \u2014 instead, a nightly maintenance job cuts a new base version, collapses all staged teachings into a single consolidated upgrade teaching, and delivers that teaching to spokes. Spokes upgrade by running a verify-apply-verify sequence per constituent teaching, handling partial prior adoption gracefully. Every teaching (individual or consolidated) must carry verification_steps; a teaching without them is rejected at authoring time. Scope is limited to WAI-Spoke/ folder contents \u2014 environment configs (CLAUDE.md, hooks, settings.json) remain Basher-managed.",
+  "why": "Teaching lists on spokes grow unbounded. Agents wade through an ever-deepening pile before each session, adoption is inconsistent, and there is no machine-enforced verification that a teaching was correctly applied. The two-tier model eliminates noise: spokes see only urgent hot-patches and periodic consolidated upgrades. The nightly base cut gives all spokes a clean versioned checkpoint. Verification_steps make adoption auditable and self-correcting \u2014 a spoke that partially applied teachings is brought to full compliance automatically by the upgrade sequence.",
+  "audience": [
+    "ozi",
+    "gardener",
+    "navigator"
+  ],
+  "use_cases": [
+    {
+      "title": "P0/P1 teaching authored \u2014 hot-patch delivery",
+      "trigger": "Authoring agent writes a teaching with priority P0 or P1 (adopt_asap: true)",
+      "outcome": "Teaching written to hub/WAI-Spoke/hub/teachings/hot-patches/; delivered immediately to all spoke incoming/ queues; applied seamlessly on each spoke's next session start; verification_steps run post-apply; all-pass required to mark accepted",
+      "persona": "ozi"
+    },
+    {
+      "title": "P2+ teaching authored \u2014 staging hold",
+      "trigger": "Authoring agent writes a teaching with priority P2 or lower (adopt_asap: false)",
+      "outcome": "Teaching written to hub/WAI-Spoke/hub/teachings/staging/; NOT delivered to any spoke; held until nightly base cut",
+      "persona": "ozi"
+    },
+    {
+      "title": "Nightly base cut \u2014 consolidation and versioning",
+      "trigger": "Nightly maintenance job runs; at least 1 teaching in staging OR staging count >= 20 (hard cap forces cut)",
+      "outcome": "New base version cut (semver minor bump); consolidated upgrade teaching generated carrying all staged teachings and their verification_steps in sequence; staged teaching files archived to hub/WAI-Spoke/hub/teachings/archive/base-vN/; consolidated upgrade teaching delivered to all spoke incoming/ queues; base version manifest updated",
+      "persona": "gardener"
+    },
+    {
+      "title": "Spoke applies consolidated upgrade teaching",
+      "trigger": "Spoke Ozi encounters consolidated upgrade teaching in incoming/",
+      "outcome": "For each constituent teaching in the consolidated set: (1) run verification_steps \u2014 if all pass, skip (already applied); (2) if any fail, apply the teaching then re-run verification_steps; (3) if all pass after apply, mark accepted; (4) if any still fail, log failure and flag for human review but continue to next teaching. Spoke base_version field updated to match the cut version after all teachings processed.",
+      "persona": "ozi"
+    },
+    {
+      "title": "New spoke bootstrapped from latest base version",
+      "trigger": "New spoke is initialized (spin-up or fork)",
+      "outcome": "Spoke receives latest base version as its WAI-Spoke/ scaffold \u2014 no need to replay historical teachings; base_version set to current; no consolidated upgrade teaching needed since spoke starts at head",
+      "persona": "ozi"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Spokes never receive individual P2+ teachings",
+      "description": "P2+ teachings exist only in hub staging until the nightly cut. A spoke that checks its incoming/ will never find a raw P2+ teaching \u2014 only consolidated upgrade teachings and P0/P1 hot-patches. This is a hard invariant: delivering a P2+ teaching directly to a spoke is a protocol violation."
+    },
+    {
+      "name": "verification_steps are a required contract, not optional metadata",
+      "description": "Every teaching file must have at least one verification_step. A teaching without this field is rejected at schema validation when authored. The verification steps are the machine-enforceable proof that the teaching was applied. Without them, adoption is unverifiable and the upgrade sequence cannot be trusted."
+    },
+    {
+      "name": "Verify-skip or verify-apply-verify \u2014 never blind apply",
+      "description": "The upgrade sequence always checks verification_steps first. If they pass, the teaching is skipped. Blind application (apply without prior verification check) risks overwriting state that was correctly set by a different path (e.g., a prior hot-patch). The pre-check is mandatory."
+    },
+    {
+      "name": "Nightly cut is the only delivery vehicle for P2+ content",
+      "description": "The nightly job is not optional infrastructure \u2014 it is the single delivery mechanism for non-urgent teachings. Bypassing it (e.g., manually delivering staged teachings to a spoke) breaks version tracking and leaves the base manifest out of sync."
+    },
+    {
+      "name": "Partial adoption is handled, not assumed",
+      "description": "A spoke may have applied some constituent teachings via prior hot-patches or manual action. The consolidated upgrade teaching's verify-first logic detects this and skips already-applied teachings. Partial adoption is a normal state, not an error. The upgrade brings partial adopters to full compliance without re-applying correctly-set state."
+    },
+    {
+      "name": "Basher-managed items within WAI-Spoke are annotated",
+      "description": "Files or directories within WAI-Spoke/ that are owned by Basher (e.g., any Basher-pushed config overlays) carry a managed_by: basher marker (either in a header comment or a .basher-managed sentinel file in the folder). An agent must not modify these directly \u2014 changes must be registered with Basher via a lug. This protects Basher-managed state from being clobbered by teaching application."
+    }
+  ],
+  "how": {
+    "trigger": "Teaching authored (P0/P1: immediate; P2+: nightly job). Spoke session start (hot-patch check). Nightly maintenance window (base cut).",
+    "steps_summary": [
+      "1. Teaching authoring: validate teaching schema \u2014 reject if verification_steps missing or empty; set priority + adopt_asap fields; write to hot-patches/ (P0/P1) or staging/ (P2+)",
+      "2. P0/P1 hot-patch path: deliver teaching file to all registered spoke incoming/ (via hub-registry.json paths); spoke Ozi picks up on next session start; runs verification_steps post-apply; marks accepted only if all pass",
+      "3. P2+ staging: teaching accumulates in hub/WAI-Spoke/hub/teachings/staging/; not visible to spokes",
+      "4. Nightly cut (gardener job): if staging count >= 1 \u2014 read all staged teachings; generate consolidated upgrade teaching (id: teaching-upgrade-base-vN) carrying each teaching's id, apply_steps, and verification_steps in authoring order; bump base version (semver minor); write consolidated teaching to hub/WAI-Spoke/hub/teachings/consolidated/; move staged files to hub/WAI-Spoke/hub/teachings/archive/base-vN/; update base-version-manifest.json",
+      "5. Nightly cut (delivery): deliver consolidated upgrade teaching to all spoke incoming/ queues via hub-registry.json spoke paths",
+      "6. Spoke upgrade execution: for each teaching entry in consolidated.teachings[]: (a) run verification_steps \u2014 all pass = skip; (b) any fail = run apply_steps then re-run verification_steps; (c) all pass = mark accepted; (d) any still fail = log to WAI-Spoke/teachings/upgrade-failures.jsonl, continue; after all teachings processed: update WAI-Spoke/base_version to consolidated.base_version",
+      "7. Hard cap enforcement: if staging count reaches 20 at any point during the day, gardener triggers an out-of-cycle cut immediately rather than waiting for nightly window"
+    ],
+    "constraints": [
+      "verification_steps field is required on all teachings \u2014 authoring is blocked without it",
+      "P2+ teachings must not appear in any spoke incoming/ folder directly \u2014 only consolidated upgrade teachings are delivered",
+      "Spoke base_version is only updated after ALL constituent teachings in a consolidated set have been processed (accepted or flagged)",
+      "Hot-patch (P0/P1) teachings bypass staging entirely \u2014 they are never consolidated into a base version retroactively",
+      "Archive folders are write-once \u2014 files in archive/base-vN/ are never modified; they are the historical record of what was consolidated",
+      "Basher-managed files within WAI-Spoke/ must not be modified by teaching apply_steps \u2014 apply_steps must check for .basher-managed sentinel before writing"
+    ]
+  },
+  "schema": {
+    "teaching_file": {
+      "description": "Schema additions required on all teaching files under this protocol",
+      "required_fields": {
+        "priority": "enum: P0 | P1 | P2 | P3 \u2014 P0/P1 triggers immediate hot-patch delivery; P2/P3 held for nightly cut",
+        "adopt_asap": "boolean \u2014 derived: true if priority is P0 or P1; false otherwise",
+        "verification_steps": [
+          {
+            "id": "string \u2014 unique within this teaching",
+            "description": "string \u2014 what this step checks",
+            "check": "string \u2014 the concrete action to take (read file, grep path, inspect field value, etc.)",
+            "pass_criteria": "string \u2014 the condition that must be true for this step to pass"
+          }
+        ],
+        "apply_steps": [
+          {
+            "id": "string",
+            "description": "string",
+            "action": "string \u2014 the concrete action to take to apply this teaching element"
+          }
+        ]
+      }
+    },
+    "consolidated_upgrade_teaching": {
+      "description": "Generated by the nightly cut job; delivered to spoke incoming/ in place of individual P2+ teachings",
+      "fields": {
+        "id": "string \u2014 teaching-upgrade-base-vN",
+        "type": "consolidated",
+        "base_version": "string \u2014 semver of the new base version this upgrade reaches",
+        "priority": "P2",
+        "adopt_asap": false,
+        "consolidates": [
+          "array of teaching ids subsumed into this upgrade"
+        ],
+        "teachings": [
+          {
+            "id": "string \u2014 original teaching id",
+            "title": "string",
+            "apply_steps": [
+              "... from original teaching ..."
+            ],
+            "verification_steps": [
+              "... from original teaching ..."
+            ]
+          }
+        ]
+      }
+    },
+    "base_version_manifest": {
+      "description": "Tracks current base version and cut history; lives at hub/WAI-Spoke/hub/teachings/base-version-manifest.json",
+      "fields": {
+        "current_version": "string \u2014 semver",
+        "cuts": [
+          {
+            "version": "string",
+            "cut_at": "ISO 8601 datetime",
+            "teachings_consolidated": [
+              "array of teaching ids"
+            ],
+            "consolidated_teaching_id": "string",
+            "archive_path": "string \u2014 relative path to archive folder for this version"
+          }
+        ]
+      }
+    },
+    "hub_teaching_paths": {
+      "staging": "hub/WAI-Spoke/hub/teachings/staging/",
+      "hot_patches": "hub/WAI-Spoke/hub/teachings/hot-patches/",
+      "consolidated": "hub/WAI-Spoke/hub/teachings/consolidated/",
+      "archive": "hub/WAI-Spoke/hub/teachings/archive/base-vN/"
+    },
+    "spoke_paths": {
+      "base_version": "WAI-Spoke/base_version \u2014 single-line file containing current base semver",
+      "upgrade_failures": "WAI-Spoke/teachings/upgrade-failures.jsonl \u2014 log of teaching verification failures after apply",
+      "basher_sentinel": "WAI-Spoke/<folder>/.basher-managed \u2014 presence means folder is Basher-owned; teaching apply_steps must not write here"
+    }
+  },
+  "tests": [
+    {
+      "id": "test-teaching-schema-rejects-missing-verification",
+      "description": "A teaching file without verification_steps field or with an empty verification_steps array is rejected at authoring time",
+      "pass_criteria": "Schema validation raises error on teaching with missing or empty verification_steps; file is not written to staging/ or hot-patches/"
+    },
+    {
+      "id": "test-p0p1-delivered-not-staged",
+      "description": "A teaching with priority P0 or P1 is written to hot-patches/ and to spoke incoming/, not to staging/",
+      "pass_criteria": "After authoring a P0 teaching: hot-patches/ contains the file; staging/ does not contain it; at least one spoke incoming/ contains it"
+    },
+    {
+      "id": "test-p2plus-staged-not-delivered",
+      "description": "A teaching with priority P2 or P3 lands in staging/ and does not appear in any spoke incoming/",
+      "pass_criteria": "After authoring a P2 teaching: staging/ contains the file; no spoke incoming/ folder contains it; hot-patches/ does not contain it"
+    },
+    {
+      "id": "test-nightly-cut-produces-consolidated-teaching",
+      "description": "Nightly cut with N staged teachings produces one consolidated upgrade teaching with type=consolidated and consolidates[] listing all N teaching ids",
+      "pass_criteria": "consolidated/ contains teaching-upgrade-base-vN.json; file has type=consolidated; consolidates array length == N; all original teaching ids present in consolidates[]"
+    },
+    {
+      "id": "test-nightly-cut-archives-staged-teachings",
+      "description": "After nightly cut, staged teachings are moved to archive/base-vN/ and staging/ is empty",
+      "pass_criteria": "staging/ is empty after cut; archive/base-vN/ contains all N original teaching files; base-version-manifest.json updated with new version entry"
+    },
+    {
+      "id": "test-upgrade-skips-already-applied",
+      "description": "A spoke that already satisfies a teaching's verification_steps sees that teaching skipped (not re-applied) during upgrade",
+      "pass_criteria": "Apply consolidated upgrade to a spoke where teaching T1 was already applied; upgrade log shows T1 skipped; T1 apply_steps not executed; upgrade-failures.jsonl has no entry for T1"
+    },
+    {
+      "id": "test-upgrade-applies-missing-teaching",
+      "description": "A spoke that fails verification for a teaching has that teaching applied and then re-verified",
+      "pass_criteria": "Apply consolidated upgrade to a spoke missing teaching T2; upgrade log shows T2 apply_steps executed; verification_steps re-run post-apply; all pass; T2 marked accepted; upgrade-failures.jsonl has no entry for T2"
+    },
+    {
+      "id": "test-upgrade-logs-persistent-failure",
+      "description": "A teaching whose verification_steps still fail after apply is logged in upgrade-failures.jsonl and the upgrade continues to the next teaching",
+      "pass_criteria": "Simulating a teaching whose apply_steps cannot satisfy verification_steps: upgrade-failures.jsonl contains an entry with the teaching id and failure details; subsequent teachings in the consolidated set are still processed"
+    },
+    {
+      "id": "test-spoke-base-version-updated-after-upgrade",
+      "description": "After a spoke successfully processes a consolidated upgrade teaching, WAI-Spoke/base_version matches the consolidated teaching's base_version field",
+      "pass_criteria": "cat WAI-Spoke/base_version == consolidated_teaching.base_version after upgrade completes"
+    },
+    {
+      "id": "test-hard-cap-triggers-out-of-cycle-cut",
+      "description": "When staging count reaches 20, a cut is triggered immediately without waiting for the nightly window",
+      "pass_criteria": "Insert 20th teaching into staging/; nightly job or cap-watcher triggers cut; consolidated teaching generated; staging cleared; cut timestamp in manifest is not the scheduled nightly time"
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "test_file": null,
+    "test_count": 0,
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": null,
+    "verification_note": "Tools built and tested S42: validate_teaching.py (17 tests), teaching_delivery_init.py (idempotent, run against hub), teaching_delivery_cut.py (13 tests), teaching_upgrade_apply.py (10 tests). 40/40 passing. Impl lugs open, awaiting dispatch."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-harness-self-maintaining-wheel-v1",
+    "spec-harness-challenge-reports-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_mode": "subagent",
+  "execution_substrate": null,
+  "routed_to": "FRAMEWORK",
+  "perceive": "Read this spec (spec-teaching-delivery-system-v1). Read related spec spec-harness-self-maintaining-wheel-v1 for base harness versioning context. Check hub/WAI-Spoke/hub/teachings/ for current folder structure. Check existing teaching files in hub teaching_repo for current schema (identify if priority and verification_steps fields exist). Check WAI-SpecIndex.jsonl for any overlapping specs.",
+  "execute": "Implement in four phases: (1) Teaching schema enforcement \u2014 add priority, adopt_asap, verification_steps, apply_steps as required fields to teaching schema validator; reject files missing these at authoring time. (2) Hub teaching folder structure \u2014 create staging/, hot-patches/, consolidated/, archive/ directories under hub/WAI-Spoke/hub/teachings/; create base-version-manifest.json at initial version. (3) Nightly cut job \u2014 implement or extend existing maintenance script to read staging/, generate consolidated upgrade teaching, archive staged files, update manifest, deliver consolidated teaching to spokes via hub-registry.json paths. (4) Spoke upgrade execution \u2014 implement verify-apply-verify loop in spoke Ozi session start handler; write upgrade-failures.jsonl on persistent failure; update WAI-Spoke/base_version on completion. Hard cap (20 teachings) check can be added to the gardener's pre-cut trigger. Basher-managed sentinel check (.basher-managed file) must be added to apply_steps executor.",
+  "verify": "All 10 tests in tests[] pass. Teaching file without verification_steps is rejected. P0 teaching appears in spoke incoming/ without going through staging. P2 teaching accumulates in staging and is not visible to spokes. Nightly cut produces consolidated teaching with correct consolidates[] array. Spoke upgrade correctly skips already-applied teachings and applies missing ones. upgrade-failures.jsonl written on persistent failure. WAI-Spoke/base_version updated after upgrade.",
+  "model_fit": "sonnet",
+  "gt_convoy_hint": "cross-spoke delivery: routed_to=FRAMEWORK"
+}

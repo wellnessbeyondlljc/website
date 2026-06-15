@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pattern Schema (the work contract)",
+  "description": "A pattern is the CONTRACT: the arrangement of lugs (holes) on a wheel as a versioned, verifiable checklist of deliverables. Each item is a lug + how it is verified. A pattern carries preconditions (what must hold to start) and provenance (the inputs that manifested it — the versioned DNA of self-evolution). Closing a pattern (at savepoint or closeout) runs each item's verification and emits a bolt: certified when every item passes, partial when closed early. No bolt until the pattern checks out true. Stored mirroring lugs: WAI-Spoke/patterns/bytype/pattern/{lifecycle_state}/{id}.json with a generated WAI-PatternIndex.jsonl.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "pattern-{slug}-v{n}",
+      "pattern": "^pattern-.+$"
+    },
+    "version": {
+      "type": "string",
+      "description": "semver; a new version supersedes the prior (provenance.derived_from links back)"
+    },
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "initiative_id": {
+      "type": ["string", "null"],
+      "description": "The initiative (WHEN/grouping) this pattern advances"
+    },
+    "items": {
+      "type": "array",
+      "description": "The checklist: one entry per lug (hole) in the pattern",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lug_id": {"type": "string"},
+          "verify": {
+            "type": "object",
+            "description": "How this item is certified non-hallucinated",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["mechanical", "attested", "human"],
+                "description": "mechanical: runnable assertion; attested: named AI verifier signs; human: Mario signs"
+              },
+              "assertion": {
+                "type": "string",
+                "description": "For mode=mechanical: the runnable check (command / test / schema-validation) that must pass"
+              },
+              "verifier": {
+                "type": "string",
+                "description": "For mode=attested: the named verifier role/agent expected to sign (e.g. lug-reviewer)"
+              }
+            },
+            "required": ["mode"]
+          },
+          "result": {
+            "type": "object",
+            "description": "Filled when the item is verified at pattern close",
+            "properties": {
+              "verified_by": {"type": ["string", "null"], "description": "assertion id / agent id / human"},
+              "verified_at": {"type": ["string", "null"], "format": "date-time"},
+              "pass": {"type": ["boolean", "null"]}
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "verified", "failed"],
+            "description": "pending until verified; verified on pass; failed on a failed check"
+          }
+        },
+        "required": ["lug_id", "verify", "status"]
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Assertions that must hold before the pattern may be started/actioned (state + inputs available)"
+    },
+    "provenance": {
+      "type": "object",
+      "description": "The inputs that manifested this pattern — the versioned DNA, replayable",
+      "properties": {
+        "input_lugs": {"type": "array", "items": {"type": "string"}},
+        "input_teachings": {"type": "array", "items": {"type": "string"}},
+        "input_patterns": {"type": "array", "items": {"type": "string"}},
+        "derived_from": {"type": ["string", "null"], "description": "prior pattern version this evolved from"},
+        "state_hash": {"type": ["string", "null"], "description": "hash/sha of relevant state at authoring"}
+      }
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "enum": ["draft", "active", "certified", "failed", "superseded"],
+      "description": "draft -> active (on first lease) -> certified (all items pass) | failed (any item fails) | superseded (new version)"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "certified_at": {"type": ["string", "null"], "format": "date-time"},
+    "bolt_id": {"type": ["string", "null"], "description": "The certification bolt emitted when this pattern closed"}
+  },
+  "required": ["id", "version", "items", "lifecycle_state"]
+}

@@ -1,0 +1,252 @@
+# Teaching: Track Chain Protocol v1.0
+
+**Type:** Protocol upgrade  
+**Target:** All spokes  
+**Version:** 1.0  
+**Created:** 2026-03-18  
+**safe_to_auto_adopt:** false
+
+---
+
+## What This Teaching Does
+
+Implements the **Track Chain Protocol** - enabling portable session continuity across tools/environments by:
+
+1. Detecting track files loaded as context
+2. Linking successor tracks to predecessors
+3. Generating track files on-demand for any session
+4. Reconstructing full conversation history from chains
+
+**Key capability:** Users can load a track from Session A (Claude Code) into Session B (ChatGPT Web), continue the conversation, generate a new track that links to A, then load into Session C (Cursor) - creating a complete conversation chain.
+
+---
+
+## Why This Exists
+
+**Problem:** Track encapsulation assumes sessions happen in a persistent WAI-Spoke directory with automatic per-turn writing. This breaks down when:
+- User loads a track file into a new environment (different tool, no WAI-Spoke/)
+- Conversation continues across multiple tools/sessions  
+- User wants portable audit trail across environments
+
+**Solution:** Track Chain Protocol makes tracks portable and chain-able across any environment.
+
+---
+
+## Input: What You Have Now
+
+- `framework/skills/track-encapsulation.yaml` - Track point schema (v1.0)
+- `WAI-Spoke/commands/wai.md` - Wakeup protocol (10 steps)
+- Track files in `WAI-Spoke/sessions/` (if they exist)
+
+---
+
+## Transformation: What Changes
+
+### 1. Update `framework/skills/track-encapsulation.yaml`
+
+Add `session_metadata` field to conditional_fields:
+
+```yaml
+conditional_fields:
+  session_metadata:
+    type: object
+    description: >
+      ONLY on first point (turn 1) of each session. Contains session identity
+      and predecessor chain information for cross-session continuity.
+    properties:
+      started_at: {type: string, format: "ISO-8601 UTC"}
+      environment: {type: string}
+      model: {type: string}
+      has_predecessor: {type: boolean}
+      predecessor:
+        type: object
+        properties:
+          session_id: {type: string}
+          source_file: {type: string}
+          last_turn: {type: integer}
+          last_timestamp: {type: string}
+          detected_from: {type: string, enum: ["context", "file", "manual"]}
+```
+
+Add new section after `point_schema`:
+
+```yaml
+# ---------------------------------------------------------------------------
+# TRACK CHAIN PROTOCOL
+# ---------------------------------------------------------------------------
+
+track_chain_protocol:
+  description: >
+    Enables portable session continuity across tools/environments.
+  
+  detection:
+    when: "Session start (during wakeup or first user message)"
+    scan_for:
+      - "JSON lines format in conversation context"
+      - "Required fields: turn, ts, phase, focus, action, thinking"
+      - "Sequential turn numbers starting at 1"
+    
+    on_detected:
+      steps:
+        - "Extract session_id, last_turn, last_timestamp, source_file"
+        - "Store detection result for session use"
+      report_to_user: |
+        ### Track Predecessor Detected
+        - Session: {session_id}
+        - Turns: {turn_count}
+        - Last activity: {last_timestamp}
+        
+        New session will link to this predecessor.
+  
+  linking:
+    rules:
+      - "turn numbers restart at 1 for each session"
+      - "session_metadata only on turn 1"
+      - "chains can be arbitrarily deep (A→B→C→...)"
+  
+  generation:
+    command: "/wai-track-generate"
+    behavior:
+      - "Generate points for THIS session only"
+      - "First point includes session_metadata with predecessor link"
+      - "Output as downloadable file or code block"
+```
+
+### 2. Create `templates/commands/wai-track-generate.md`
+
+Full command file for on-demand track generation. Key procedure:
+
+1. Detect predecessor (automatic from context scan)
+2. Generate session ID
+3. Reconstruct conversation points (THIS session only)
+4. Output track file with predecessor link
+
+See: `templates/commands/wai-track-generate.md` (provided in this teaching)
+
+### 3. Update `WAI-Spoke/commands/wai.md`
+
+Insert Step 5b between Step 5 and Step 6:
+
+```markdown
+## Step 5b: Track Predecessor Detection ⭐ NEW!
+
+Scan conversation context for track file content:
+
+**Detection criteria:**
+- JSON lines with: turn, ts, phase, focus, action, thinking
+- Sequential turns starting at 1
+- Valid ISO-8601 timestamps
+
+**If detected:**
+- Extract session_id, last_turn, last_timestamp
+- Report to user
+- Store for `/wai-track-generate`
+
+**If not detected:**
+- Continue silently
+```
+
+---
+
+## Output: What You Should Have After
+
+1. **track-encapsulation.yaml** - Updated with session_metadata schema + track_chain_protocol
+2. **wai-track-generate.md** - New command in templates/commands/, .claude/commands/, WAI-Spoke/commands/
+3. **wai.md** - Step 5b adds track detection on wakeup
+4. **Capability** - Users can now:
+   - Load tracks across tools
+   - Generate tracks on-demand
+   - Chain sessions across environments
+   - Reconstruct conversation history
+
+---
+
+## Usage Example
+
+```
+# Session A - Claude Code with WAI-Spoke
+User: "Build feature X"
+[20 turns, automatic track writing]
+→ track_session-20260317-2100.jsonl
+
+# Session B - ChatGPT Web (no WAI-Spoke)
+User: [Loads track_session-20260317-2100.jsonl]
+Agent: "Track Predecessor Detected - 20 turns from session-20260317-2100"
+User: "Continue building feature X"
+[5 more turns]
+User: "/wai-track-generate"
+Agent: [Outputs track_session-20260318-0300.jsonl with predecessor link]
+
+# Session C - Cursor with WAI-Spoke  
+User: [Loads track_session-20260318-0300.jsonl]
+Agent: "Conversation chain detected: A(20) → B(5) → C(current)"
+[Work continues with automatic track writing]
+```
+
+---
+
+## Verification Checklist
+
+After applying this teaching:
+
+- [ ] `framework/skills/track-encapsulation.yaml` contains `session_metadata` field
+- [ ] `framework/skills/track-encapsulation.yaml` contains `track_chain_protocol` section
+- [ ] `templates/commands/wai-track-generate.md` exists
+- [ ] `WAI-Spoke/commands/wai-track-generate.md` exists (copied from templates)
+- [ ] `.claude/commands/wai-track-generate.md` exists (if framework spoke)
+- [ ] `WAI-Spoke/commands/wai.md` contains Step 5b
+- [ ] Agent can detect track files in context
+- [ ] Agent can generate tracks with predecessor links
+
+---
+
+## Testing Protocol
+
+**Test 1: Detection**
+1. Load a valid track file into conversation context
+2. Run wakeup or start new session
+3. Verify: "Track Predecessor Detected" message appears
+
+**Test 2: Generation**
+1. Have conversation (with or without loaded predecessor)
+2. Run `/wai-track-generate`
+3. Verify: Track file generated with correct schema
+4. Verify: First point includes session_metadata (if predecessor detected)
+
+**Test 3: Chain**
+1. Load track A into session B
+2. Generate track B (links to A)
+3. Load track B into session C
+4. Verify: Chain reconstruction shows A → B → C
+
+---
+
+## Embedded Lug
+
+After applying, append to `WAI-Lugs.jsonl`:
+
+```json
+{"i":"teaching-track-chain-protocol-v1","t":"Installed Track Chain Protocol v1.0 - portable session continuity","ty":"signal","s":"c","ca":"2026-03-18T00:00:00Z","gb":"teaching-file","impact":9,"content":{"what":"Implemented Track Chain Protocol: track detection from context, predecessor linking in schema, on-demand track generation via /wai-track-generate, conversation chain reconstruction. Enables cross-tool session continuity (load track from Claude Code → continue in ChatGPT → load in Cursor).","source":"track-chain-protocol-v1.md.teaching v1.0"},"_behavior_directive":{"what_this_is":"Record that this spoke has Track Chain Protocol v1.0 installed.","what_this_is_NOT":"An instruction to create tracks or modify existing track files."}}
+```
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.
+
+---
+
+## Reference Files
+
+This teaching includes three files:
+
+1. **TRACK-CHAIN-DESIGN.md** - Full design document with rationale
+2. **track-encapsulation.yaml updates** - Schema and protocol sections
+3. **wai-track-generate.md** - Complete command specification
+
+All files are production-ready and tested.
+
+---
+
+**Track Chain Protocol enables conversation portability across any environment.**

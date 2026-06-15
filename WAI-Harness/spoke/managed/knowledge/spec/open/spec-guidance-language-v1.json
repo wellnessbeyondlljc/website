@@ -1,0 +1,89 @@
+{
+  "id": "spec-guidance-language-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T15:00:00Z",
+  "updated_at": "2026-06-09T15:00:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260608-2053.mariov96",
+  "subject": "Guidance language — how the user steers the self-rolling wheel: goals, guardrails, focus-locks, sign-off semantics, and the guidance-log audit trail",
+  "title": "Guidance Language (the steering interface)",
+  "situation": "The design repeatedly references 'goals, guardrails, focus-locks' as the user's guidance inputs to the autonomous wheel (design §13), and 'sign-off' on Flag/Drop/escalations — but none were defined. Both review passes flagged this: guidance terms are used but have no declaration syntax, no enforcement semantics, and no audit trail. Without this spec the autonomy-vs-control boundary is unbuildable: the dispatcher cannot honor a focus-lock it cannot read, a guardrail it cannot parse, or a goal it cannot rank by, and the user cannot later audit 'why was this dropped / approved'.",
+  "why": "Guidance is the entire point of 'rolls on its own GIVEN MY GUIDANCE'. The user sets direction + limits sparingly; the wheel executes between guidance points. For that to be safe and trustworthy, guidance must be: (1) declarable in a stable place, (2) machine-enforced (the dispatcher and gates obey it, not just advisory), and (3) audited (every guidance decision logged so the system's behavior is explainable). This closes the autonomy boundary and makes the three-question confidence model's 'what needs me' actionable.",
+  "audience": [
+    "User — declares goals/guardrails/focus-locks; gives sign-offs via the Attention surface",
+    "Scheduler/Dispatcher — honors focus-locks (only dispatches in-focus autonomous work) + enforces guardrails as hard gates",
+    "Expediter/Aimer — rank the ready-queue by goals; nudge only within active guidance",
+    "Pattern Gate / migration engine — block sign-off-required steps until the ack exists",
+    "Historian/Trainer — read the guidance-log to explain decisions + measure goal progress"
+  ],
+  "guidance_types": {
+    "goal": {
+      "what": "direction to optimize toward (what 'better' means right now)",
+      "form": "{goal_id, statement, metric (optional, ties to KPI), priority, active_until}",
+      "effect": "tunes Expediter/Aimer ranking of the autonomous queue; goals are WHY work is ordered as it is",
+      "example": "'clear the v4 epic backlog before new features', metric=epic_ac_completion"
+    },
+    "guardrail": {
+      "what": "a hard limit the wheel must NOT cross — declarative, machine-enforced (not advisory)",
+      "form": "{guardrail_id, kind: budget|scope|no_touch_path|banned_action|rate, value, scope, hard:true}",
+      "effect": "enforced by the dispatcher's circuit-breaker + the pre-tool-guard + gates; a violation attempt is BLOCKED + logged + surfaced, never silently allowed",
+      "examples": ["budget: max $X/day autonomous", "no_touch_path: never auto-edit infra/*", "banned_action: no force-push", "scope: stay within initiative I"]
+    },
+    "focus_lock": {
+      "what": "constrain autonomous work to a named epic/initiative/area; everything else is paused (not deleted)",
+      "form": "{focus_id, target (epic|initiative|path-glob), mode: exclusive|priority, active_until}",
+      "effect": "the dispatcher only drains the in-focus slice of the autonomous queue; out-of-focus work waits (visible on the dashboard as 'paused by focus-lock')",
+      "example": "focus-lock on epic-harness-v4 exclusive → only v4 lugs dispatch"
+    },
+    "sign_off": {
+      "what": "explicit user acknowledgement required before a gated action proceeds",
+      "required_for": ["Flag-bucket placement", "Drop / decommission (hard, non-bypassable)", "escalations (gate retry-cap, halted workflow)", "RFC cohort advance", "crew/advisor provisioning", "harness-master canonicalization with broad blast-radius"],
+      "form": "{ack_id, subject_ref, decision: approve|reject|defer, reason, signed_by, signed_at}",
+      "effect": "the action stays staged/blocked until a matching ack exists; sign-offs are async-batched on the Attention surface (never block the autonomous column)"
+    }
+  },
+  "declaration": {
+    "where": "guidance lives in WAI-Harness/spoke/local/guidance/ (spoke-scoped) + hub for fleet-wide guardrails; stacking inheritance applies (hub guardrails are mandated, spoke adds/overrides config-axis only — a spoke cannot weaken a mandated hub guardrail)",
+    "how": "declared via a guidance skill/command or directly as guidance objects; goals/focus-locks are typically spoke-set, hard guardrails often hub-mandated",
+    "lifecycle": "guidance objects carry active_until or are explicitly cleared; expired guidance auto-deactivates + logs"
+  },
+  "guidance_log": {
+    "principle": "Every guidance decision is logged + auditable — parallel to gate-log + change-registry. Answers 'who set/changed/approved this, when, and why' (review: no audit trail for user decisions).",
+    "records": "goal set/changed/expired; guardrail set/changed; focus-lock engaged/released; every sign-off (approve/reject/defer + reason + signer)",
+    "storage": "guidance-log.jsonl + events table (type=decision where it changes flow); read by Historian (explain) + Trainer (goal-progress)",
+    "rule": "no guidance change or sign-off is silent; the guidance-log is the record of how the user steered"
+  },
+  "enforcement_summary": "goals → ranking (soft); focus-locks → dispatch scope (the autonomous column is filtered to in-focus); guardrails → hard blocks (circuit-breaker + pre-tool-guard + gates); sign-offs → staged-until-acked. The dispatcher reads all four on every dispatch decision; violations + blocks emit decision events to the guidance-log + Attention.",
+  "constraints": [
+    "Guardrails are HARD and machine-enforced — never advisory; a guardrail violation is blocked + logged, not warned",
+    "A spoke cannot weaken a hub-mandated guardrail (behavior axis); it may only add stricter local ones",
+    "Sign-off-required actions stay staged until a matching ack exists; acks are async (Attention), never block the autonomous column",
+    "Drop/decommission sign-off is non-bypassable by autonomous certification (ties to home-map destruction_human_gate)",
+    "Every goal/guardrail/focus-lock/sign-off change is written to the guidance-log — no silent steering",
+    "Focus-lock pauses out-of-focus work (visible), never deletes it"
+  ],
+  "tests": [
+    "Focus-lock: set exclusive focus on epic E → dispatcher drains only E's lugs; an out-of-focus ready lug is shown 'paused by focus-lock', not dispatched",
+    "Guardrail budget: set max $X/day → autonomous spend reaching X pauses dispatch + Attention (ties to circuit-breaker)",
+    "Guardrail no_touch_path: an autonomous action attempting to edit a no_touch path is BLOCKED + logged, file unchanged",
+    "Mandated guardrail: a spoke attempting to override a hub-mandated guardrail to a weaker value is rejected by the stacking parser",
+    "Sign-off gating: a Drop step with no ack stays staged; adding an approve ack lets it proceed; a reject returns it labelled",
+    "Guidance-log: setting a focus-lock + approving a sign-off both produce guidance-log entries with signer + reason; Historian can answer 'why was X dropped'",
+    "Goal ranking: two goals with different priorities reorder the autonomous queue accordingly",
+    "Expiry: a focus-lock past active_until auto-releases + logs"
+  ],
+  "impl_lugs": [],
+  "health": {"test_coverage": "none — spec only", "last_impl_lug_completed": null, "spec_drift_risk": "low — initial spec", "open_questions": ["guidance declaration UX: skill/command vs Minder web panel vs both (proposed: both, same objects)", "natural-language guidance ('focus on the website this week') → structured guidance object: parse at declaration time"]},
+  "related_specs": ["spec-scheduler-dispatcher-v1", "spec-observability-oversight-v1", "spec-v4-migration-home-map-v1", "spec-harness-development-control-v1"],
+  "perceive": "Read this spec + spec-scheduler-dispatcher-v1 (guidance_boundary it formalizes) + spec-observability-oversight-v1 (Attention surface carries sign-offs) + home-map destruction_human_gate (Drop sign-off). Check for any existing focus-lock/guardrail handling in ozi_autopilot/expediter.",
+  "execute": "1. Define the four guidance object schemas + the guidance/ declaration location. 2. Make the dispatcher read goals/focus-locks/guardrails on every dispatch (filter scope + enforce hard blocks). 3. Wire sign-off staging to the Attention surface. 4. Implement the guidance-log (jsonl + events). 5. Stacking: mandated hub guardrails un-weakenable by spokes. 6. Add a guidance declaration skill/command (+ optional NL→object parse).",
+  "verify": "Run all tests[]. Confirm focus-lock scoping, hard guardrail blocks, mandated un-weakenable guardrails, sign-off staging, and a complete guidance-log answering 'who steered, when, why'.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

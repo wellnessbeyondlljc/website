@@ -1,0 +1,267 @@
+{
+  "id": "spec-harness-self-maintaining-wheel-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T00:00:00Z",
+  "updated_at": "2026-05-30T18:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.248",
+  "impact": 9,
+  "subject": {
+    "kind": "architecture",
+    "id": "harness-self-maintaining-wheel",
+    "label": "Self-Maintaining Wheel Architecture"
+  },
+  "title": "Self-Maintaining Wheel Architecture \u2014 Harness replaces framework spoke; hub is keeper",
+  "what": "The harness (renamed from 'framework' \u2014 a new persona, not a rebrand) is a versioned protocol that enables wheels. It is not a spoke. The hub holds the harness under WAI-Spoke/hub/harness/. Bootstrap snapshots replace patch chains. Any spoke at head can generate and submit a teaching via peer review. Hub Ozi (wheel mode) consolidates teachings into new bootstrap versions. Migration = structured audit + data refactoring of WAI-* folders. Structural parity: harness, hub, and every spoke share the same WAI-Spoke folder structure with their own PathGraph, TasteGraph, and vector library.",
+  "why": "The framework spoke exists only to write its own code \u2014 a utility node whose only job is managing itself. This produces patch chain accumulation, special routing rules every spoke must learn, gardener checks to compensate, and token weight every session. With 20+ project wheels, this compounds into enormous audit busy-work. The harness model eliminates the special-case spoke, makes upgrade = install, and enables autonomous iterative resolution via Navigator + Ozi so the user only touches escalations.",
+  "audience": [
+    "admin",
+    "ozi",
+    "navigator"
+  ],
+  "use_cases": [
+    {
+      "title": "Spoke at head submits a teaching",
+      "trigger": "Spoke generates teaching at closeout; user approves; lug delivered to hub/harness/teachings/incoming/",
+      "outcome": "Hub queues teaching for peer review, assigns dry-run to peer spoke, improvements cycle until greenlit, teaching moves to queued/",
+      "persona": "ozi"
+    },
+    {
+      "title": "Consolidation trigger fires",
+      "trigger": "Teaching count in queued/ reaches threshold (default 10), or on-demand",
+      "outcome": "Hub Ozi (wheel mode) merges teachings into new bootstrap snapshot, runs file hygiene, generates migration lugs for all outdated spokes, updates harness PathGraph",
+      "persona": "ozi"
+    },
+    {
+      "title": "Outdated spoke migrates",
+      "trigger": "Spoke Ozi picks up migration lug delivered by hub after consolidation",
+      "outcome": "Spoke runs audit of WAI-* folders, generates prioritized blockers lug, replaces skill files from new bootstrap snapshot, updates wheel.harness_version + wheel.at_head = true",
+      "persona": "ozi"
+    },
+    {
+      "title": "Navigator flags lug state concern",
+      "trigger": "Navigator (hub) reviews spoke lug state and finds it below desired state",
+      "outcome": "Navigator notifies Ozi with concern + desired state; Ozi creates specialized advisor; advisor iterates autonomously until resolved or escalation threshold hit",
+      "persona": "navigator"
+    },
+    {
+      "title": "New spoke setup on any machine",
+      "trigger": "Bootstrap folder shared (self-contained with inline helpers)",
+      "outcome": "Agent initializes spoke from bootstrap \u2014 no external reference required. For woefully outdated spoke: replace WAI-* with bootstrap and run migration lug.",
+      "persona": "admin"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Structural parity",
+      "description": "Harness, hub, and every spoke share the same WAI-Spoke folder structure. Hub folder lives inside WAI-Spoke/ so Ozi manages it as local workspace. No special cases."
+    },
+    {
+      "name": "Bootstrap = universal setup unit",
+      "description": "Bootstrap is self-contained with inline helpers. Sharing is trivial. Upgrading is the same as installing for severely outdated spokes. Each version includes a version manifest with upgrade_array (list of teachings applied) for easy reconciliation."
+    },
+    {
+      "name": "Teaching peer review before consolidation",
+      "description": "Hub assigns teaching dry-run to a Cohort A peer spoke (at head). Peer reports challenges. Originating spoke improves. Teaching must pass quality gate before queued/. Quality gate: Cohort A spoke eligible; zero hard conflicts; all verify steps pass on peer spoke; no files outside spoke-local scope modified."
+    },
+    {
+      "name": "Migration = audit + refactoring",
+      "description": "Migration lugs instruct spoke to audit WAI-* folders for stale patterns, generate prioritized blockers lug (must-complete actions first), then replace skill files from bootstrap snapshot and run hygiene."
+    },
+    {
+      "name": "Ozi wheel mode is hub-only",
+      "description": "Ozi determines mode from wheel.node_type. 'spoke' -> spoke mode (unchanged). 'hub' -> wheel mode available. Wheel mode handles teaching count monitoring, consolidation, migration lug generation, harness PathGraph updates."
+    },
+    {
+      "name": "Harness PathGraph = policy registry",
+      "description": "Harness PathGraph at hub/WAI-Spoke/pathgraph/harness/ is the canonical white-boxed register of all protocols, integrations, and behavioral rules. Outdated policies decay and drop (version control recovers them). Not just work tracking."
+    },
+    {
+      "name": "Harness edits require explicit elevation",
+      "description": "Harness edits are blocked by Ozi unless wheel_mode == true (hub only). A spoke routing a lug to harness scope gets rejected: 'Submit as a teaching.' No incidental harness changes, no lug intermingling."
+    },
+    {
+      "name": "No gardener fleet-check pass",
+      "description": "Fleet health is a byproduct of the upgrade process \u2014 checked by matter of course on migration. Gardener's innovation-scanning role is preserved (detects teaching candidates); fleet-health-checking and teaching-distribution passes are eliminated."
+    }
+  ],
+  "how": {
+    "trigger": "Teaching submission by spoke-at-head OR consolidation trigger (count/version/on-demand) OR spoke picking up migration lug",
+    "steps_summary": [
+      "1. Spoke closes out at head \u2014 Generate Teachings skill compares spoke files vs bootstrap snapshot, drafts teaching, user approves, lug delivers to hub/WAI-Spoke/hub/teachings/incoming/",
+      "2. Hub queues teaching for peer review \u2014 assigns dry-run to Cohort A peer spoke, challenges cycle back to originating spoke, teaching improved, greenlit to queued/",
+      "3. Consolidation trigger fires \u2014 hub Ozi (wheel mode) merges queued/ teachings into new bootstrap snapshot, file hygiene pass removes deprecated patterns, version manifest written",
+      "4. Hub generates migration lugs for all outdated spokes via hub registry \u2014 then IMMEDIATELY initiates Gastown convoy (gt mayor attach: 'execute harness migration on all registered spokes'). Gardener delivery is fallback only for spokes not reachable via Gastown.",
+      "5. Gastown Mayor dispatches one Polecat per spoke \u2014 each Polecat runs wai-ozi-headless on the spoke, executes the migration lug (audit WAI-* \u2192 blockers lug \u2192 replace skill files \u2192 commit + push), reports outcome back to Mayor",
+      "6. Mayor writes fleet migration summary to hub \u2014 Navigator reviews, issues budget for escalations, spawns specialist advisors for blocked spokes",
+      "7. User receives one summary report: 'N/N migrated' or 'N/N \u2014 M escalations need review'. User approves or reviews escalations only. No per-spoke sessions required."
+    ],
+    "constraints": [
+      "Only spokes with wheel.at_head == true may submit teachings",
+      "Hub node_type must be 'hub' for Ozi to enter wheel mode",
+      "Harness edits blocked on non-hub nodes",
+      "Teaching peer review requires dry-run on Cohort A peer spoke \u2014 no auto-queue without review pass",
+      "Migration lug must include audit step before file replacement",
+      "ANTI-PATTERN: never design a migration requiring per-spoke user wakeup. Fleet migrations are always push-based via Gastown convoy. User action = approve once. Everything downstream is autonomous."
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Spoke closeout when at head (teaching generation optional step)",
+      "Teaching count in hub queued/ reaches threshold",
+      "User or hub Ozi requests minor version bump",
+      "Spoke Ozi picks up migration lug on wakeup"
+    ],
+    "not_when": [
+      "Spoke not at head cannot submit teachings",
+      "Non-hub nodes cannot enter wheel mode",
+      "Incidental spoke work must not trigger harness edits"
+    ],
+    "frequency": "Teaching submission: per session (optional). Consolidation: every ~10 teachings or on version bump. Migration: per spoke, triggered by hub after consolidation."
+  },
+  "schema": {
+    "inputs": [
+      "hub/WAI-Spoke/hub/harness/bootstrap/v{N}/ \u2014 current locked bootstrap snapshot",
+      "hub/WAI-Spoke/hub/teachings/queued/ \u2014 greenlit teachings awaiting consolidation",
+      "hub/WAI-Spoke/hub/harness/hygiene/deprecated-patterns.json \u2014 known cruft patterns to remove",
+      "hub/WAI-Spoke/hub/harness/harness-state.json \u2014 current version, teaching count, thresholds",
+      "hub/hub-registry.json \u2014 spoke fleet registry for migration lug distribution (current location; will move to hub/WAI-Spoke/hub/registry/hub-registry.json when hub subfolder restructure is complete per this spec)"
+    ],
+    "outputs": [
+      "hub/WAI-Spoke/hub/harness/bootstrap/v{N+1}/ \u2014 new bootstrap snapshot after consolidation",
+      "hub/WAI-Spoke/hub/harness/bootstrap/v{N+1}/version-manifest.json \u2014 upgrade_array, hygiene_removals",
+      "hub/WAI-Spoke/hub/teachings/archived/ \u2014 post-consolidation teaching history",
+      "spoke/WAI-Spoke/lugs/incoming/migration-harness-v{N}-to-v{N+1}.json \u2014 migration lug per spoke",
+      "spoke/WAI-Spoke/generate-teaching/submitted/ \u2014 audit trail of submitted teachings"
+    ],
+    "state_changes": [
+      "harness-state.json version increments on consolidation, teaching_count resets to 0",
+      "spoke wheel.harness_version updates to new version on migration completion",
+      "spoke wheel.at_head becomes true after migration, false when new consolidation occurs"
+    ]
+  },
+  "constraints": [
+    "Hub folder lives inside WAI-Spoke/ on hub node \u2014 Ozi manages it as local workspace",
+    "All nodes share same WAI-Spoke structure (structural parity)",
+    "New harness repo (separate from Wheelwright framework repo) reflects new persona",
+    "Bootstrap is self-contained \u2014 works on any machine with an agent, no external reference",
+    "Teachings archived, never deleted \u2014 version control is the historical record for dropped items"
+  ],
+  "operational_traces": {
+    "schema": {
+      "op_type": "string (lug_pickup|teaching_adoption|migration_step|advisor_creation|lug_complete)",
+      "lug_id": "string",
+      "outcome": "string (success|failure|partial)",
+      "delta": "string (what changed from plan)",
+      "teaching_candidate": "bool"
+    },
+    "storage": "WAI-Spoke/pathgraph/history.jsonl",
+    "append_contract": "Ozi MUST append one entry per operation before marking lug complete",
+    "query_surface": "Navigator reads fleet traces; Historian extracts aspiration drift from delta fields"
+  },
+  "goal_affinity": {
+    "output_file": "WAI-Spoke/advisors/navigator/goal-affinity-current.json",
+    "schema": {
+      "goal_chain_id": "string",
+      "goal_title": "string",
+      "weight": "number (0.0-1.0)",
+      "lug_affinities": [
+        {
+          "lug_id": "string",
+          "affinity_score": "number (0.0-1.0)"
+        }
+      ]
+    },
+    "ozi_contract": "Ozi reads goal-affinity-current.json at dispatch start; multiplies each lug ROI by (1 + affinity_score) before ordering dispatch queue",
+    "refresh": "Navigator rewrites file at each wakeup"
+  },
+  "challenge_reports": {
+    "schema": {
+      "spoke_id": "string",
+      "harness_version_from": "string",
+      "harness_version_to": "string",
+      "challenges": [
+        {
+          "step": "string",
+          "description": "string",
+          "severity": "warn|block",
+          "resolved_by": "string"
+        }
+      ]
+    },
+    "delivery": "Spoke appends challenge report to migration lug completion record; delivered back to hub as outgoing lug",
+    "aggregation": "Hub indexes at WAI-Spoke/hub/harness/migration-reports/{spoke_id}-{version}.json",
+    "bootstrap_input": "Hub Ozi reads all reports at next consolidation \u2192 generates learning-index.json for new bootstrap version"
+  },
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "test_file": null,
+    "test_count": 0,
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "resolved_questions": [
+      {
+        "question": "Peer review quality gate criteria",
+        "answer": "Cohort A spoke eligible; zero hard conflicts; all verify steps pass on peer spoke; no files outside spoke-local scope modified"
+      },
+      {
+        "question": "Navigator desired-state message format to Ozi",
+        "answer": {
+          "concern_type": "string",
+          "lug_id": "string|null",
+          "goal_chain_id": "string|null",
+          "desired_state": {},
+          "budget_grant": "number|null"
+        }
+      },
+      {
+        "question": "Specialized advisor creation contract in Ozi",
+        "answer": {
+          "advisor_type": "string",
+          "concern": "string",
+          "desired_state": {},
+          "ttl_hours": "number",
+          "budget": "number"
+        }
+      },
+      {
+        "question": "Vector library format \u2014 each node accumulates its own; what is the schema?",
+        "answer": "Postgres/pgvector table per node namespace (spoke_id partition) covers both A (lug+session embeddings) and B (teaching+skill RAG). GitNexus provides code symbol graph layer (callers, dependencies, execution flows). Together: semantic search over behavioral data (Postgres) + structural code intelligence (GitNexus). Folder WAI-Spoke/vector-library/ holds local metadata/index state. Full spec: spec-vector-library-v1 \u2014 must include Postgres table schema and GitNexus query integration."
+      },
+      {
+        "question": "Gardener tooling re-evaluation scope \u2014 which passes retire, which survive?",
+        "answer": "Fleet-health-check pass eliminated; teaching-distribution pass eliminated; innovation-scanning role preserved"
+      },
+      {
+        "question": "WAI-State field rename: framework_version -> harness_version (migration path for existing spokes)",
+        "answer": "Standard migration lug; field rename is one step in the migration audit instructions; no special case needed"
+      }
+    ],
+    "verified_at": "2026-05-30T18:00:00Z",
+    "verification_note": "Design spec promoted to v1.0.0. All open questions resolved. Implementation gates on impl epic creation."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-cross-spoke-sovereignty-v1",
+    "spec-evolution-lifecycle-v1",
+    "spec-harness-operational-traces-v1",
+    "spec-harness-challenge-reports-v1",
+    "spec-harness-kb-v1",
+    "spec-harness-goal-affinity-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec (spec-harness-self-maintaining-wheel-v1). Read the design plan at /home/mario/.claude/plans/how-can-our-design-warm-raven.md for full design detail. Review resolved_questions in health section. Read child specs: spec-harness-operational-traces-v1, spec-harness-challenge-reports-v1, spec-harness-kb-v1, spec-harness-goal-affinity-v1. Check whether any existing tooling (gardener scripts, wai-sync-v2, spoke-upgrade.sh, bootstrap scripts) overlaps with the proposed design.",
+  "execute": "Design spec at v1.0.0. Next: create impl epic linking all four child specs. Sequence: operational-traces first (no deps), challenge-reports second (no deps), kb third (no deps), goal-affinity last (depends on spec-goal-chain-v1).",
+  "verify": "All open_questions resolved (health.open_questions is empty). Spec at v1.0.0. Four child spec lugs exist and are linked in related_specs. Hub structural parity validated against existing hub/ folder layout.",
+  "model_fit": "haiku"
+}

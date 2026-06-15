@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Initiative Schema (per-file)",
+  "description": "An initiative is the high-level organizing 'playlist' (the WHEN/grouping axis): it groups epics/lugs, carries priority + optional due date, and drives toward a culmination where Ozi celebrates with the user. Stored per-file mirroring lugs: WAI-Spoke/initiatives/bytype/initiative/{lifecycle_state}/{id}.json. The slug `id` is the canonical key (e.g. wheel-intelligence-layer); index.json is a generated read-model. Sessions advancing an initiative emit bolts that cross-link back to it (the journey/treasure map).",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Canonical slug key, e.g. wheel-intelligence-layer (NOT initiative-{slug}-v{n})"
+    },
+    "label": {
+      "type": "string",
+      "description": "Human-readable name"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "description": "Coarse open/closed flag retained for back-compat; lifecycle_state is authoritative",
+      "enum": ["open", "closed"]
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "description": "Authoritative lifecycle; also determines the storage folder. 'dormant' = asleep with a wake_on condition (sleep/wake feature).",
+      "enum": ["proposed", "approved", "active", "measuring", "dormant", "complete", "abandoned"]
+    },
+    "wake_on": {
+      "type": ["object", "null"],
+      "description": "Wake condition for a dormant initiative. The steward wakes it when ANY set sub-condition fires.",
+      "properties": {
+        "at": {"type": ["string", "null"], "format": "date-time", "description": "Wake when now >= this ISO-8601 timestamp"},
+        "event": {"type": ["string", "null"], "description": "Wake when this named harness event fires (e.g. epic_completed:epic-x, file_changed:path/glob)"},
+        "commit_count": {"type": ["integer", "null"], "description": "Wake when the repo commit count reaches this value (reuses the snooze_until_commit_count pattern)"},
+        "reason": {"type": ["string", "null"], "description": "Why it was put to sleep / what to do on return"}
+      }
+    },
+    "dormant_since": {"type": ["string", "null"], "format": "date-time"},
+    "dormant_from": {"type": ["string", "null"], "description": "lifecycle_state the initiative held before sleeping; restored on wake"},
+    "wake_reason": {"type": ["string", "null"], "description": "Set by the steward when an initiative is woken: which condition fired"},
+    "woke_at": {"type": ["string", "null"], "format": "date-time"},
+    "current_position": {
+      "type": ["object", "null"],
+      "description": "Live 'where am I' snapshot for handoff — shareable with anyone reading the same files. Updated on save/switch.",
+      "properties": {
+        "updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "by": {"type": ["string", "null"], "description": "session id or model that last wrote the position"},
+        "summary": {"type": ["string", "null"], "description": "One-paragraph state of this thread"},
+        "done": {"type": "array", "items": {"type": "string"}},
+        "next": {"type": "array", "items": {"type": "string"}},
+        "files": {"type": "array", "items": {"type": "string"}, "description": "Files/areas in play right now"},
+        "blockers": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "owns": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Glob patterns this initiative owns, so concurrent sessions/initiatives can divide a tree safely (e.g. WAI-Harness/spoke/advisors/expediter/**)"
+    },
+    "last_revisited_at": {"type": ["string", "null"], "format": "date-time", "description": "Last time the steward gave this initiative an intelligent return visit"},
+    "revisit_cadence_days": {"type": ["integer", "null"], "description": "How often the steward should revisit (default 7). Used to detect stall."},
+    "impact_rank": {
+      "type": "integer",
+      "description": "1 = highest system impact; feeds backlog scoring multipliers"
+    },
+    "epics": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Epic lug ids grouped under this initiative"
+    },
+    "task_lugs": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Non-epic lug ids grouped under this initiative (optional)"
+    },
+    "hypothesis": {
+      "type": "string",
+      "description": "If/then statement the initiative tests"
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "completion_gate": {
+      "type": "object",
+      "description": "Measurement gate: runs_required, measurement_window_days, data_source"
+    },
+    "focus_lock": {
+      "type": "boolean",
+      "description": "When true, this initiative holds the fleet's focus until released"
+    },
+    "approved_at": {"type": ["string", "null"], "format": "date-time"},
+    "measuring_started_at": {"type": ["string", "null"], "format": "date-time"},
+    "hypothesis_result": {"type": ["string", "null"]},
+    "modification_notes": {"type": ["string", "null"]},
+    "goals": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "One or many goals this initiative drives toward"
+    },
+    "priority": {
+      "type": ["string", "integer", "null"],
+      "description": "Optional priority (e.g. P1) used for sequencing"
+    },
+    "due_date": {
+      "type": ["string", "null"],
+      "description": "Optional target date (ISO-8601) for timing/sequencing"
+    },
+    "celebration_note": {
+      "type": ["string", "null"],
+      "description": "Written by Ozi at culmination, surfaced to the user"
+    }
+  },
+  "required": ["id", "label", "lifecycle_state"]
+}

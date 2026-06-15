@@ -1,0 +1,122 @@
+{
+  "id": "spec-teaching-pipeline-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "protocol",
+    "id": "teaching-pipeline",
+    "label": "Teaching Distribution Pipeline"
+  },
+  "title": "Teaching Distribution Pipeline -- framework improvements propagated to all spokes",
+  "what": "Teachings are markdown files (*.teaching) that encode framework improvements, new skills, and behavioral updates. The hub authors a teaching and places it in each spoke's WAI-Spoke/seed/ingest/. At session start, the wakeup protocol reads the ingest directory, adopts each teaching (installs skill files, applies config changes, updates fw_ver fingerprint), and archives to processed/.",
+  "why": "Without teachings, every framework improvement requires manual editing of each spoke. Teachings are the automated distribution mechanism - author once in the hub, apply everywhere.",
+  "audience": [
+    "admin",
+    "dev"
+  ],
+  "use_cases": [
+    {
+      "title": "Distributing a new skill file",
+      "trigger": "Hub authors skill-wai-savepoint-v1.md.teaching with the skill file embedded",
+      "outcome": "All spokes adopt at next session start - wai-savepoint.md appears in .claude/commands/",
+      "persona": "admin"
+    },
+    {
+      "title": "Updating a behavioral rule via Doctor",
+      "trigger": "Hub authors a teaching that modifies CLAUDE.md anti-patterns",
+      "outcome": "Doctor rule pack executes on all spokes - CLAUDE.md updated consistently",
+      "persona": "admin"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "safe_to_auto_adopt=true default",
+      "description": "Default all teachings to safe_to_auto_adopt=true. Set false only for genuinely breaking changes."
+    },
+    {
+      "name": "Teaching weight contributes to fw_ver",
+      "description": "Each teaching has weight (1/5/10/25). Absorbed teachings accumulate into spoke fw_ver fingerprint string."
+    }
+  ],
+  "how": {
+    "trigger": "Hub places *.teaching file in WAI-Spoke/seed/ingest/",
+    "steps_summary": [
+      "1. Hub authors teaching file with frontmatter: id, weight, safe_to_auto_adopt, target_files",
+      "2. Hub distributes to spoke ingest directories via outgoing/incoming transport",
+      "3. At spoke session start: wakeup scans seed/ingest/ for *.teaching files",
+      "4. For each: if safe_to_auto_adopt, apply immediately; else queue for manual review",
+      "5. Apply: install skill files, update configs, run Doctor rule packs as specified",
+      "6. Update fw_ver: append fingerprint = first 3 chars of md5('{id}:{weight}')",
+      "7. Archive teaching to seed/ingest/processed/"
+    ],
+    "constraints": [
+      "Teaching adoption (processed/ marker) does NOT guarantee skill file presence in .claude/commands/",
+      "fw_ver fingerprints are append-only and alpha-sorted for hash reproducibility"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Hub publishes a teaching for distribution"
+    ],
+    "not_when": [
+      "Direct filesystem edits to spoke - always use teaching pipeline for cross-fleet changes"
+    ],
+    "frequency": "Per framework improvement"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/seed/ingest/*.teaching - teaching files from hub"
+    ],
+    "outputs": [
+      "Updated .claude/commands/ (new skill files)",
+      "Updated fw_ver in WAI-State.json",
+      "Teaching archived to processed/"
+    ],
+    "state_changes": [
+      "fw_ver updated",
+      "Skill files installed",
+      "Teaching moved from ingest/ to processed/"
+    ]
+  },
+  "constraints": [
+    "Never bypass teaching pipeline for cross-fleet behavioral changes",
+    "Teaching weight must be: 1 (patch), 5 (behavior), 10 (schema), 25 (architecture)"
+  ],
+  "tests": [
+    {
+      "test_file": "tests/behavioral/test_teaching_adoption.py",
+      "test_names": [],
+      "coverage_area": "teaching adoption lifecycle and fw_ver update",
+      "last_verified": null
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "partial",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "teaching-pipeline",
+  "body": "The teaching pipeline is the automated distribution mechanism for framework improvements across all spokes. A teaching is a markdown file with YAML frontmatter (id, title, type, version, safe_to_auto_adopt, created_at, weight) followed by a detailed description of what changed and how to apply it. The hub authors the teaching and places it in each spoke's WAI-Spoke/seed/ingest/ directory via the hub-spoke transport (outgoing/incoming). At session start, the wakeup protocol scans seed/ingest/ for *.teaching files and processes each one. If safe_to_auto_adopt=true the teaching is applied immediately; if false it is queued for manual review and displayed in the briefing as a pending item. Applying a teaching installs skill files (writes to .claude/commands/ or templates/commands/), updates configs, and runs Doctor rule packs as the teaching body specifies. After application, the teaching is archived to seed/ingest/processed/ and the spoke's fw_ver fingerprint string is updated. The fingerprint for a teaching is the first 3 characters of md5('{id}:{weight}'). Teaching weight values are: 1 (patch/minor fix), 5 (behavior update or protocol tweak), 10 (schema or protocol change), 25 (architectural addition or new advisor). Fingerprints are accumulated in chronological adoption order — the full fw_ver string is: {series}.{YYYYMMDD}-{fp1}.{fp2}.{fp3}. Two spokes with identical absorbed teachings produce identical fw_ver regardless of adoption order because the hash input sorts fingerprints alpha. A series increments when accumulated weight reaches 100 or when the hub emits a series-close teaching. Adoption (moving to processed/) does not guarantee skill file presence in .claude/commands/ — verification requires checking the filesystem directly. Every framework behavioral change must go through the teaching pipeline; direct spoke filesystem edits bypass the fleet and create invisible divergence.",
+  "done_when": [
+    "A *.teaching file placed in WAI-Spoke/seed/ingest/ with safe_to_auto_adopt=true is applied and archived to seed/ingest/processed/ without user intervention during the next wakeup",
+    "After teaching application, WAI-State.json fw_ver contains the new teaching's fingerprint (first 3 chars of md5('{id}:{weight}')) appended to the previous fingerprint string",
+    "A teaching with safe_to_auto_adopt=false appears in the wakeup briefing under Pending Teachings with count and a prompt for manual action",
+    "Two spokes that have absorbed the same set of teachings in different orders produce identical fw_ver hash values",
+    "A teaching with weight=25 contributes 25 points toward the series accumulator, and the series increments when total accumulated weight reaches 100"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-hub-spoke-sync-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

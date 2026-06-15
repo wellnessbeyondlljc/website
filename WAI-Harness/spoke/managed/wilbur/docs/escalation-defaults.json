@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "description": "Default escalation routing — overridden by verified TasteGraph notification_preferences",
+  "defaults": {
+    "wave_complete":        {"track": "internal", "interrupt": false, "level": 1},
+    "error_blocking":       {"track": "internal", "interrupt": true,  "level": 3},
+    "decision_required":    {"track": "internal", "interrupt": true,  "level": 3},
+    "stale_lug":            {"track": "internal", "interrupt": false, "level": 1},
+    "lug_completed":        {"track": "internal", "interrupt": false, "level": 0},
+    "epic_completed":       {"track": "internal", "interrupt": false, "level": 1},
+    "initiative_completed": {"track": "internal", "interrupt": true,  "level": 2}
+  }
+}

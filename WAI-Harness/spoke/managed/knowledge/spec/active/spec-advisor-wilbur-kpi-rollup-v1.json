@@ -1,0 +1,53 @@
+{
+  "id": "spec-advisor-wilbur-kpi-rollup-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-28T00:30:00Z",
+  "updated_at": "2026-05-28T00:30:00Z",
+  "routed_to": "FRAMEWORK",
+  "impact": 9,
+  "subject": { "kind": "protocol", "id": "advisor-wilbur-rollup", "label": "Advisor → Wilbur KPI Rollup" },
+  "title": "Advisor KPI Rollup to Wilbur — executive accountability layer for the advisor fleet",
+  "what": "After each advisor expedition, the advisor writes a wilbur_kpi_report.json to its own folder. Wilbur reads these on its nightly scan and produces a fleet-wide advisor health dashboard. Advisors must satisfy Wilbur's KPI expectations before their budget allocation is renewed in the next init cycle. Wilbur is the executive — advisors report to it, not to Ozi.",
+  "why": "Without a top-down accountability layer, advisor quality degrades silently. Vera's coverage_score can drop to 0.2 and nothing notices. Wilbur provides the executive demand signal: 'This advisor is under-performing — either fix it or Ozi stops allocating budget to it.'",
+  "wilbur_kpi_schema": {
+    "path": "WAI-Spoke/advisors/{advisor_id}/wilbur_kpi_report.json",
+    "fields": {
+      "advisor_id": "string",
+      "report_for_expedition": "expedition_id",
+      "reported_at": "ISO-8601",
+      "kpis": {
+        "coverage_score": "float — from coverage_taxonomy.yaml overall_coverage_score",
+        "findings_per_run": "int — findings filed this expedition",
+        "false_positive_rate": "float — false_positives / total_findings",
+        "p1_dimensions_at_target": "bool — all P1 dimensions at >= 0.75 coverage",
+        "reflections_current": "bool — reflection_latest.json is newer than expedition_log",
+        "budget_efficiency": "float — findings / time_used_seconds * 60"
+      },
+      "meets_wilbur_expectations": "bool",
+      "recommendation": "renew|reduce_budget|put_on_notice|retire",
+      "notes": "string — free-form advisor commentary for Wilbur"
+    }
+  },
+  "wilbur_expectations": {
+    "minimum_coverage_score": 0.60,
+    "maximum_false_positive_rate": 0.30,
+    "minimum_findings_per_run": 1,
+    "reflection_required": true,
+    "p1_dimensions_minimum_coverage": 0.75
+  },
+  "fleet_health_dashboard": {
+    "what": "Wilbur aggregates all spoke advisor KPI reports into hub/WAI-Hub/advisor-fleet-health.json",
+    "fields": ["spoke_id", "advisor_id", "meets_expectations", "coverage_score", "last_run_at", "recommendation"],
+    "surfaced_in": "Wilbur nightly scan output → WAI wakeup brief (fleet health section)"
+  },
+  "escalation_path": {
+    "yellow_one_miss": "Wilbur flags in fleet health dashboard — no action required",
+    "orange_two_consecutive": "Wilbur surfaces in wakeup brief with recommendation",
+    "red_three_consecutive": "Wilbur recommends Ozi reduce budget allocation by 50%",
+    "black_five_consecutive": "Wilbur recommends advisor retirement — routes notice to framework"
+  },
+  "relationship_to_ozi": "Ozi dispatches advisors (operational). Wilbur evaluates them (executive). Ozi sees schedule; Wilbur sees outcomes. Neither overrules the other — Wilbur's recommendation routes to Mario's attention queue.",
+  "relationship_to_pathgraph": "Wilbur correlates advisor findings with PathGraph — a finding that maps to a decision the PathGraph records as intentional is deprioritized. A finding in a module with no PathGraph coverage is elevated."
+}

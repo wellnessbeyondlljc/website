@@ -1,0 +1,52 @@
+{
+  "id": "spec-initiative-work-contracts-v1",
+  "type": "spec",
+  "status": "open",
+  "title": "Initiative Work Contracts \u2014 hypothesis-driven completion with focus-lock",
+  "created_at": "2026-05-29T19:19:49.212386+00:00",
+  "subject_id": "initiatives",
+  "subject_area": "WAI-Spoke/initiatives/",
+  "perceive": "Read WAI-Spoke/initiatives/index.json \u2014 verify all initiatives have the required contract fields: lifecycle_state, focus_lock, hypothesis, success_criteria, completion_gate. Check tools/spoke_expediter.py for load_focus_lock_ids() and 3x ROI multiplier logic. Check if impl-initiative-schema-contract-fields-v1 exists (may be missing \u2014 schema was applied via inline session work).",
+  "behavior": [
+    "Every initiative MUST have a hypothesis, success_criteria, and completion_gate before it can move from lifecycle_state=proposed to approved. Proposed initiatives are never dispatched.",
+    "When focus_lock=true and lifecycle_state=approved|active: the expediter multiplies ROI of all lugs in this initiative by 3x. Non-initiative lugs are de-weighted to 0.5x. One focus lock allowed at a time.",
+    "Lifecycle: proposed -> [user approves hypothesis+criteria] -> approved -> [expediter routes epics] -> active -> [all epics complete] -> measuring -> [N nightly runs collect data, assessor scores against criteria] -> [user checkpoint] -> complete | modified",
+    "Measuring phase: after all epics in an initiative complete, lifecycle_state moves to measuring. A Vera scout (initiative-health-scout) queries the data_source, scores each criterion as passed/failed, and produces a hypothesis_result: confirmed|refuted|partial.",
+    "User checkpoints at two gates: (1) hypothesis approval (proposed->approved), (2) measurement review (measuring->complete). Changes to criteria after approval require a new user sign-off.",
+    "The wakeup brief surfaces the active focus-locked initiative prominently including: initiative label, lugs remaining, runs collected so far (measuring state), and hypothesis."
+  ],
+  "schema": {
+    "hypothesis": "string \u2014 the bet: if we build X, outcome Y will occur because Z",
+    "success_criteria": "array of strings \u2014 measurable, time-bound proof conditions",
+    "completion_gate": {
+      "runs_required": "int \u2014 nightly runs needed before measuring verdict",
+      "measurement_window_days": "int \u2014 rolling window for data collection",
+      "data_source": "string \u2014 activity_events | track_ledger | custom"
+    },
+    "focus_lock": "bool \u2014 expediter 3x ROI multiplier + 0.5x non-initiative lugs",
+    "lifecycle_state": "enum: proposed | approved | active | measuring | complete",
+    "approved_at": "ISO timestamp | null",
+    "measuring_started_at": "ISO timestamp | null",
+    "hypothesis_result": "confirmed | refuted | partial | null",
+    "modification_notes": "string \u2014 assessor recommendation after measuring | null"
+  },
+  "impl_lugs": [
+    "impl-initiative-schema-contract-fields-v1",
+    "impl-initiative-focus-lock-expediter-v1",
+    "impl-initiative-measuring-phase-runner-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "impl-initiative-measuring-phase-runner-v1",
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": "2026-05-29T20:50:00Z",
+    "verification_note": "focus-lock live in spoke_expediter.py (load_focus_lock_ids, 3x/0.5x multiplier). initiatives/index.json has all contract fields: lifecycle_state, focus_lock, hypothesis, success_criteria, completion_gate, approved_at, measuring_started_at, hypothesis_result. fleet-observability has focus_lock=true and lifecycle_state=active."
+  },
+  "version": "1.0.0",
+  "execution_mode": "gastown",
+  "execute": "1. If any initiative is missing lifecycle_state or hypothesis: add the missing fields based on initiative description and current status. 2. If spoke_expediter.py lacks focus-lock logic: create an impl lug routed_to=BASHER targeting tools/spoke_expediter.py. 3. If measuring phase runner is missing: check score_backlog.py or relevant tool for measuring-phase integration. 4. Update health.last_impl_lug_completed to reflect most recently completed impl lug.",
+  "verify": "All initiatives in index.json have lifecycle_state, focus_lock, hypothesis, success_criteria, completion_gate. tools/spoke_expediter.py has load_focus_lock_ids() returning correct IDs when focus_lock=true. Running spoke_expediter --dry-run shows Focus lock active when fleet-observability is locked.",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

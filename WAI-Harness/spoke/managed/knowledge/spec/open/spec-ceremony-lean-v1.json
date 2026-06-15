@@ -1,0 +1,90 @@
+{
+  "id": "spec-ceremony-lean-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T16:00:00Z",
+  "updated_at": "2026-06-09T16:00:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 8,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260608-2053.mariov96",
+  "subject": "Ceremony leanness — ceremonies are thin judgment wrappers over deterministic Basher scripts; ceremonies become first-class observable workflows; skill-set rationalization (104→~56) before migration",
+  "title": "Lean Ceremonies (script-backed) + Skill-Set Rationalization",
+  "situation": "A pre-build inventory (S47, 2 reviewers) covered all 104 skill files in templates/commands/. Findings: (1) the core ceremonies (wakeup/closeout/savepoint/...) are partly script-backed already (closeout.sh, wai-exit.sh, generate_wakeup_brief.py, verify_engine.py) but still carry heavy mechanical logic inline (git audit, skill sync, base/teaching adoption, delta detection, staging writes) that belongs in deterministic scripts; (2) the skill set has large redundancy — ~21 -slim/-reference variant clusters + 6 dead/redirect skills — that would migrate as cruft if not rationalized first. The user's directive: ceremonies must be tight and lean on Basher scripts as much as possible.",
+  "why": "The Agent-vs-Script principle: agents are expensive/slow/non-deterministic; anything that runs the same way every time must be a script. Lean ceremonies = lower latency, testable mechanical steps, reusable across providers, and an agent that spends its judgment only where judgment is needed. Rationalizing the skill set before migration means MyWheel carries a clean canonical set (~56), not 104 with duplicate variants and dead redirects — and the deprecations travel with teachings (no silent retirement).",
+  "audience": [
+    "Basher — owns the extracted ceremony scripts (.claude / tools) + distributes the rationalized skill set",
+    "ceremony skills (wakeup/closeout/savepoint/...) — become thin wrappers calling scripts + composing judgment strings only",
+    "Observability spine — ceremonies emit workflow_step events + bolts (first-class observable workflows)",
+    "migration engine + Hygiene — execute the deprecate/merge during migration; deprecations get teachings"
+  ],
+  "leanness_principle": {
+    "rule": "A ceremony skill body contains ONLY judgment (what to decide, what to compose, when to branch). Every mechanical step (file write, git op, JSON/index update, file scan, schema check, version bump, archival, sync) is a deterministic Basher script the ceremony invokes. v3 proved the pattern: git moved out of closeout into wai-exit.sh via a staging buffer.",
+    "test": "if a step always runs the same way given the same inputs, it is a script — not skill prose. A ceremony that still does mechanical work inline fails this spec.",
+    "staging_buffer_pattern": "ceremonies capture intent/state in a JSON staging buffer (track-buffer, closeout-staging, partial buffers); Basher scripts + the Stop hook coordinate the actual commits/pushes asynchronously — keeps CC latency low + guarantees atomicity without nested tool calls."
+  },
+  "script_extraction_targets": [
+    {"script": "closeout-delta-detect.py", "owner": "Basher", "ceremony": "closeout step 2b", "rank": "P0", "does": "classify session into CONVERSATION_ONLY|MICRO|STANDARD|FULL — gates all subsequent ceremony steps"},
+    {"script": "wai-base-adopt.sh", "owner": "Basher", "ceremony": "wakeup 0.5A", "rank": "P1", "does": "run base adoption, emit bolt, update version pointer"},
+    {"script": "wai-teaching-adopt.sh", "owner": "Basher", "ceremony": "wakeup 0.5B", "rank": "P1", "does": "apply unadopted teachings, move to processed, create tracking lug"},
+    {"script": "wai-lug-triage.sh", "owner": "Basher", "ceremony": "wakeup 0.5C", "rank": "P1", "does": "validate + route incoming lugs to bytype/"},
+    {"script": "wai-git-audit.sh", "owner": "Basher", "ceremony": "closeout 10h", "rank": "P1", "does": "classify uncommitted files (teaching/runtime/unknown), decide disposition"},
+    {"script": "wai-skill-sync.sh", "owner": "Basher", "ceremony": "closeout 10", "rank": "P1", "does": "idempotent sync canonical skills to .claude/commands/"},
+    {"script": "wai-savepoint.sh", "owner": "Basher", "ceremony": "savepoint", "rank": "P2", "does": "slug derive, file scan, JSON writes, pointer update, track append, brief regen (was a sub-agent — make it pure script)"},
+    {"script": "wai-task-complete.sh", "owner": "Basher", "ceremony": "task-complete", "rank": "P2", "does": "write partial staging buffer (append-or-merge)"},
+    {"script": "wai-closeout-stage.py", "owner": "Basher", "ceremony": "closeout 11", "rank": "P2", "does": "write fingerprint + staging buffer (idempotent)"},
+    {"already_scripts": ["closeout.sh", "wai-exit.sh", "generate_wakeup_brief.py", "verify_engine.py", "batch_planner.py"], "note": "these are already Basher/tools-owned — extend, don't duplicate"}
+  ],
+  "ceremonies_as_workflows": {
+    "principle": "The KEEP ceremonies become first-class observable workflows (Stream N) — live per-step status + typed events + bolts.",
+    "workflows": [
+      {"workflow": "wakeup", "emits": "session_start event, base-adoption bolt (if needed), teaching-adoption tracking lug, wakeup brief"},
+      {"workflow": "closeout", "emits": "closeout event (terminal track), ceremony bolt (step results), disruption lug (if failures), fingerprint/staging"},
+      {"workflow": "savepoint", "emits": "savepoint file (pending/active/completed), track event, pattern bolt (if pattern advanced)"},
+      {"workflow": "teaching-adoption", "emits": "track event, tracking lug (in_progress->completed), file move to processed/"},
+      {"workflow": "base-adoption", "emits": "adoption bolt, base version updated"}
+    ]
+  },
+  "skill_rationalization": {
+    "from_to": "104 files -> ~56 canonical (48 removed)",
+    "ceremonies_keep": ["wai (wakeup)", "wai-closeout", "wai-savepoint", "wai-status", "wai-compact-resume", "wai-track (spec)", "wai-foundation", "wai-rules", "wai-task-complete", "wai-apply-all", "wai-full"],
+    "ceremony_merges": [{"merge": "wai-slim -> wai (fast path already in wai)"}, {"merge": "wai-time -> wai-status (context metrics already there)"}, {"merge": "wai-closeout-slim -> wai-closeout (delta-detect gives the level; slim = conditional branch)"}],
+    "deprecate_hard": [
+      {"file": "wai-claude-maximizer.md", "reason": "redirect stub, absorbed into wai-tool-advisor"},
+      {"file": "wai-claude-maximizer-reference.md", "reason": "orphaned reference for deprecated skill (437 lines)"},
+      {"file": "wai-claude-maximizer-reference-slim.md", "reason": "slim of orphaned reference"},
+      {"file": "wai-tool-maximizer-gemini.md", "reason": "redirect stub, absorbed into wai-tool-advisor"},
+      {"file": "wai-tool-maximizer-gemini-reference.md", "reason": "orphaned reference for deprecated skill"},
+      {"file": "wai-sync-v2.md", "reason": "incomplete observation-logging stub, stale since Feb, never completed"}
+    ],
+    "merge_clusters": "~21 X.md + X-slim.md + X-reference.md trios/quartets -> single canonical X.md with progressive-disclosure sections (Fast Path callout + Reference appendix). Full cluster list in S47 inventory (track). Keep feedback-specific variants (e.g. wai-closeout-feedback-v2-slim) — not generic -slim cruft.",
+    "execution": "EXECUTED DURING MIGRATION (Hygiene + Basher distribution), NOT now: deprecate files -> trash_bin (never rm) with a deprecation teaching each (no silent retirement); merges -> consolidate canonical then drop variants. MyWheel migrates the lean ~56 set."
+  },
+  "constraints": [
+    "A ceremony skill body is judgment-only; all mechanical work is a Basher script it invokes (Agent-vs-Script)",
+    "Extracted scripts are deterministic, idempotent, testable, and emit observability events (no silent script runs)",
+    "Ceremonies use the staging-buffer pattern; the Stop hook + Basher scripts own the actual commit/push",
+    "KEEP ceremonies are modeled as first-class observable workflows (live status + events + bolts)",
+    "Skill rationalization runs during migration, not ad hoc; every deprecation ships a teaching (no silent retirement); deprecated files go to trash_bin, never rm",
+    "Reference/schema-heavy skills (lug-schema, advisor-schema, crew-*) may relocate to managed/docs as reference, not executable skills"
+  ],
+  "tests": [
+    "Leanness audit: a KEEP ceremony's body has no inline mechanical step that a script could do (every git/file/json/index op is a script call)",
+    "Script determinism: each extracted script is idempotent (run twice = same result) + emits a typed event",
+    "Closeout delta: closeout-delta-detect.py classifies a conversation-only session as CONVERSATION_ONLY and the ceremony skips version bump/skill-sync/test-gate accordingly",
+    "Workflow observability: running closeout produces a closeout workflow object with live per-step status + a ceremony bolt",
+    "Rationalization: post-migration the skill set is ~56 canonical; the 6 deprecate files are in trash_bin with a deprecation teaching each; no -slim/-reference duplicate remains for a merged cluster",
+    "No silent retirement: each deprecated skill has a corresponding teaching in the hub teaching repo"
+  ],
+  "impl_lugs": [],
+  "health": {"test_coverage": "none — spec only", "last_impl_lug_completed": null, "spec_drift_risk": "low", "open_questions": ["which reference-heavy skills relocate to managed/docs vs stay as skills (lug-schema/advisor-schema/crew-*)", "wai-next: referenced in commands but file missing — create a thin 'what's next' or formally deprecate"]},
+  "related_specs": ["spec-observability-oversight-v1", "spec-v4-migration-home-map-v1", "spec-hygiene-advisor-v1", "spec-verification-quality-v1"],
+  "perceive": "Read this spec + the S47 ceremony inventory (track) + templates/commands/ ceremony bodies + existing scripts (closeout.sh, wai-exit.sh, generate_wakeup_brief.py). Confirm Basher ownership of .claude/* + ceremony scripts.",
+  "execute": "1. Extract the script_extraction_targets to Basher scripts (deterministic, idempotent, event-emitting). 2. Rewrite KEEP ceremonies as thin judgment wrappers invoking those scripts. 3. Model the KEEP ceremonies as observable workflow objects (Stream N). 4. During migration: collapse the 21 merge clusters into canonical files, deprecate the 6 dead files to trash_bin with teachings. 5. Regenerate the skill manifest from the lean set.",
+  "verify": "Run all tests[]. Confirm ceremonies are judgment-only + script-backed, scripts are deterministic + observable, closeout delta gating works, ceremonies render as workflows, and the migrated skill set is the lean ~56 with deprecation teachings.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

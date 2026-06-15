@@ -1,0 +1,104 @@
+{
+  "id": "spec-goal-queue-v1",
+  "type": "spec",
+  "status": "completed",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:10:00Z",
+  "updated_at": "2026-06-01T07:12:47.932906+00:00",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 8,
+  "subject": "Goal Queue \u2014 shared work discovery layer for chain-based multi-agent coordination",
+  "title": "Goal Queue \u2014 Multi-Agent Chain Discovery and Selection",
+  "what": "Defines the Goal Queue: the shared view of available goal chains that agents query to discover work. The queue is a queryable projection over bytype/chain/ lugs (and the wai_claims Supabase table) filtered to unclaimed, non-expired chains ordered by priority. Agents query the queue at session start, select a chain, claim it, and plan against it. The queue exposes: all available chains, their current claim status, TTL expiry time, and execution_mode. It does NOT store state \u2014 it is a live view, not a persistent list.",
+  "why": "Goal chains (spec-goal-chain-v1) define the unit of work. The Goal Queue is how agents find chains to work on without duplicating effort or requiring a coordinator. Any session \u2014 Ozi nightly, AP, or a fresh user session \u2014 can query the queue, select the highest-priority available chain, and claim it atomically. Without a queue abstraction, agents would need to scan bytype/chain/ directly and resolve claim conflicts themselves, leading to race conditions and brittle session startup logic.",
+  "audience": [
+    "AP \u2014 queries queue at session start to find the highest-priority available chain",
+    "Ozi \u2014 queries queue nightly to dispatch chains across available session budget",
+    "Navigator \u2014 reads queue to understand current workload when building portfolio slice",
+    "Any session startup routine that needs to find and claim work"
+  ],
+  "use_cases": [
+    "Session startup: AP queries queue, gets top 3 unclaimed chains ordered by priority, selects one, claims it atomically",
+    "Ozi nightly dispatch: queries queue for all unclaimed chains, assigns across available Ozi sessions in priority order",
+    "Multi-Ozi coordination: two Ozi instances query simultaneously; first claim wins (Supabase PK); second sees the chain as claimed and skips to next",
+    "Stale claim detection: queue query returns chains with expires_at in the past as 'available with stale claim' \u2014 enables TTL sweep trigger",
+    "Navigator portfolio: Navigator reads queue depth (unclaimed chain count) when deciding whether to recommend new work vs completing existing chains"
+  ],
+  "patterns": [
+    "Queue is a view, not a store: never persist the queue itself; derive it fresh from chain lugs + claims table on each query",
+    "Priority order: initiative_rank (from initiatives/index.json focus_lock > approved > measuring) > chain ROI > created_at",
+    "Available chain: status=open AND (claimed_by=null OR expires_at < now())",
+    "Atomic claim: query then claim must be done as a single Supabase transaction to prevent race; local fallback uses file lock",
+    "Skip-on-claimed: when a queried chain is found claimed by another session, skip it without error \u2014 this is expected behavior in multi-Ozi setups"
+  ],
+  "schema": {
+    "queue_item": {
+      "chain_id": "string",
+      "goal": "string",
+      "execution_mode": "sequential | parallel",
+      "priority": "int \u2014 computed: 100 if focus_lock initiative, 50 if approved initiative, 10 default",
+      "roi": "float \u2014 from chain lug",
+      "available": "bool \u2014 true if unclaimed or claim expired",
+      "claim_status": "unclaimed | claimed | expired",
+      "claimed_by": "session_id | null",
+      "expires_at": "ISO-8601 | null",
+      "children_total": "int",
+      "children_completed": "int",
+      "children_remaining": "int"
+    },
+    "queue_query_params": {
+      "filter_available": "bool default true \u2014 return only claimable chains",
+      "filter_initiative": "initiative_id | null \u2014 narrow to one initiative",
+      "filter_execution_mode": "sequential | parallel | null \u2014 no filter",
+      "limit": "int default 10",
+      "order_by": "priority_desc_then_roi_desc (default)"
+    },
+    "queue_query_response": {
+      "queried_at": "ISO-8601",
+      "total_chains": "int \u2014 total chain lugs in bytype/chain/",
+      "available_chains": "int \u2014 unclaimed or expired",
+      "claimed_chains": "int",
+      "items": [
+        "queue_item"
+      ]
+    }
+  },
+  "constraints": [
+    "Queue is always derived fresh \u2014 never cache the queue for more than one session startup",
+    "Claim and query must be atomic when using Supabase (SELECT FOR UPDATE or INSERT with conflict check); a two-step query-then-claim with a gap is a race condition",
+    "Priority computation uses initiatives/index.json focus_lock and lifecycle_state \u2014 the queue reader must load this file to compute priority correctly",
+    "A chain with all children in completed_children[] must be excluded from the queue (status=completed) regardless of claim state",
+    "Ozi must not claim more chains than available session budget can complete \u2014 query with budget_tokens as a filter hint"
+  ],
+  "tests": [
+    "Empty queue: no chain lugs exist; queue_query returns available_chains=0, items=[]",
+    "Priority ordering: one focus_lock initiative chain + one approved initiative chain; focus_lock chain appears first",
+    "Claimed chain excluded: chain has valid (non-expired) claim; query with filter_available=true returns it as unavailable",
+    "Expired claim included: chain claim expires_at < now(); query returns it as available with claim_status=expired",
+    "Completed chain excluded: chain has all children in completed_children[]; does not appear in queue",
+    "Atomic claim race: two agents query simultaneously, both see same unclaimed chain, both attempt to claim \u2014 only one succeeds"
+  ],
+  "impl_lugs": [
+    "impl-goal-queue-ozi-startup-v1"
+  ],
+  "health": {
+    "test_coverage": "behavioral",
+    "last_impl_lug_completed": "impl-goal-queue-ozi-startup-v1",
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "completed_at": "2026-06-01T07:12:47.932918+00:00",
+    "completed_by": "claude-sonnet-4-6"
+  },
+  "related_specs": [
+    "spec-goal-chain-v1",
+    "spec-intra-agent-comms-v1",
+    "spec-sentinel-advisor-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec. Read spec-goal-chain-v1 for chain lug schema. Check WAI-Spoke/WAI-State.json _work_queue for how current queue is implemented. Read WAI-Spoke/initiatives/index.json for priority computation inputs.",
+  "execute": "1. Implement queue_query() function: reads bytype/chain/ lugs + wai_claims table, applies filters, computes priority, returns sorted queue_query_response. 2. Add queue_query() call to session startup routine before claiming begins. 3. Add budget_tokens parameter to queue_query() for Ozi dispatch. 4. Implement local fallback (file scan + file lock) for single-Ozi spokes without Supabase. 5. Add queue depth metric to Navigator input for portfolio planning.",
+  "verify": "1. queue_query() called with no chain lugs returns available_chains=0. 2. Priority: focus_lock chain ranks above approved chain. 3. Valid claim excluded from available results. 4. Expired claim included in available results. 5. Completed chain excluded. 6. Two simultaneous claims of the same chain \u2014 one rejected.",
+  "execution_mode": "tender",
+  "execution_substrate": null
+}

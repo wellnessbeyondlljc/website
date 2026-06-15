@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hub Teams Registry Schema",
+  "description": "Schema for teams.json in hub registry. Teams group spokes by shared purpose, commercial intent, or relationship.",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "created_at": {"type": "string", "format": "date-time"},
+        "last_updated": {"type": "string", "format": "date-time"},
+        "framework_version": {"type": "string"},
+        "description": {"type": "string"}
+      },
+      "required": ["created_at", "framework_version"]
+    },
+    "teams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique team identifier (e.g., 'wheelwright-team')"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable team name"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "Why this team exists, what connects these spokes"
+          },
+          "commercial": {
+            "type": "boolean",
+            "description": "True if team is commercially linked (wins should be publicized)"
+          },
+          "public_facing": {
+            "type": "boolean",
+            "description": "True if team represents public-facing products/services"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spoke_id": {"type": "string"},
+                "relevance_note": {"type": "string"}
+              },
+              "required": ["spoke_id"]
+            }
+          }
+        },
+        "required": ["id", "name", "purpose", "members"]
+      }
+    }
+  },
+  "required": ["metadata", "teams"],
+  "_instructions": {
+    "for_hub_ai": "Read this schema to validate teams.json. Use teams to determine cross-spoke suggestion relevance.",
+    "for_ozi": "Before surfacing cross-spoke suggestion, check if source and target share a team. If no shared team, skip suggestion. If shared team with commercial=true, frame wins for publicizing.",
+    "usage": "A spoke with no team membership is standalone — never suggest for cross-promotion. A spoke can belong to multiple teams with different relevance in each."
+  }
+}

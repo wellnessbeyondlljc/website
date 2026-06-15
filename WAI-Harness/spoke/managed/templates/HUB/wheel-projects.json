@@ -1,0 +1,33 @@
+{
+  "version": "2.0",
+  "description": "Registry of wheel projects connected to this hub",
+  "projects": [],
+  "groups": {},
+  "last_scan": null,
+  "_instructions": {
+    "for_llms": "This file tracks all wheel projects and groups. Updated by the AI during (deprecated - auto-teaching on closeout) and (deprecated - auto-discovery on wakeup).",
+    "structure": {
+      "projects": [
+        {
+          "path": "/path/to/project",
+          "name": "project-name",
+          "description": "Optional project description",
+          "added_at": "ISO-8601 timestamp"
+        }
+      ],
+      "groups": {
+        "group-name": {
+          "name": "group-name",
+          "description": "Optional group description",
+          "spokes": ["/path/to/project1", "/path/to/project2"],
+          "created_at": "ISO-8601 timestamp"
+        }
+      }
+    },
+    "notes": {
+      "projects": "List of registered spoke projects",
+      "groups": "Organizational groups for projects (manual CRUD via 'WAI group' commands)",
+      "version": "2.0 adds groups field and simplified project structure"
+    }
+  }
+}

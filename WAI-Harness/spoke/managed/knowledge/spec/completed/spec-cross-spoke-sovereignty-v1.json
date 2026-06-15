@@ -1,0 +1,157 @@
+{
+  "id": "spec-cross-spoke-sovereignty-v1",
+  "type": "spec",
+  "status": "completed",
+  "version": "1.1.0",
+  "created_at": "2026-05-29T00:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.264",
+  "impact": 9,
+  "subject": {
+    "kind": "rule",
+    "id": "cross-spoke-sovereignty",
+    "label": "Spoke Sovereignty: Cross-Spoke Change Protocol"
+  },
+  "title": "Spoke Sovereignty: Cross-Spoke Change Protocol",
+  "what": "Defines the invariant that agents operating within a spoke must never directly write, edit, or delete files that live in another spoke's directory tree. All cross-spoke changes must travel as properly-formed lugs delivered to the target spoke's incoming/. This rule applies symmetrically to the framework spoke itself. AMENDED v1.1: a cross-spoke change does not travel as just ANY lug \u2014 it travels as a COMPLETE change-lug carrying a full account (reason + what-was-done + files_changed + commit) plus external-session attribution (resolve_attribution, kind=user|agent). The receiving spoke verifies and incorporates it per ITS OWN policies; no checklist is imposed from outside.",
+  "why": "Direct cross-spoke file edits are untraceable (no lug history), undocumented (no PEV), overwritten on the next distribution run, and violate the spoke's right to accept or reject incoming changes on its own schedule. A lug-mediated change gives the target spoke full visibility, a reject path, and a recoverable audit trail. Without this rule, multi-agent sessions silently corrupt each other's state.",
+  "audience": [
+    "dev",
+    "agent",
+    "admin"
+  ],
+  "use_cases": [
+    {
+      "title": "Framework agent discovers a bug in a hub file",
+      "trigger": "Agent in framework spoke identifies a needed fix in hub/WAI-Spoke/",
+      "outcome": "Agent composes an impl lug with PEV + target_files pointing to hub paths, delivers it to hub/WAI-Spoke/lugs/incoming/, writes a copy to framework/WAI-Spoke/lugs/outgoing/ with delivered_at set. Does NOT directly edit the hub file."
+    },
+    {
+      "title": "Basher agent needs a framework skill updated",
+      "trigger": "Basher identifies a gap in templates/commands/wai-ozi-autopilot.md",
+      "outcome": "Basher delivers an impl lug to framework/WAI-Spoke/lugs/incoming/. Framework agent picks it up in its next session. Direct edit of framework files by Basher is never performed."
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Cross-spoke changes travel as lugs",
+      "description": "When an agent in Spoke A needs to change a file in Spoke B: (1) compose a properly-formed lug with perceive, execute, verify, target_files, effort_score, model_fit, acceptance_criteria; (2) look up Spoke B's path via hub-registry.json wheels[].path; (3) deliver the lug to {spoke_b_path}/WAI-Spoke/lugs/incoming/; (4) write a delivered copy to {spoke_a_path}/WAI-Spoke/lugs/outgoing/{lug_id}.json with delivered_at set."
+    },
+    {
+      "name": "Framework is a spoke",
+      "description": "The framework repository is not special. It is Spoke 0 \u2014 it plays by the same rules. Agents working in non-framework spokes must never write directly to framework/templates/commands/, framework/CLAUDE.md, or any other framework-owned path. Deliver a lug instead."
+    },
+    {
+      "name": "Deliver immediately, not at closeout",
+      "description": "The delivery lug must be written to incoming/ in the same session that identified the need. Deferring to closeout means the finding may be lost in a context-compaction event. Compose and deliver before continuing other work."
+    },
+    {
+      "name": "Outgoing/ is the audit trail",
+      "description": "Every lug delivered to another spoke must have a corresponding copy in the sending spoke's WAI-Spoke/lugs/outgoing/ with delivered_at, target_spoke, and target_path fields. This enables: cross-spoke delivery confirmation, duplicate suppression, and post-mortem audit."
+    },
+    {
+      "name": "Cross-spoke changes are COMPLETE change-lugs (with attribution)",
+      "description": "Deliver a complete change-lug, not a bare lug: include reason, change_summary, files_changed, commit, source_spoke, target_spoke, scope, and authored_by/authored_kind from resolve_attribution (the canonical who/when/where string). Emit with tools/write_change_receipt.py, which auto-stamps attribution + commit and routes to {target}/WAI-Spoke/lugs/incoming/ + source outgoing/. The receiving agent handles per its own policies (review, tests, docs as ITS standards require); to reject, it emits a counter change-lug back to the source. See teaching blueprint-curator-model-v1 and skill wai-contribute."
+    }
+  ],
+  "how": {
+    "trigger": "Agent identifies a change needed in a file outside its own spoke root",
+    "steps_summary": [
+      "1. Identify: the file path you need to change is NOT under your current spoke root",
+      "2. Stop: do not open an Edit or Write tool on the foreign path",
+      "3. Look up target spoke: read hub-registry.json \u2192 find wheel by path prefix \u2192 get spoke_id and lug incoming path",
+      "4. Compose lug: type impl/task, full PEV, target_files pointing to foreign paths, model_fit, effort_score, acceptance_criteria",
+      "5. Deliver: write lug to {target_spoke_path}/WAI-Spoke/lugs/incoming/{lug_id}.json",
+      "6. Record: write a copy to WAI-Spoke/lugs/outgoing/{lug_id}.json with delivered_at and target_spoke fields",
+      "7. Continue: proceed with your current spoke's work"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Agent is about to edit a file in another spoke's directory",
+      "Agent discovers a cross-spoke bug while working in its own spoke"
+    ],
+    "not_when": [
+      "Reading files in another spoke for context (read-only is permitted)",
+      "The agent IS the framework spoke and the change IS within framework scope"
+    ]
+  },
+  "schema": {
+    "outgoing_lug_fields": [
+      "id",
+      "type",
+      "title",
+      "perceive",
+      "execute",
+      "verify",
+      "target_files",
+      "routed_to",
+      "delivered_at",
+      "target_spoke",
+      "target_path",
+      "model_fit",
+      "effort_score",
+      "acceptance_criteria",
+      "reason",
+      "change_summary",
+      "files_changed",
+      "commit",
+      "scope",
+      "source_spoke",
+      "authored_by",
+      "authored_kind"
+    ]
+  },
+  "constraints": [
+    "Hub incoming/ is NOT a relay for spoke-to-spoke delivery \u2014 each spoke has its own incoming/",
+    "Reading (not writing) files in other spokes for context is permitted",
+    "Emergency hotfixes (production system down) may bypass with explicit documentation \u2014 add a caution lug immediately after",
+    "Cross-spoke changes must be COMPLETE change-lugs (reason + change_summary + files_changed + commit + resolve_attribution authored_by/kind); prefer tools/write_change_receipt.py. The receiving spoke handles per its own policies \u2014 no externally-imposed checklist."
+  ],
+  "tests": [
+    "ct-outgoing-delivery-audit-v1"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "corpus",
+    "corpus_tests": [
+      "ct-outgoing-delivery-audit-v1"
+    ],
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": "2026-05-30T07:45:00Z",
+    "verification_note": "Corpus test ct-outgoing-delivery-audit-v1 PASS: 15 outgoing lugs, 0 failures. Patched 4 lugs missing target_spoke (impl-hub-architect, impl-hub-prioritizer, impl-hub-registry-schema-patch, impl-hub-wakeup-fleet-overlay). No direct foreign-spoke writes found in recent git history. CLAUDE.md anti-pattern present."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-cross-spoke-sovereignty-working-agreement-v1"
+  ],
+  "outcome": "Spec verified clean: outgoing/ directory exists with 20+ entries, no cross-spoke violations in git log (30 days), CLAUDE.md anti-pattern 'Direct cross-spoke file edits' present at line 99 with full spec reference, rejection lug reject-impl-advisor-schedule-eval-supabase-filter-v1 already completed. No remediation lugs required.",
+  "completed_at": "2026-05-31T16:50:00Z",
+  "gitnexus_symbols": [],
+  "execution_mode": "tender",
+  "execution_substrate": null,
+  "gt_convoy_hint": "requires review: quality=0",
+  "perceive": "Read this spec (spec-cross-spoke-sovereignty-v1). Read hub-registry.json to confirm spoke paths are accessible. Check WAI-Spoke/lugs/outgoing/ \u2014 verify outgoing/ directory exists and recent cross-spoke deliveries have matching entries. Run: git log --diff-filter=AM --name-only --since=30.days | grep -v '^WAI-Spoke/lugs/outgoing/' | grep -v '^\\.claude/' | grep -v '^templates/' to surface any direct writes to foreign spoke paths in recent commits.",
+  "execute": "If outgoing/ directory is missing: mkdir -p WAI-Spoke/lugs/outgoing/. For each violation found in git log (direct edit to foreign spoke path): 1. Compose a remediation impl lug with full PEV, target_files listing the affected foreign-spoke paths, routed_to matching the target spoke wheel_id, effort_score, model_fit. 2. Look up target spoke path in hub-registry.json wheels[].path by matching path prefix. 3. Write lug to {target_spoke_path}/WAI-Spoke/lugs/incoming/{lug_id}.json. 4. Write copy to WAI-Spoke/lugs/outgoing/{lug_id}.json with delivered_at and target_spoke fields set. If no violations: confirm the anti-pattern is present in CLAUDE.md under Anti-Patterns section (entry: 'Direct cross-spoke file edits') and the rule appears in wai-rules.md.",
+  "verify": "WAI-Spoke/lugs/outgoing/ exists. No Edit or Write tool calls in this session targeted files outside the current spoke root (framework root = /home/mario/projects/wheelwright/framework/). Every cross-spoke delivery lug written this session has a corresponding entry in outgoing/ with delivered_at set. CLAUDE.md anti-pattern 'Direct cross-spoke file edits' is present and complete. Rejection lug reject-impl-advisor-schedule-eval-supabase-filter-v1 is processed (moved to completed or type changed).",
+  "amendments": [
+    {
+      "version": "1.1.0",
+      "at": "2026-06-04T06:50:08.395739Z",
+      "by": "framework/session-20260603-0135",
+      "summary": "Require a COMPLETE change-lug (full account + external-session attribution) on cross-spoke changes; receiving spoke handles per its own policies. Reconciles with the curator model.",
+      "refs": [
+        "blueprint-curator-model-v1 (teaching)",
+        "wai-contribute (skill)",
+        "tools/write_change_receipt.py",
+        "feature-framework-change-receipt-protocol-v1"
+      ]
+    }
+  ],
+  "related_teachings": [
+    "blueprint-curator-model-v1"
+  ]
+}

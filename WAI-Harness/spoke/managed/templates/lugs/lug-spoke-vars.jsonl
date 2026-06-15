@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "template_name": "spoke-vars",
+    "version": "1.0",
+    "purpose": "Spoke-specific variables for template synthesis. Agent can customize."
+  },
+  "_behavior_directive": {
+    "what_this_is": "A CONFIG lug storing spoke-specific variables",
+    "what_this_is_NOT": "A task to execute or instruction to follow",
+    "owner": "The spoke (agent can update this lug)",
+    "usage": "Read by spoke_synthesis.py to merge with framework templates"
+  },
+  "id": "lug-spoke-vars",
+  "ty": "config",
+  "title": "Spoke Local Variables",
+  "vars": {
+    "project_name": "{{PROJECT_NAME}}",
+    "project_description": "{{PROJECT_DESCRIPTION}}",
+    "stack": [],
+    "ai_style": "Balanced autonomy with check-ins for critical decisions",
+    "custom_rules": []
+  },
+  "created_at": "{{CREATED_AT}}",
+  "last_modified_at": "{{CREATED_AT}}",
+  "_instructions": {
+    "for_agent": "You can update this lug to customize spoke behavior. Add custom_rules for project-specific guidelines.",
+    "for_synthesis": "spoke_synthesis.py reads these vars and applies them to framework templates.",
+    "placeholders": {
+      "project_name": "Short name used in synthesis",
+      "project_description": "One-sentence description",
+      "stack": "Array of technologies used",
+      "ai_style": "How autonomous should AI be",
+      "custom_rules": "Array of project-specific rules to add to IDE config"
+    }
+  }
+}

@@ -1,0 +1,265 @@
+# Teaching: WAI Skill System v1.0
+
+**Type:** Framework Enhancement  
+**Version:** 1.0.0  
+**Created:** 2026-03-18  
+**Safe to Auto-Adopt:** true  
+**Affects:** Skill registry, advisory behaviors, session modes
+
+---
+
+## What This Teaching Provides
+
+The WAI Skill System transforms command files into a governed skill registry with:
+
+1. **Skill Registry** - `WAI-Skills.jsonl` with metadata for all 24 skills
+2. **Advisory Skills** - 6 advisor skills that auto-trigger on patterns
+3. **Session Modes** - Control advisory behavior and verbosity
+4. **Streamlined Guide** - WAI-Guide.md slimmed to skill index
+
+---
+
+## Files Included
+
+### Registry
+- `WAI-Spoke/WAI-Skills.jsonl` - 24 skill entries with full metadata
+
+### Commands
+- `templates/commands/wai-mode.md` - Session mode control
+
+### Documentation  
+- `WAI-Spoke/WAI-Guide.md` - v2.0 skill index (replaces verbose v1)
+- `WAI-Spoke/reference/auto/WAI-Guide-v1.md` - Archived legacy guide
+
+---
+
+## Skill Registry Schema
+
+Each skill in `WAI-Skills.jsonl` contains:
+
+```jsonl
+{
+  "id": "wai",
+  "name": "WAI Wakeup",
+  "type": "core|advisory|utility|governance",
+  "lifecycle": "stable|beta|deprecated|superseded",
+  "scope": "spoke|hub|framework",
+  "safety_level": 10,
+  "advisory": false,
+  "watchers": [],
+  "objects": ["WAI-State.json"],
+  "use_cases": ["session_start"],
+  "command_file": "wai.md",
+  "description": "One-line summary"
+}
+```
+
+---
+
+## 24 Registered Skills
+
+### Core Skills (3)
+- `wai` - Wakeup protocol
+- `closeout` - Session preservation  
+- `shipit` - Quality gate + commit
+
+### Advisory Skills (6)
+- `complexity-advisor` - Planning gate (2+ files OR 6+ steps)
+- `stewardship-advisor` - Scope drift detection
+- `context-advisor` - Lazy-loading enforcement
+- `foundation-advisor` - Foundation completeness check
+- `signal-advisor` - High-impact capture (impact >= 8)
+- `lug-advisor` - Lug authoring guidance
+
+### Utility Skills (10)
+- `status` - Health check
+- `time` - Token usage
+- `mode` - Session mode control (NEW)
+- `red-light` - Checkpoint inspection
+- `green-light` - Resume from checkpoint
+- `track-generate` - Session track generation
+- `chat-to-track` - External session import
+- `ide-setup` - Hook configuration
+- `benchmark` - Performance validation
+- `init-v2` - Spoke initialization
+- `sync-v2` - Hub sync
+
+### Governance Skills (5)
+- `foundation` - Project identity
+- `principles` - WAI principles P1-P9
+- `rules` - Boundary enforcement
+- `stewardship-framework` - AI partnership model
+- `improve` - Framework evolution
+
+---
+
+## Session Modes (NEW)
+
+Modes control advisory triggers and verbosity:
+
+| Mode | Advisory Triggers | Auto-Implementation | Verbosity |
+|------|-------------------|---------------------|-----------|
+| **execution** (default) | Standard | Optional | Normal |
+| **interactive** | All active | Disabled | High |
+| **planning** | Planning-only | Disabled | High |
+| **review** | Quality-focused | Disabled | Normal |
+| **deploy** | Safety-critical | Disabled | High |
+
+Set via: `/wai-mode [mode_name]`
+
+Stored in: `WAI-State.json` → `_session_state.mode`
+
+---
+
+## How to Apply This Teaching
+
+### Automatic Steps (safe_to_auto_adopt: true)
+
+1. **Copy skill registry:**
+   ```bash
+   cp teachings/skill-system-v1/WAI-Skills.jsonl WAI-Spoke/WAI-Skills.jsonl
+   ```
+
+2. **Copy mode command:**
+   ```bash
+   cp teachings/skill-system-v1/wai-mode.md templates/commands/wai-mode.md
+   cp teachings/skill-system-v1/wai-mode.md WAI-Spoke/commands/wai-mode.md
+   ```
+
+3. **Update WAI-State.json:**
+   Add to `_session_state`:
+   ```json
+   {
+     "mode": "execution",
+     "_mode_options": ["execution", "interactive", "planning", "review", "deploy"],
+     "_mode_description": "Controls advisory triggers, auto-implementation, and verbosity"
+   }
+   ```
+
+4. **Update WAI-Guide.md:**
+   ```bash
+   # Archive v1
+   cp WAI-Spoke/WAI-Guide.md WAI-Spoke/reference/auto/WAI-Guide-v1.md
+   
+   # Install v2
+   cp teachings/skill-system-v1/WAI-Guide.md WAI-Spoke/WAI-Guide.md
+   ```
+
+5. **Move to processed:**
+   ```bash
+   mv WAI-Spoke/seed/ingest/skill-system-v1.md.teaching \
+      WAI-Spoke/seed/processed/
+   ```
+
+---
+
+## Behavioral Implications
+
+### Advisory Skills Auto-Trigger
+
+Advisory skills now activate automatically based on watchers:
+
+- **complexity-advisor** → Triggers on 2+ files OR 6+ steps
+- **stewardship-advisor** → Triggers on scope drift
+- **context-advisor** → Triggers on reference file loading
+- **foundation-advisor** → Triggers on incomplete foundation
+- **signal-advisor** → Triggers on high-impact decisions (>= 8)
+- **lug-advisor** → Triggers on lug operations
+
+### Modes Control Behavior
+
+Session mode affects advisory sensitivity:
+
+- `execution` - Standard triggers
+- `interactive` - All advisors active
+- `planning` - Design-focused, no execution
+- `review` - Quality-focused, read-preferred
+- `deploy` - Safety-critical, maximum verification
+
+### Guide Simplified
+
+WAI-Guide.md v2.0 is now a skill index, not a verbose rulebook:
+
+- Faster to scan
+- Easier to navigate
+- Points to skill files for details
+- Legacy content archived, not lost
+
+---
+
+## Challenge This Solves
+
+**Before:**
+- 24 command files scattered across `templates/commands/`
+- No central registry or metadata
+- Behavioral rules duplicated in WAI-Guide.md, CLAUDE.md, skill files
+- No mode system for controlling advisory behavior
+- Verbose WAI-Guide.md hard to navigate
+
+**After:**
+- Single source of truth: `WAI-Skills.jsonl` with all metadata
+- Advisory skills auto-trigger on patterns
+- Session modes control behavior and verbosity
+- Streamlined WAI-Guide.md as skill index
+- Knowledge lives in skill Context blocks, not duplicated
+
+---
+
+## Verification
+
+After applying, verify:
+
+1. **Registry exists:**
+   ```bash
+   test -f WAI-Spoke/WAI-Skills.jsonl && echo "✓ Registry installed"
+   ```
+
+2. **24 skills registered:**
+   ```bash
+   wc -l WAI-Spoke/WAI-Skills.jsonl  # Should show 24
+   ```
+
+3. **Mode command exists:**
+   ```bash
+   test -f templates/commands/wai-mode.md && echo "✓ Mode command installed"
+   ```
+
+4. **Mode field in state:**
+   ```bash
+   jq '._session_state.mode' WAI-Spoke/WAI-State.json  # Should show "execution"
+   ```
+
+5. **Guide v2 active:**
+   ```bash
+   head -1 WAI-Spoke/WAI-Guide.md  # Should show "# WAI Guide v2.0"
+   ```
+
+6. **v1 archived:**
+   ```bash
+   test -f WAI-Spoke/reference/auto/WAI-Guide-v1.md && echo "✓ v1 archived"
+   ```
+
+---
+
+## Backward Compatibility
+
+✅ All v1 commands still work  
+✅ No breaking changes to existing workflows  
+✅ Advisory skills enhance, don't replace, existing behaviors  
+✅ Mode defaults to `execution` (current behavior)  
+✅ Legacy WAI-Guide.md archived, not deleted
+
+---
+
+## Next Steps After Adoption
+
+1. Try modes: `/wai-mode planning` for architecture work
+2. Check registry: `cat WAI-Spoke/WAI-Skills.jsonl`
+3. Reference skills via new WAI-Guide.md index
+4. Watch advisors auto-trigger on relevant work
+
+---
+
+**Teaching Package:** Skill System v1.0  
+**Safe to Auto-Adopt:** ✅ Yes  
+**Impact:** Governance + organization (no destructive operations)

@@ -1,0 +1,32 @@
+{
+  "id": "spec-incoming-lug-triage-signal-separation-v1",
+  "type": "spec",
+  "title": "Define incoming/ triage: separate signals from work lugs in AI response",
+  "status": "completed",
+  "created_at": "2026-05-14T00:00:00Z",
+  "created_by": "basher-session-65",
+  "source_spoke": "basher",
+  "urgency": "medium",
+  "problem": "The incoming/ folder receives both signals (type: signal — knowledge broadcasts for adoption) and work lugs (type: impl, task, spec — actionable items). When an AI is asked to 'check incoming lugs', it presents all items as equivalent work, burying the one real lug under a wall of signals. This happens on every spoke because the disambiguation rule is not specified in the wakeup or triage protocol.",
+  "evidence": "basher session-65: incoming/ had 1 impl lug and 12 signals. AI presented all 13 as 'incoming lugs to implement', requiring the user to correct the framing.",
+  "value": "Eliminates a recurring UX failure. User asks about lugs, gets a signal briefing. Signals and lugs require different responses — signals need adoption decisions; lugs need planning and implementation.",
+  "acceptance_criteria": [
+    "WAI triage protocol (wai.md or a referenced triage spec) defines the two categories in incoming/: (1) work lugs (type: impl, task, spec, bug, feature) and (2) signals (type: signal)",
+    "When presenting incoming/ contents, the AI leads with work lugs count and titles, then lists signals separately as 'X signals pending adoption'",
+    "The wakeup brief or triage step explicitly states: 'signals are not lugs — do not present them as actionable work items'",
+    "Spoke template or triage command updated to reflect this distinction"
+  ],
+  "scope": "framework — applies to all spokes",
+  "suggested_fix": "Add a triage rule to the incoming/ processing step: filter by type field. type in [impl, task, spec, bug, feature] = work lug (plan and implement). type == signal = signal (adopt or defer). Present them in separate sections with separate counts.",
+  "target_files": [
+    "templates/commands/wai.md",
+    "templates/commands/wai-full.md"
+  ],
+  "completed_at": "2026-05-16T09:23:14.649448+00:00",
+  "resolution": "Triage Presentation Rule added to templates/commands/wai-full.md Incoming Routing Rules section. Separates work lugs from signals in presentation format.",
+  "roi": 3.0,
+  "effort_score": 1,
+  "model_fit": "haiku",
+  "outcome": null,
+  "gitnexus_symbols": []
+}

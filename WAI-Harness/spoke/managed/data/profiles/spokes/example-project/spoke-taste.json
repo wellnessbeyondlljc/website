@@ -1,0 +1,64 @@
+{
+  "spoke_name": "example-project",
+  "version": "1.0.0",
+  "created_at": "2026-04-09T16:03:00Z",
+  "last_updated": "2026-04-09T16:03:00Z",
+  "inherited_from": "hub",
+  "overrides": {
+    "python": {
+      "max_line_length": 88,
+      "target_version": "3.10",
+      "type_checking": "basic"
+    },
+    "testing": {
+      "framework": "pytest",
+      "min_coverage": 70,
+      "test_style": "standard"
+    },
+    "documentation": {
+      "docstring_style": "sphinx",
+      "api_docs_required": false,
+      "changelog_format": "basic"
+    },
+    "quality": {
+      "linting": {
+        "tool": "flake8",
+        "strict_mode": false,
+        "exclude_patterns": ["tests/*", "build/*"]
+      },
+      "formatting": {
+        "tool": "autopep8",
+        "line_length": 88,
+        "target_version": "py310"
+      }
+    },
+    "workflow": {
+      "ci_cd": "gitlab_ci",
+      "branch_protection": false,
+      "required_reviews": 2
+    }
+  },
+  "spoke_specific": {
+    "database": {
+      "type": "postgresql",
+      "orm": "sqlalchemy",
+      "migrations": "alembic"
+    },
+    "frontend": {
+      "framework": "react",
+      "styling": "tailwind",
+      "build_tool": "webpack"
+    },
+    "deployment": {
+      "strategy": "docker",
+      "orchestration": "kubernetes",
+      "environment": "staging_production"
+    }
+  },
+  "metadata": {
+    "description": "Example project taste profile with web application characteristics",
+    "inherits_from_hub": true,
+    "conflicts_resolved": 2,
+    "last_hub_sync": "2026-04-09T16:03:00Z"
+  }
+}

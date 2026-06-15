@@ -1,0 +1,197 @@
+{
+  "id": "spec-verification-quality-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T00:20:00Z",
+  "updated_at": "2026-06-09T19:10:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Verification & Quality spine \u2014 test generation (test-at-birth, AC-driven), coverage maintenance, tiered pre-user quality gate, layered verification logging; cross-cutting across the v4 lifecycle",
+  "title": "Verification & Quality Spine (v4)",
+  "situation": "v4 has many verification pieces scattered with no unifying model: Pattern Gate (runtime verifier), bolt/check certification, verification_test on lugs (AC12), test_results table (storage layer), test-manifest, scouts, advisor certification, tiered verification (mechanical/attested/human), the two-pass count anti-pattern, and 'agent-tests-first' for user-facing work. Four questions are unanswered as a system: (1) how are tests generated, (2) how are suites + coverage maintained, (3) what quality bar is verified before the user sees anything, (4) is logging reviewable. This spec unifies them into one cross-cutting spine that threads through every lifecycle stage.",
+  "why": "Without a unified spine, verification is ad hoc: tests get skipped at lug creation, coverage decays invisibly, the user is shown work that is 'well-formed on disk' but never actually run, and failures vanish silently. Each gap is a known WAI failure mode (skipping verification, mechanical-only on counts, 'probably saved'). The spine makes verification a hard, observable, maintained property: AC-traceable tests at birth, computed coverage owned by a QA advisor, a tiered pre-user gate, and a layered audit trail. Quality becomes verified, not asserted.",
+  "audience": [
+    "lug-reviewer subagent \u2014 enforces test-at-birth gate (no draft\u2192open without a runnable verification_test)",
+    "Pattern Gate subagent \u2014 post-gate enforces the pre-user quality bar per tier",
+    "QA advisor (spoke: Jordy/qa-engineer) \u2014 owns suite health, coverage computation, stale-test detection",
+    "Hub qa-guardian \u2014 aggregates fleet test health; Trainer reads post-adoption test deltas",
+    "Historian \u2014 mines test_results + gate-log for quality trends",
+    "every authoring agent \u2014 generates AC-traceable tests when creating a lug"
+  ],
+  "q1_test_generation": {
+    "principle": "Test-at-birth, AC-driven. Tests are authored WHEN the lug is created, not after.",
+    "ac_traceability": "Every acceptance criterion maps to >=1 test. The lug's verify[] steps are the test spec; they are materialized into runnable tests. A lug-reviewer gate FAILS draft->open if any AC has no test.",
+    "tiers": {
+      "mechanical": "a runnable assertion (script/CLI exit code, JSON schema check, file/state assertion). PREFERRED \u2014 deterministic, no hallucination. Script-backed wherever possible.",
+      "attested": "a named AI verifier (e.g. pattern-gate, lug-reviewer) reads observable state and signs the result. Used when no deterministic assertion is feasible.",
+      "human": "Mario signs. Reserved for taste/judgment calls the harness cannot assert.",
+      "attested_experiential": "for user-facing semantic/experiential checks (does the page render? does the flow work?) \u2014 a Read+Bash gate structurally cannot do this (external review A: 'semantic/experiential testing void'). Route to a multimodal subagent in a SANDBOXED browser runtime (Playwright/headless) that logs structural visual/DOM assertions. Runs in the execution sandbox (spec-execution-sandbox-v1), not against live state."
+    },
+    "record_per_check": "{check, mode: mechanical|attested|human, verified_by, result: 1|0|null, observed}",
+    "generation_sources": [
+      "lug authoring: agent writes verify[] -> materialized test (script-backed where possible)",
+      "scouts (Wayfinder): continuous Haiku-class checks -> bug-report lugs on failure",
+      "flow definitions: each flow step's expected_conditions -> a flow test",
+      "regression: a fixed bug adds a test that reproduces it (no fix without a guarding test)"
+    ],
+    "test_quality_gate": {
+      "principle": "Test-at-birth guarantees a test EXISTS, not that it is CORRECT (blind-review HIGH: a wrong AC begets a wrong test, both gates pass green). The test must be REVIEWED before the lug opens, not after it closes.",
+      "rules": [
+        "the test author is NOT the sole approver: a second party (QA/Jordy, or a fresh subagent for low-impact) reviews that the test actually exercises the AC's intent, before draft->open",
+        "mechanical tests are preferred precisely because they are auditable; an attested test must record WHAT it checked so the check itself can be reviewed",
+        "tests carry a reviewed_by + reviewed_at; an unreviewed test blocks promotion the same as a missing test"
+      ]
+    }
+  },
+  "q2_coverage_maintenance": {
+    "owner": "spoke QA advisor (Jordy/qa-engineer) owns suite health; hub qa-guardian aggregates fleet-wide",
+    "registry": "test-manifest.json (managed) maps every test -> owner(lug|flow|advisor) -> last_run -> result -> version. test_results table (storage layer) is the durable run history.",
+    "coverage_metrics": [
+      "lug coverage: open work/impl lugs WITH a runnable verification_test / total (target: 100% before green)",
+      "flow coverage: priority flows WITH an e2e test / total",
+      "null_rate: checks with result=null (honest gaps) / total checks \u2014 DISCLOSED, not hidden",
+      "freshness: tests not run in >N versions/sessions flagged as stale (a coverage gap even if it once passed)"
+    ],
+    "maintenance_rules": [
+      "tests re-run on every minor version change of their owner (lug richness + test coverage are one concern)",
+      "stale tests surface in the QA advisor report + wakeup Quality Health section",
+      "a removed feature removes its tests (no derelict tests); a new feature adds tests at birth",
+      "certification_score = passes / (passes + fails + nulls) \u2014 coverage honesty is built into the score"
+    ]
+  },
+  "q3_pre_user_quality_gate": {
+    "principle": "Agent tests FIRST. The user is only directed to work that is verified ready. Nothing is 'done' on the agent's say-so \u2014 the bolt must be tight (all checks=1) or gaps explicitly disclosed (null). 'Probably saved' is banned.",
+    "tiered_bar_by_visibility": {
+      "internal_change": "mechanical pass (code runs, assertions green)",
+      "count_aggregation_summary": "TWO passes \u2014 mechanical (runs, keys present) AND semantic (inspect actual items in the count against known data). A count of 40 that's the wrong type is a semantic bug mechanical tests miss.",
+      "user_facing_artifact": "mechanical + semantic + EXPERIENTIAL \u2014 verified in the medium the user will use it (web: rendered in browser after load, not just well-formed on disk; CLI: actually run; doc: actually read)"
+    },
+    "enforcement": "the Pattern Gate post-gate certifies the postcondition quality bar for the tier (not mere existence). Surfacing work to the user is itself a gated step; the gate blocks 'show user' until the tier's bar is met or gaps are disclosed with a null and a reason.",
+    "gate_integrity": {
+      "principle": "Read+Bash isolation makes the gate unable to AUTHOR success, but it can still pattern-match wrongly and miss a semantic error (blind-review HIGH). Two defenses:",
+      "rules": [
+        "auditable gate: the gate emits the actual check it ran + what it observed (not just pass/fail), so the gate itself is reviewable on the event bus (a decision event)",
+        "fresh-actor rule at the visibility boundary: the gate certifying 'show user' for a user-facing artifact must NOT be the same model/agent that produced the work OR authored its test; for high-visibility output this tier is human or a distinct fresh model \u2014 closing the 'work, test, and gate all from one head' loophole"
+      ]
+    },
+    "disclosure": "when gaps remain, the user is shown the work WITH an explicit gap statement (what wasn't verified and why) \u2014 never silent partial completion presented as done."
+  },
+  "q4_verification_logging": {
+    "principle": "No silent failures. Every test run and every failure is logged AND routed to the owning advisor.",
+    "layered_audit_trail": {
+      "track.jsonl": "per-turn \u2014 what happened + reasoning",
+      "bolt": "per-session \u2014 the certification fingerprint (checks tight/loose)",
+      "gate-log.jsonl": "per-step \u2014 gate dispositions (approved/halted/escalate)",
+      "test_results": "per-test \u2014 result history, version-stamped (storage layer)"
+    },
+    "routing": "a failure is routed to the owner advisor (QA for suite issues, the lug's owner for lug-test failures, Historian for trends). Escalation on repeated failure (retry cap) creates a Historian signal.",
+    "reviewability": "Historian mines test_results + gate-log for quality trends; QA advisor reports suite health; user reviews via the fleet dashboard Quality Health panel; wakeup brief surfaces a Quality Health section (coverage %, null rate, stale tests, failing suites)."
+  },
+  "gap_taxonomy": {
+    "principle": "'Expose all the gaps' (north star) needs a DEFINITION of gap, or coverage is unmeasurable (review MED). A gap is a typed, detectable, surfaceable deficiency \u2014 each type has an owner-detector and a surface.",
+    "types": [
+      {
+        "gap": "test-null",
+        "meaning": "a check that ran null (not verified)",
+        "detector": "QA/coverage",
+        "surface": "Quality Health null rate"
+      },
+      {
+        "gap": "ac-uncovered",
+        "meaning": "an acceptance criterion with no mapped test",
+        "detector": "lug-reviewer",
+        "surface": "test-at-birth gate (blocks open)"
+      },
+      {
+        "gap": "path-untested",
+        "meaning": "code path/module with no exercising test",
+        "detector": "QA + GitNexus",
+        "surface": "Quality Health coverage %"
+      },
+      {
+        "gap": "capability-missing",
+        "meaning": "a mandated/recommended CG capability not present",
+        "detector": "Aimer vs CapabilitiesGraph",
+        "surface": "adoption gap report"
+      },
+      {
+        "gap": "decision-undocumented",
+        "meaning": "a state change with no decision event / lug rationale",
+        "detector": "Historian",
+        "surface": "survey gap list"
+      },
+      {
+        "gap": "cruft/misplacement",
+        "meaning": "dead code, duplicate, file in wrong home",
+        "detector": "Historian/Asset-Reviewer",
+        "surface": "Hygiene adoption-correctness score"
+      },
+      {
+        "gap": "deprecation-live",
+        "meaning": "a deprecated path/marker still in use",
+        "detector": "self-healing AC22 + Trainer",
+        "surface": "stale-write trend"
+      }
+    ],
+    "exposed_means": "a gap is 'exposed' when it appears on its declared surface with a type + detector + (where possible) a remediation lug. The adoption gap report aggregates all types into the alignment roadmap. A dropped lug is 'gap-resolved' only if its drop is logged with a reason; otherwise it is gap-hidden (not allowed)."
+  },
+  "cross_cutting_map": {
+    "lug_creation": "test-at-birth gate (lug-reviewer) \u2014 AC<->test traceability before draft->open",
+    "flow_execution": "Pattern Gate pre/post \u2014 certifies preconditions + postcondition quality bar",
+    "session_close": "bolt certification \u2014 all checks tight or gaps disclosed; closeout test gate (v3 Step 0)",
+    "advisor_runs": "scout tests per advisor domain; certification = all advisor scouts green",
+    "evolution": "Trainer measures post-adoption test deltas vs pre-adoption baseline",
+    "migration": "v4_migrate no-orphan gate + additive checksum verification + bucket verification",
+    "pre_user": "tiered quality gate before any 'show user' step"
+  },
+  "constraints": [
+    "No lug moves draft->open without a runnable verification_test covering every AC (hard gate)",
+    "Script-backed (mechanical) verification is preferred; attested/human only when no deterministic assertion is feasible",
+    "Counts/aggregations require BOTH mechanical and semantic passes",
+    "User-facing artifacts require experiential verification in the target medium",
+    "null is a first-class honest result (not a failure) but MUST be disclosed; certification_score counts nulls against coverage",
+    "No silent failures: every failure logged + routed to an owner",
+    "'Probably/should be' completion language is banned \u2014 state verified or state the gap",
+    "Removed features remove their tests; new features add tests at birth (no derelict, no untested)"
+  ],
+  "tests": [
+    "Test-at-birth gate: a lug with an AC lacking a test FAILS lug-reviewer draft->open; adding the test passes it",
+    "AC traceability: every AC in a sample lug maps to >=1 entry in its verify[]/test-manifest",
+    "Coverage compute: QA advisor reports lug coverage %, flow coverage %, null rate from test_results correctly",
+    "Stale detection: a test not run in >N versions is flagged stale in the QA report",
+    "Two-pass: a count feature passes mechanical (keys present) but a seeded semantic error (wrong item types in the count) is caught by the semantic pass and blocks 'done'",
+    "Experiential: a web artifact well-formed on disk but failing to render is BLOCKED from user-surfacing",
+    "Disclosure: work with a null check is surfaced to the user WITH an explicit gap statement, never as silent done",
+    "Logging: a test failure produces a test_results row + routes to the owner advisor; repeated failure escalates to Historian",
+    "Wakeup Quality Health section renders coverage %, null rate, stale count, failing suites"
+  ],
+  "impl_lugs": [
+    "impl-qa-stale-test-detection-v1"
+  ],
+  "health": {
+    "test_coverage": "partial - q2 stale-test detection + gap_taxonomy (test-null/stale/failing) covered by test_qa_suite_health.py (6 tests). Uncovered: test-at-birth review gate (test_quality_gate second-party review), tiered pre-user quality gate (q3), experiential verification, failure routing (q4), QA advisor (Jordy) ownership.",
+    "last_impl_lug_completed": "impl-qa-stale-test-detection-v1",
+    "spec_drift_risk": "low \u2014 initial spec",
+    "open_questions": [
+      "Coverage bar for green certification: 100% of open lugs test-covered (strict) vs a threshold with disclosed nulls (lenient)? \u2014 proposed: 100% test-PRESENT, null results allowed but disclosed",
+      "Test auto-generation autonomy: agent generates from ACs with QA verify (proposed) vs human-authored required for some tiers",
+      "QA advisor identity: spoke Jordy/qa-engineer (crew) vs a dedicated harness QA advisor \u2014 reconcile with crew migration"
+    ]
+  },
+  "related_specs": [
+    "spec-storage-layer-v1",
+    "spec-trainer-advisor-v1",
+    "spec-v4-migration-home-map-v1",
+    "spec-harness-development-control-v1"
+  ],
+  "perceive": "Read this spec + the v4 epic (AC10-13 lug quality, AC1-3 pattern gate). Read the storage layer test_results schema + test-manifest decision. Read CLAUDE.md anti-patterns (mechanical-only counts, skipping verification, 'probably saved'). Confirm QA advisor identity vs crew migration.",
+  "execute": "1. Make test-at-birth a hard gate in lug-reviewer (no draft->open without AC-covering runnable test). 2. Implement coverage computation + QA advisor suite-health report (test-manifest + test_results). 3. Implement the tiered pre-user quality gate as a Pattern Gate flow (internal/count/user-facing tiers) blocking 'show user'. 4. Add the wakeup Quality Health section. 5. Wire failure routing + no-silent-failure logging across track/bolt/gate-log/test_results. 6. Add stale-test detection.",
+  "verify": "Run all tests[]. Confirm test-at-birth gate blocks an untested AC; two-pass catches a semantic count error; experiential gate blocks an unrendered web artifact; coverage + null rate compute correctly; failures log + route; Quality Health renders.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

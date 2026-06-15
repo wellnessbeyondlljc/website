@@ -1,0 +1,143 @@
+{
+  "id": "spec-vector-library-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:00:00Z",
+  "updated_at": "2026-05-30T17:00:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 8,
+  "subject": "VectorLibrary \u2014 hub-hosted decision pattern and approach knowledge base (fourth memory graph)",
+  "title": "VectorLibrary \u2014 Hub Knowledge Vectors with Tool Gate and Adoption Tracking",
+  "what": "Defines VectorLibrary as the fourth intelligence graph (PathGraph + TasteGraph + ToolGraph + VectorLibrary). VectorLibrary is a hub-hosted catalogue of reusable decision patterns, validated approaches, and solved problems \u2014 each entry is a vector (a directional solution). Active vectors carry requires_tools[] (what a spoke needs to adopt this vector) and adopted_by[] (which spokes have adopted, at what version). Retired vectors record retirement_reason and retirement_date. Vector adoption is gated by ToolGraph: the spoke's access_matrix must contain all requires_tools before adoption is recorded. Spokes never write to the hub library \u2014 they propose vectors via lug delivery; the hub Gardener reviews and promotes.",
+  "why": "Currently each spoke rediscovers solutions independently. A teaching propagates behavioral rules but not validated decision patterns (the why behind choosing approach X over Y). VectorLibrary closes the knowledge-reuse gap: a pattern proven in one spoke becomes available to all spokes that have the required tooling. The adoption gate prevents incompatible adoption \u2014 a spoke cannot accidentally adopt a Supabase-dependent pattern when it has no Supabase access. Retirement propagation ensures stale patterns are pulled before they cause harm.",
+  "audience": [
+    "All agents making architectural or approach decisions \u2014 check VectorLibrary before designing from scratch",
+    "Navigator \u2014 surfaces relevant active vectors during session portfolio planning",
+    "Hub Gardener \u2014 curates the library: promotion, versioning, retirement",
+    "Sentinel \u2014 monitors health of approaches adopted from VectorLibrary",
+    "Any agent at closeout \u2014 consider whether a novel solution warrants authoring a new vector"
+  ],
+  "use_cases": [
+    "Pattern reuse: spoke solves drift-detection in a novel way; at closeout it authors a vector proposal lug (routed_to=HUB); Gardener promotes it; other spokes can adopt",
+    "Navigator recommends: during session planning, Navigator surfaces 2 active vectors relevant to the current work goal alongside lug recommendations",
+    "Adoption gate: spoke wants vector with requires_tools=[supabase-rest, ollama-local]; ToolGraph access_matrix missing ollama-local \u2014 adoption blocked with clear reason",
+    "Retirement: a vector based on a deprecated API retires with reason='wai-sync-v1 removed in v2.1' and retirement_date; adopting spokes receive a teaching",
+    "Fleet adoption view: hub sees 12/30 spokes adopted vector-session-guard-pattern; flags remaining 18 for outreach teaching"
+  ],
+  "patterns": [
+    "Hub-hosted, spoke-read: vectors live at hub/WAI-Hub/vectors/active/ and hub/WAI-Hub/vectors/retired/ \u2014 spokes read, never write directly",
+    "Spoke adoption record: WAI-Spoke/adopted-vectors.json tracks which vectors this spoke has adopted and at what version",
+    "requires_tools gate: must pass ToolGraph.access_matrix check before adoption is recorded in adopted-vectors.json",
+    "Retirement propagation: hub retires a vector \u2192 teaching published \u2192 spokes update adopted-vectors.json with retirement_note",
+    "Vector versioning: vectors carry semver; adopted_by[] records version at adoption time \u2014 enables drift detection when vector updates",
+    "Authoring pipeline: spoke proposes (task lug routed_to=HUB) \u2192 Gardener reviews \u2192 promoted to active library"
+  ],
+  "schema": {
+    "vector_entry_file_pattern": "hub/WAI-Hub/vectors/active/{vector_id}.json",
+    "retired_file_pattern": "hub/WAI-Hub/vectors/retired/{vector_id}.json",
+    "vector_entry": {
+      "vector_id": "string \u2014 slug format e.g. vector-session-guard-pattern-v1",
+      "version": "semver e.g. 1.0.0",
+      "title": "string",
+      "summary": "string \u2014 one paragraph: the problem this solves, the approach taken, when to apply it",
+      "category": "decision | approach | pattern | anti-pattern",
+      "status": "active | retired",
+      "tags": [
+        "string \u2014 e.g. session-coordination, cost-optimization, error-recovery"
+      ],
+      "requires_tools": [
+        "tool_id \u2014 from ToolGraph schema; spoke must have all of these in access_matrix"
+      ],
+      "authored_by": "wheel_id \u2014 spoke that originated this vector",
+      "created_at": "ISO-8601",
+      "adopted_by": [
+        {
+          "wheel_id": "string",
+          "adopted_at": "ISO-8601",
+          "version_adopted": "semver"
+        }
+      ],
+      "retirement_reason": "string | null",
+      "retirement_date": "ISO-8601 | null",
+      "superseded_by": "vector_id | null"
+    },
+    "hub_library_index_file": "hub/WAI-Hub/vectors/index.json",
+    "hub_library_index": {
+      "generated_at": "ISO-8601",
+      "active_count": "int",
+      "retired_count": "int",
+      "vectors": [
+        {
+          "vector_id": "string",
+          "version": "semver",
+          "status": "active | retired",
+          "title": "string",
+          "category": "string",
+          "tags": [
+            "string"
+          ],
+          "adopted_by_count": "int",
+          "requires_tools": [
+            "tool_id"
+          ]
+        }
+      ]
+    },
+    "spoke_adoption_record_file": "WAI-Spoke/adopted-vectors.json",
+    "spoke_adoption_record": {
+      "wheel_id": "string",
+      "updated_at": "ISO-8601",
+      "adopted": [
+        {
+          "vector_id": "string",
+          "version_adopted": "semver",
+          "adopted_at": "ISO-8601",
+          "retirement_note": "string | null \u2014 set when the adopted vector is later retired"
+        }
+      ]
+    }
+  },
+  "constraints": [
+    "Vectors live at the hub \u2014 spokes NEVER write vector entries directly to hub/WAI-Hub/vectors/",
+    "To propose a new vector: spoke creates a task lug with routed_to=HUB; lug body must include a draft vector_entry JSON for Gardener to review",
+    "requires_tools entries must reference valid tool_ids from the ToolGraph schema \u2014 no free-text tool names",
+    "adopted_by[] is maintained by the hub Gardener on nightly sync \u2014 spokes do not self-update this field in the hub file",
+    "A retired vector with non-empty adopted_by[] triggers a teaching to notify all adopting spokes of the retirement",
+    "Vector retirement is permanent: no un-retiring; if the approach is revived, create a new vector with supersedes referencing the old one",
+    "Spokes update adopted-vectors.json locally when they adopt a vector or when a retirement teaching arrives \u2014 this is a spoke-maintained file"
+  ],
+  "tests": [
+    "Adoption gate blocked: spoke access_matrix missing a required tool; adoption attempt returns clear error with the missing tool_id",
+    "Adoption gate pass: all requires_tools present in spoke access_matrix; adopted-vectors.json updated with vector_id, version_adopted, and adopted_at",
+    "Retirement propagation: vector retired in hub library; teaching published; spoke processes teaching and adds retirement_note to its adopted-vectors.json entry",
+    "Library index integrity: all files in hub/WAI-Hub/vectors/active/ appear in index.json; count matches active_count",
+    "Supersession flow: vector V1 retired with superseded_by=V2; adopters of V1 receive adoption prompt for V2 in next teaching batch",
+    "Proposal lug review: task lug routed_to=HUB with draft vector_entry; Gardener promotes to active/ and updates index.json"
+  ],
+  "impl_lugs": [
+    "impl-vector-library-hub-seed-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-05-31T08:00:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "Navigator surfacing mechanism: semantic search on summary+tags, or tag-based exact matching? Semantic requires embedding infra.",
+      "adopted-vectors.json: committed or gitignored? It reflects spoke state (not framework code) and changes frequently.",
+      "First seed vector: what existing proven pattern in this spoke is the best candidate for the first vector entry?"
+    ]
+  },
+  "related_specs": [
+    "spec-toolgraph-v1",
+    "spec-evolution-lifecycle-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec fully. Check if hub/WAI-Hub/vectors/ directory exists. Read spec-toolgraph-v1 for the access_matrix gate implementation. Check WAI-Spoke/adopted-vectors.json if it exists. Read WAI-Spoke/advisors/navigator/recommendations-current.json to understand current Navigator behavior.",
+  "execute": "1. Create hub/WAI-Hub/vectors/active/ and hub/WAI-Hub/vectors/retired/ directories. 2. Create hub/WAI-Hub/vectors/index.json scaffold with active_count=0, retired_count=0, vectors=[]. 3. Create WAI-Spoke/adopted-vectors.json scaffold for this spoke. 4. Implement ToolGraph adoption gate in vector adoption workflow: check spoke ToolGraph.json access_matrix before recording adoption. 5. Add VectorLibrary sync step to Gardener nightly: aggregate adopted_by[] from all spokes, detect retirements with non-empty adopted_by. 6. Author first vector entry from an existing proven pattern in this spoke (e.g. session-guard pattern).",
+  "verify": "1. hub/WAI-Hub/vectors/index.json exists and parses cleanly. 2. WAI-Spoke/adopted-vectors.json exists and parses cleanly. 3. Attempt adoption of vector with missing required tool in spoke access_matrix \u2014 blocked with tool_id in error. 4. Adoption with all tools present \u2014 adopted-vectors.json updated correctly. 5. Retire a test vector; retirement_note propagates to adopting spoke record.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

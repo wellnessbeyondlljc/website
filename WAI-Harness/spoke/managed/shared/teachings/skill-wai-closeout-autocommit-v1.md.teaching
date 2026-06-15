@@ -1,0 +1,67 @@
+# Teaching: Closeout Auto-Commit — No Confirmation Gate v1
+
+**Family:** skill-wai-closeout
+**Version:** 1.0
+**Created:** 2026-03-28
+**Impact:** 9
+**Source Session:** session-20260328
+**safe_to_auto_adopt:** true
+
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| Closeout skill exists | `test -f "WAI-Spoke/commands/wai-closeout.md" && echo PASS \|\| echo FAIL` | Update |
+
+## Batch Sequence
+
+**Batch:** closeout-autocommit-v1
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Does
+
+Removes the "HARD STOP — wait for user confirmation" gate from closeout. The commit and push now happen automatically after the summary banner is displayed. The completion banner moves to AFTER the commit so users see actual confirmation, not a question.
+
+**Before (broken):**
+- Step 11: Summary banner with "Proceed with commit? ✅" — HARD STOP, wait for user
+- Step 12: Commit + push
+- No completion box shown unless user responded
+
+**After (correct):**
+- Step 11: Commit + push immediately (no confirmation)
+- Step 12: Verify + display `┌─ CLOSEOUT ...┘` completion box
+
+**Why:** Displaying "Proceed with commit?" without actually committing makes users think it failed. The commit is mandatory — the summary is informational, not a gate.
+
+---
+
+## Migration
+
+In your spoke's `WAI-Spoke/commands/wai-closeout.md`, find the Summary Banner step and update it:
+
+**Remove the HARD STOP pattern** — any language like:
+- "Do NOT proceed to Step 12 unless the user explicitly cancels"
+- "Proceed with commit? ✅" in the banner template
+- "Wait for user response before committing"
+
+**Replace with:** Commit and push immediately after the summary, then show the completion box.
+
+The correct flow is:
+1. Present summary (accomplishments, version, signals)
+2. `git add`, `git commit`, `git push` — no waiting
+3. `git status` must be clean
+4. Display `┌─ CLOSEOUT Session-{N} ...┘` box
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

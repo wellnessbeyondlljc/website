@@ -1,0 +1,315 @@
+{
+  "id": "spec-harness-goal-affinity-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T18:00:00Z",
+  "updated_at": "2026-05-30T18:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.248",
+  "impact": 8,
+  "subject": {
+    "kind": "protocol",
+    "id": "harness-goal-affinity",
+    "label": "Goal-Lug Affinity Cascade"
+  },
+  "title": "Harness Goal Affinity \u2014 Navigator aligns Ozi dispatch queue to active goal chains",
+  "what": "Navigator produces a goal_affinity output alongside its existing model routing output. At wakeup, Navigator reads all active goal chains and the lug corpus, scores each lug for affinity to each goal chain, and writes goal-affinity-current.json. Ozi reads this file before every dispatch cycle and multiplies each lug's ROI score by (1 + affinity_score) to compute effective_priority, then sorts the dispatch queue by effective_priority descending. After Ozi completes a lug, it writes a structured reflection entry to pathgraph/history.jsonl with planned vs actual execution details plus a goal_chain_id reference. Goal chain progress is tracked in goal-chain-progress.json, updated after each reflection. Stalled goal chains trigger escalating responses: affinity boost at 3 sessions stalled, advisor creation at 5 sessions stalled.",
+  "why": "Ozi dispatches by ROI alone today \u2014 it has no concept of what the user is trying to accomplish. A lug with ROI=0.7 that advances the user's active goal is more valuable than a lug with ROI=0.8 that is tangential. Without goal affinity, the dispatch queue is optimized for cost-efficiency but not for user intent. Over a long session backlog this compounds: goal-aligned work gets crowded out by a sea of high-ROI maintenance tasks, and the user's actual objectives stall silently. Goal affinity bridges that gap \u2014 it makes Ozi's execution order reflect the user's purpose, not just the lug's standalone ROI.",
+  "audience": [
+    "ozi",
+    "navigator",
+    "admin"
+  ],
+  "use_cases": [
+    {
+      "title": "Goal chain set \u2014 affinity cascade computed",
+      "trigger": "User sets an active goal chain OR Navigator detects initiative focus_lock; Navigator wakeup runs",
+      "outcome": "Navigator reads active goal chains from goal chain lug corpus, scores all open lugs, writes goal-affinity-current.json; Ozi picks it up on next dispatch cycle and reorders queue by effective_priority",
+      "persona": "navigator"
+    },
+    {
+      "title": "Stall detected \u2014 affinity boost applied",
+      "trigger": "Navigator wakeup finds a goal chain with no lug completions for 3 or more sessions",
+      "outcome": "Navigator sets stall_alerts entry with action=boost_affinity; Ozi reads this and doubles affinity_score for all lugs matching that goal chain; goal_weights entry for stalled chain also boosted; status visible in next wakeup briefing",
+      "persona": "navigator"
+    },
+    {
+      "title": "Persistent stall \u2014 specialized advisor created",
+      "trigger": "Navigator wakeup finds a goal chain with no lug completions for 5 or more sessions",
+      "outcome": "Navigator sets stall_alerts entry with action=create_advisor; Ozi reads this and creates a specialized advisor with concern=goal_stall and desired_state pointing to the blocked goal chain; advisor iterates autonomously to diagnose and unblock",
+      "persona": "ozi"
+    },
+    {
+      "title": "Lug completion \u2014 reflection written and goal chain updated",
+      "trigger": "Ozi marks a lug as complete",
+      "outcome": "Ozi appends reflection entry to pathgraph/history.jsonl with planned_steps_count, actual_steps_count, delta, next_recommendation, and goal_chain_id if affinity_score > 0.3; updates goal-chain-progress.json to add lug_id to completed_children[] for matching goal chain; updated progress visible in next Navigator wakeup",
+      "persona": "ozi"
+    },
+    {
+      "title": "New session \u2014 Navigator rewrites affinity file",
+      "trigger": "Navigator wakeup at start of any session",
+      "outcome": "Navigator reads fresh goal chain state and fresh lug corpus, recomputes all affinity scores (applying recency_penalty for aged lugs), rewrites goal-affinity-current.json in full; prior file overwritten \u2014 consumers always see current session's view",
+      "persona": "navigator"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Affinity-multiplied-ROI",
+      "description": "Ozi's effective dispatch priority = ROI * (1 + affinity_score). This preserves ROI as the floor \u2014 a lug with zero affinity still dispatches at its full ROI value. Affinity only adds to priority, never subtracts. Lugs with affinity_score=1.0 dispatch at up to 2x their base ROI, ensuring goal-aligned work reaches the top of the queue without discarding ROI signal entirely."
+    },
+    {
+      "name": "Completion-reflection-loop",
+      "description": "Every lug completion emits a reflection entry that feeds two downstream consumers: PathGraph history (operational trace for Historian and teaching candidate detection) and goal-chain-progress.json (goal advancement tracking for Navigator). Reflection is mandatory on any lug with affinity_score > 0.3 \u2014 the system records how goal-aligned work actually performed vs plan."
+    },
+    {
+      "name": "Stall-detection-escalation",
+      "description": "Navigator tracks sessions_stalled per goal chain (incremented each wakeup where that chain has zero completions). At 3 sessions: boost_affinity action doubles affinity weight for child lugs. At 5 sessions: create_advisor action triggers Ozi to spawn a specialized advisor with concern=goal_stall. This two-tier escalation avoids premature advisor creation while ensuring no goal is silently abandoned."
+    },
+    {
+      "name": "Recency-decay-prevents-queue-lock",
+      "description": "Old goal-adjacent lugs do not lock the queue just because they have high affinity. For every 10 sessions a lug has been in the queue, its affinity_score decays by 0.1. This prevents long-queued maintenance lugs from accumulating perpetual priority boosts. Decay applies after affinity is computed \u2014 it modifies the stored affinity_score in the output file."
+    }
+  ],
+  "how": {
+    "trigger": "Navigator wakeup (every session start) OR Ozi lug completion event",
+    "steps": [
+      "1. Navigator reads all open goal chain lugs from bytype/goal-chain/open/ and computes goal_weights[] \u2014 each active chain gets a weight proportional to its priority and recency",
+      "2. Navigator reads all open lugs from bytype/*/open/ and for each lug computes affinity_score using v1 factors only: keyword_match (+0.3 if lug title/what contains goal chain keywords), epic_lineage (+0.5 if lug blocked_by chain traces to goal chain id). v2 factors (work_class_alignment, recency_penalty) are not computed until schema amendments land \u2014 see schema.affinity_scoring_factors.v2_factors_pending_schema_amendment",
+      "3. Navigator checks sessions_stalled per goal chain by reading goal-chain-progress.json and comparing last_completion_session to current session number; sets stall_alerts[] entries with appropriate action",
+      "4. Navigator writes goal-affinity-current.json (full overwrite) to WAI-Spoke/advisors/navigator/goal-affinity-current.json",
+      "5. Ozi reads goal-affinity-current.json at dispatch start; for each lug in the pending queue, looks up affinity_score (default 0.0 if not listed); computes effective_priority = ROI * (1 + affinity_score); sorts queue by effective_priority descending",
+      "6. Ozi applies stall_alerts: for boost_affinity \u2014 multiplies affinity_score by 2 before priority computation; for create_advisor \u2014 creates specialized advisor with concern=goal_stall before proceeding with dispatch",
+      "7. After any lug completion, Ozi writes reflection entry to WAI-Spoke/pathgraph/history.jsonl (mandatory if affinity_score > 0.3, optional otherwise)",
+      "8. After reflection, Ozi updates WAI-Spoke/advisors/navigator/goal-chain-progress.json: appends lug_id to completed_children[] for the matched goal chain, increments completion_count, updates last_completion_session"
+    ],
+    "constraints": [
+      "Navigator must read goal-affinity-current.json as read-only input during wakeup briefing; it writes the file, Ozi only reads it",
+      "Ozi must not modify goal-affinity-current.json \u2014 all updates come from Navigator at next wakeup",
+      "Affinity scoring weights (0.3/0.4/0.2) are initial estimates; implementation must expose them as tunable config, not hardcoded constants",
+      "Affinity scores are clamped to [0.0, 1.0] after all boosts and penalties are applied",
+      "goal-chain-progress.json is Ozi-writable (append after completion) and Navigator-readable (input to stall detection); Navigator must never overwrite this file \u2014 it is the longitudinal record",
+      "Stall counter resets to 0 when any child lug of the goal chain is completed",
+      "Reflection entries in history.jsonl are append-only; never modify existing entries"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Navigator wakeup at session start (mandatory)",
+      "User sets or changes active goal chain (triggers immediate Navigator recompute)",
+      "Ozi completes a lug with affinity_score > 0.3 (triggers reflection + progress update)",
+      "Stall threshold reached (3 or 5 sessions) \u2014 action set in affinity file for Ozi to consume"
+    ],
+    "not_when": [
+      "Do not recompute affinity mid-dispatch-cycle \u2014 use the file written at wakeup for the entire session",
+      "Do not create advisor for goal_stall if an advisor with concern=goal_stall for the same goal_chain_id already exists and is active",
+      "Do not write reflection for lugs with affinity_score <= 0.3 unless the operator explicitly enables reflection for all lugs"
+    ],
+    "frequency": "Affinity file: once per session at wakeup, full overwrite. Reflection entries: per lug completion (conditional on affinity threshold). Progress file: per qualifying lug completion."
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/lugs/bytype/goal-chain/open/*.json \u2014 active goal chain definitions (blocked_by: spec-goal-chain-v1 must be resolved first)",
+      "WAI-Spoke/lugs/bytype/*/open/*.json \u2014 full open lug corpus for affinity scoring",
+      "WAI-Spoke/advisors/navigator/goal-chain-progress.json \u2014 prior completion history for stall detection",
+      "WAI-Spoke/advisors/navigator/recommendations-current.json \u2014 existing Navigator model routing output (goal-affinity-current.json is written alongside this, never replaces it)"
+    ],
+    "outputs": [
+      "WAI-Spoke/advisors/navigator/goal-affinity-current.json \u2014 affinity scores, goal weights, stall alerts; schema below",
+      "WAI-Spoke/advisors/navigator/goal-chain-progress.json \u2014 longitudinal completion record; schema below",
+      "WAI-Spoke/pathgraph/history.jsonl \u2014 reflection entries appended per qualifying lug completion; schema below"
+    ],
+    "state_changes": [
+      "goal-affinity-current.json overwritten each Navigator wakeup",
+      "goal-chain-progress.json.completed_children[] grows after each Ozi lug completion",
+      "goal-chain-progress.json.last_completion_session updated after each qualifying completion",
+      "pathgraph/history.jsonl grows by one entry per qualifying lug completion"
+    ],
+    "goal_affinity_current_schema": {
+      "description": "WAI-Spoke/advisors/navigator/goal-affinity-current.json \u2014 written by Navigator at wakeup",
+      "fields": {
+        "generated_at": "ISO-8601 timestamp",
+        "active_goal_chain_id": "string or null \u2014 the single highest-priority active goal chain ID",
+        "initiative_focus_lock": "string or null \u2014 initiative slug if user has set a focus lock",
+        "goal_weights": [
+          {
+            "goal_chain_id": "string",
+            "goal_title": "string",
+            "weight": "float 0.0-1.0 \u2014 relative weight of this goal chain vs others"
+          }
+        ],
+        "lug_affinities": [
+          {
+            "lug_id": "string",
+            "lug_title": "string",
+            "affinity_score": "float 0.0-1.0 \u2014 final clamped score after all factors and decay",
+            "matched_goal": "string \u2014 goal_chain_id of the highest-affinity match",
+            "match_reason": "string \u2014 human-readable summary of which factors fired"
+          }
+        ],
+        "stall_alerts": [
+          {
+            "goal_chain_id": "string",
+            "sessions_stalled": "integer",
+            "action": "boost_affinity or create_advisor"
+          }
+        ]
+      }
+    },
+    "goal_chain_progress_schema": {
+      "description": "WAI-Spoke/advisors/navigator/goal-chain-progress.json \u2014 written by Ozi after each qualifying lug completion",
+      "fields": {
+        "schema_version": "string \u2014 semver",
+        "updated_at": "ISO-8601 timestamp",
+        "chains": [
+          {
+            "goal_chain_id": "string",
+            "goal_title": "string",
+            "completion_count": "integer",
+            "last_completion_session": "string \u2014 session ID of last qualifying completion",
+            "sessions_stalled": "integer \u2014 sessions since last completion (reset to 0 on completion)",
+            "completed_children": [
+              "lug_id strings"
+            ],
+            "reflection_summaries": [
+              {
+                "lug_id": "string",
+                "completed_at": "ISO-8601",
+                "delta": "string \u2014 brief description of what differed from plan",
+                "next_recommendation": "string"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "reflection_entry_schema": {
+      "description": "Appended to WAI-Spoke/pathgraph/history.jsonl by Ozi after qualifying lug completion",
+      "fields": {
+        "ts": "ISO-8601 timestamp",
+        "op_type": "lug_complete",
+        "lug_id": "string",
+        "outcome": "success or failure",
+        "planned_steps_count": "integer \u2014 steps count from lug execute field",
+        "actual_steps_count": "integer \u2014 actual steps taken",
+        "delta": "string \u2014 what differed from plan (empty string if none)",
+        "next_recommendation": "string \u2014 what this agent would do differently next time",
+        "goal_chain_id": "string or null \u2014 matched goal chain ID if affinity_score > 0.3",
+        "affinity_score": "float \u2014 the affinity score that triggered this reflection",
+        "teaching_candidate": "boolean \u2014 whether this delta should be reviewed as a teaching candidate"
+      }
+    },
+    "affinity_scoring_factors": {
+      "description": "Scoring factors for v1 (computable from existing lug fields) and v2 (requires schema amendments). Weights are initial estimates \u2014 tune after 10 sessions of data.",
+      "v1_factors": [
+        {
+          "name": "keyword_match",
+          "boost": 0.3,
+          "description": "Lug title or description contains keywords from the goal chain's title or description fields. Uses existing lug.title + lug.what text \u2014 no new schema fields required."
+        },
+        {
+          "name": "epic_lineage",
+          "boost": 0.5,
+          "description": "Lug has a blocked_by or parent epic reference (via the lug corpus) that chains up to the active goal chain's id or title match. Uses existing lug.blocked_by[] and epic.id fields \u2014 no new schema fields required."
+        }
+      ],
+      "v2_factors_pending_schema_amendment": [
+        {
+          "name": "work_class_alignment",
+          "boost": 0.2,
+          "description": "Lug work_class matches one of the goal chain's preferred_work_classes[] entries. BLOCKED: requires preferred_work_classes[] field in spec-goal-chain-v1 schema AND work_class field in lug schema. Do not implement until both specs carry these fields."
+        },
+        {
+          "name": "recency_penalty",
+          "decay": -0.1,
+          "per": "10 sessions in queue",
+          "description": "Decays affinity for lugs that have been in the open queue for multiple sessions. BLOCKED: requires queued_since_session field on lugs (field does not currently exist in the lug schema). Do not implement until the field is added and backfilled."
+        }
+      ]
+    }
+  },
+  "blocked_by": "spec-goal-chain-v1",
+  "blocked_by_note": "The goal-chain lug type must be defined (schema, lifecycle, required fields) before Navigator can read goal chains and compute affinity. This spec is implementation-ready only after spec-goal-chain-v1 reaches v1.0.0.",
+  "constraints": [
+    "goal-affinity-current.json is session-scoped \u2014 it is always a full rewrite at Navigator wakeup; no incremental patching",
+    "Ozi reads goal-affinity-current.json once per dispatch cycle start; it does not re-read mid-cycle to avoid priority thrashing",
+    "Affinity scoring weights (keyword_match=0.3, epic_lineage=0.4, work_class_alignment=0.2) are tunable config; implementation must not hardcode them",
+    "The boost_affinity stall action doubles the affinity_score at Ozi read-time \u2014 it does not modify the stored file; the doubled value is transient for that dispatch cycle only",
+    "Navigator must not create the goal_chain_progress.json file from scratch \u2014 Ozi is the sole writer; Navigator is reader-only for stall detection purposes",
+    "Reflection entries in pathgraph/history.jsonl must not replace or modify operational trace entries from spec-harness-operational-traces-v1 \u2014 they are additive entries with op_type=lug_completion and the extra reflection fields"
+  ],
+  "tests": [
+    {
+      "id": "test-affinity-file-written-at-wakeup",
+      "description": "After Navigator wakeup with at least one active goal chain and one open lug, goal-affinity-current.json exists with generated_at within 60 seconds of wakeup start, and lug_affinities[] is non-empty",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-effective-priority-ordering",
+      "description": "Given two lugs with equal ROI but one with affinity_score=0.5 and one with affinity_score=0.0, the high-affinity lug appears first in Ozi dispatch order. Verify by inspecting dispatch log or Ozi's sorted queue before first lug pickup.",
+      "type": "semantic"
+    },
+    {
+      "id": "test-reflection-written-on-qualified-completion",
+      "description": "After Ozi completes a lug that has affinity_score > 0.3 in the current goal-affinity-current.json, pathgraph/history.jsonl contains a new entry with op_type=lug_completion, the correct lug_id, and non-null goal_chain_id",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-goal-chain-progress-updated",
+      "description": "After a qualifying lug completion, goal-chain-progress.json shows the lug_id in completed_children[] for the matched goal chain and last_completion_session is updated to the current session ID",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-stall-detection-boost-affinity",
+      "description": "Given a goal chain with sessions_stalled >= 3 in goal-chain-progress.json, Navigator wakeup sets stall_alerts[] entry with action=boost_affinity for that chain_id. Verify by inspecting goal-affinity-current.json after wakeup.",
+      "type": "mechanical"
+    },
+    {
+      "id": "test-stall-boost-doubles-priority",
+      "description": "For a lug matching a goal chain with stall_alert action=boost_affinity, verify Ozi's computed effective_priority = ROI * (1 + affinity_score * 2) and that this lug ranks above a same-ROI lug with a non-stalled goal chain match.",
+      "type": "semantic"
+    },
+    {
+      "id": "test-recency-decay-applied",
+      "description": "A lug with queue_age >= 10 sessions and keyword_match=true should have affinity_score capped lower than a fresh lug with the same keyword_match. Verify decay reduces the score by 0.1 per 10-session block.",
+      "type": "semantic"
+    },
+    {
+      "id": "test-no-duplicate-stall-advisor",
+      "description": "If an active advisor with concern=goal_stall already exists for goal_chain_id X, and Navigator wakeup sets stall_alerts with action=create_advisor for X, Ozi must not create a second advisor. Verify by checking advisor count before and after dispatch cycle.",
+      "type": "mechanical"
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "test_file": null,
+    "test_count": 0,
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "v1 scoring weights (keyword_match=0.3, epic_lineage=0.5) are initial estimates \u2014 tune after 10 sessions of data",
+      "v2 work_class_alignment: requires preferred_work_classes[] in spec-goal-chain-v1 schema AND work_class field in lug schema \u2014 create amendment lugs before implementing",
+      "v2 recency_penalty: requires queued_since_session field on lugs \u2014 field absent from all current lugs; create schema amendment lug before implementing",
+      "Should Ozi emit a reflection for failed lugs as well as successful ones? Currently required only for affinity > 0.3 on completion; failure-reflections may be more valuable for teaching candidate generation."
+    ],
+    "verified_at": null,
+    "verification_note": "Design spec \u2014 no implementation yet. Design plan at /home/mario/.claude/plans/how-can-our-design-warm-raven.md (Loop 2: Goal Alignment)."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-harness-self-maintaining-wheel-v1",
+    "spec-goal-chain-v1",
+    "spec-harness-operational-traces-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec (spec-harness-goal-affinity-v1) in full. Check whether spec-goal-chain-v1 exists at WAI-Spoke/lugs/bytype/spec/open/spec-goal-chain-v1.json \u2014 if it does not exist, this spec is blocked and implementation cannot begin. Read goal-chain-progress.json at WAI-Spoke/advisors/navigator/goal-chain-progress.json to understand current goal advancement state (file may not exist yet on first run). Read recommendations-current.json at WAI-Spoke/advisors/navigator/recommendations-current.json to understand existing Navigator output format. Review open_questions in health section before proceeding.",
+  "execute": "This spec is blocked_by spec-goal-chain-v1. Do not begin implementation until that spec reaches v1.0.0 and the goal-chain lug type is defined. When unblocked: (1) implement Navigator affinity scoring logic reading from goal chain corpus; (2) implement goal-affinity-current.json writer in Navigator wakeup flow; (3) implement Ozi dispatch cycle modification to read affinity file and compute effective_priority; (4) implement reflection writer in Ozi lug completion handler; (5) implement goal-chain-progress.json updater in Ozi completion flow; (6) wire stall detection and alert actions in Navigator wakeup. Create one impl lug per numbered step above \u2014 do not bundle all six into one lug.",
+  "verify": "All eight tests in tests[] pass (4 mechanical, 4 semantic). goal-affinity-current.json is present and valid JSON after Navigator wakeup on a spoke with at least one active goal chain. Ozi dispatch log shows effective_priority > ROI for goal-aligned lugs. pathgraph/history.jsonl shows reflection entries for completed goal-aligned lugs. goal-chain-progress.json shows completed_children[] growing correctly. All open_questions in health section either resolved or have linked impl lugs addressing them.",
+  "model_fit": "haiku"
+}

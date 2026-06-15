@@ -1,0 +1,235 @@
+{
+  "id": "spec-harness-challenge-reports-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T18:00:00Z",
+  "updated_at": "2026-05-30T18:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.248",
+  "impact": 7,
+  "subject": {
+    "kind": "protocol",
+    "id": "harness-challenge-reports",
+    "label": "Migration Challenge Reports"
+  },
+  "title": "Harness Migration Challenge Reports \u2014 spokes report back; bootstrap learns",
+  "what": "When a spoke Ozi completes a migration lug, it appends a structured challenge report to the outgoing lug payload and delivers it back to hub. Hub Ozi indexes these reports in harness/migration-reports/. Recurring challenges across multiple spokes are promoted to hygiene rules in deprecated-patterns.json. Each new bootstrap version includes a learning-index.json summarizing aggregated challenge patterns from the previous migration cycle. Spokes consume the learning index before executing migration steps so that known problems are pre-warned.",
+  "why": "Migration today is unidirectional: hub pushes, spoke receives, and the hub never learns what was hard. Identical problems repeat across spokes and sessions with no collective memory. The challenge report loop closes this feedback gap: the fleet teaches itself what migrations are difficult, and each subsequent bootstrap version is easier than the last.",
+  "audience": [
+    "ozi",
+    "navigator"
+  ],
+  "use_cases": [
+    {
+      "title": "Spoke completes migration and reports challenges",
+      "trigger": "Spoke Ozi marks migration lug complete after running audit + file replacement steps",
+      "outcome": "Challenge report appended to lug completion record and delivered to hub via outgoing lug; hub indexes report under harness/migration-reports/{spoke_id}/{from_version}-to-{to_version}.json",
+      "persona": "ozi"
+    },
+    {
+      "title": "Hub consolidates challenge reports into hygiene rules",
+      "trigger": "Hub Ozi runs consolidation; reads migration-reports/ for all reports in the current version window",
+      "outcome": "Challenges appearing in 3+ reports for the same version transition are promoted to hygiene rules in deprecated-patterns.json; challenge count indexed per version transition in harness-state.json",
+      "persona": "ozi"
+    },
+    {
+      "title": "New bootstrap version includes learning index",
+      "trigger": "Consolidation produces new bootstrap snapshot",
+      "outcome": "learning-index.json written alongside version-manifest.json; migration lugs delivered to outdated spokes reference the learning index path; spokes read it before executing any migration step",
+      "persona": "ozi"
+    },
+    {
+      "title": "Recurring challenge escalates to blocker in next version",
+      "trigger": "A challenge pattern from learning-index.json recurs in the next migration cycle (spoke reports same step with severity warn after it was documented)",
+      "outcome": "Hub Ozi escalates severity from warn to must_resolve_before_migration in the following bootstrap version; migration lugs for that version include explicit pre-check for the pattern",
+      "persona": "navigator"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Bidirectional migration loop",
+      "description": "Migration is not one-direction. Hub pushes migration lug; spoke executes; spoke returns challenge report lug. The return path is as important as the forward path. Hub must acknowledge receipt in its registry before the migration cycle is considered closed."
+    },
+    {
+      "name": "Aggregation before promotion",
+      "description": "A single challenge report does not change hygiene rules. Promotion requires the same challenge step appearing in reports from 3 or more spokes within one version window. This prevents noisy or environment-specific issues from polluting fleet-wide guidance."
+    },
+    {
+      "name": "Learning index as pre-read contract",
+      "description": "Migration lugs must include a step: 'Read learning-index.json before executing migration steps.' The index is not optional documentation \u2014 it is a mandatory pre-read that informs the executing agent what problems to watch for before they occur."
+    },
+    {
+      "name": "Severity escalation for recurring patterns",
+      "description": "Documented challenges that recur escalate automatically. warn -> must_resolve_before_migration is a one-way gate: once escalated, the pattern cannot be downgraded without explicit hub Ozi review and a note in the hygiene audit trail."
+    }
+  ],
+  "how": {
+    "trigger": "Spoke Ozi completes a migration lug (any harness version transition)",
+    "steps_summary": [
+      "1. Spoke Ozi completes migration lug execution \u2014 builds challenge_report object with spoke_id, harness_version_from, harness_version_to, challenges[] (each with step, description, severity, resolved_by)",
+      "2. Challenge report appended to lug completion record; outgoing lug (type: task, routed_to: HUB) created in spoke/WAI-Spoke/lugs/outgoing/ with payload containing the challenge report",
+      "3. Hub Ozi receives outgoing lug on next consolidation; validates report schema; writes to hub/WAI-Spoke/hub/harness/migration-reports/{spoke_id}/{from}-to-{to}.json",
+      "4. Hub updates harness-state.json challenge_count for the version transition; challenge index updated",
+      "5. At consolidation: Hub reads all migration-reports/ for current version window; aggregates challenges by step \u2014 challenges with occurrence_count >= 3 promoted to hygiene rule in deprecated-patterns.json",
+      "6. New bootstrap snapshot written; learning-index.json generated from aggregated challenge patterns \u2014 one entry per promoted pattern with step_pattern, description, occurrences, severity, pre_warning_text",
+      "7. Migration lugs generated for next cycle reference learning-index.json path; migration lug step 1 is always 'Read learning-index.json'",
+      "8. On next migration cycle: if a spoke reports a challenge matching an existing learning-index entry, Hub Ozi increments recurrence count; if severity was warn and pattern recurs, escalate to must_resolve_before_migration in following version"
+    ],
+    "constraints": [
+      "Challenge report is required \u2014 migration lugs are not considered complete without a challenge report payload (even if challenges[] is empty)",
+      "Hub must confirm receipt of report in registry before migration cycle status is set to closed",
+      "Aggregation threshold is 3 reports; configurable in harness-state.json as challenge_promotion_threshold",
+      "Severity escalation is permanent within a bootstrap version; downgrade requires hub Ozi review + audit note",
+      "learning-index.json must be generated before migration lugs are dispatched for the new version"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Migration lug completion by any spoke Ozi",
+      "Consolidation event reading migration-reports/ for the version window",
+      "New bootstrap snapshot generation (learning-index.json must be written)"
+    ],
+    "not_when": [
+      "Spoke that failed migration mid-execution does not submit a challenge report \u2014 partial reports are discarded; full report requires migration completion",
+      "Hub does not aggregate reports across version windows \u2014 each version transition is an independent aggregate"
+    ],
+    "frequency": "Per migration lug completion (challenge report). Per consolidation event (aggregation + learning index generation)."
+  },
+  "schema": {
+    "inputs": [
+      {
+        "name": "challenge_report",
+        "description": "Structured report produced by spoke Ozi on migration completion; delivered as outgoing lug payload",
+        "schema": {
+          "spoke_id": "string \u2014 unique spoke identifier from hub-registry.json",
+          "harness_version_from": "string \u2014 semver of the harness version being migrated from",
+          "harness_version_to": "string \u2014 semver of the harness version being migrated to",
+          "completed_at": "ISO 8601 datetime \u2014 when migration lug was marked complete",
+          "challenges": [
+            {
+              "step": "string \u2014 migration step identifier (matches step label in migration lug)",
+              "description": "string \u2014 what the challenge was, observed behavior, error text if applicable",
+              "severity": "enum: warn | block \u2014 warn = completed with workaround; block = required manual intervention before proceeding",
+              "resolved_by": "string \u2014 how it was resolved (free text); null if challenge remains unresolved at report time"
+            }
+          ]
+        }
+      },
+      {
+        "name": "harness_migration_reports_index",
+        "description": "Hub index of all received challenge reports, keyed by spoke_id and version transition; lives at hub/WAI-Spoke/hub/harness/migration-reports/index.json",
+        "schema": {
+          "reports": [
+            {
+              "spoke_id": "string",
+              "version_transition": "string \u2014 '{from_version}-to-{to_version}'",
+              "report_path": "string \u2014 relative path to report file",
+              "received_at": "ISO 8601 datetime",
+              "challenge_count": "integer"
+            }
+          ]
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "name": "learning_index",
+        "description": "Generated alongside each new bootstrap snapshot; consumed by migration lugs as mandatory pre-read; lives at hub/WAI-Spoke/hub/harness/bootstrap/v{N}/learning-index.json",
+        "schema": {
+          "version": "string \u2014 bootstrap version this learning index accompanies",
+          "consolidated_from": "string \u2014 version transition these patterns were drawn from (e.g. '1.3.0-to-1.4.0')",
+          "generated_at": "ISO 8601 datetime",
+          "challenge_patterns": [
+            {
+              "step_pattern": "string \u2014 migration step label where this challenge was observed",
+              "description": "string \u2014 description of the challenge pattern generalized across all reporting spokes",
+              "occurrences": "integer \u2014 number of spokes that reported this challenge",
+              "severity": "enum: warn | must_resolve_before_migration",
+              "pre_warning_text": "string \u2014 text to display to agent before executing this step; should be actionable"
+            }
+          ]
+        }
+      },
+      {
+        "name": "hygiene_promotion",
+        "description": "Challenges promoted to deprecated-patterns.json when occurrence_count >= challenge_promotion_threshold",
+        "schema": {
+          "pattern_id": "string",
+          "step_pattern": "string",
+          "description": "string",
+          "promoted_at": "ISO 8601 datetime",
+          "promoted_from_version": "string",
+          "occurrences_at_promotion": "integer"
+        }
+      }
+    ],
+    "state_changes": [
+      "harness-state.json: challenge_count['{from}-to-{to}'] increments on each report receipt",
+      "harness-state.json: challenge_promotion_threshold (default 3) governs when patterns are promoted",
+      "deprecated-patterns.json: new hygiene rule added when challenge_count >= threshold",
+      "migration-reports/index.json: new entry added on each report receipt",
+      "spoke wheel.migration_challenges_submitted = true after report delivered"
+    ]
+  },
+  "constraints": [
+    "Challenge report is mandatory \u2014 an empty challenges[] list is valid but the report object itself must always be submitted on migration completion",
+    "Hub aggregates reports per version transition only (no cross-window aggregation)",
+    "learning-index.json must exist in bootstrap snapshot before migration lugs are dispatched; migration lug generation blocked otherwise",
+    "Severity escalation is permanent within a bootstrap version; requires explicit hub Ozi audit note to reverse",
+    "Spoke that fails migration mid-run does not submit a challenge report; partial reports are rejected on hub receipt",
+    "challenge_promotion_threshold is configurable in harness-state.json but defaults to 3; lowering below 2 is not permitted"
+  ],
+  "tests": [
+    {
+      "id": "test-report-schema-valid",
+      "description": "A migration lug completion record includes a challenge_report object with all required fields (spoke_id, harness_version_from, harness_version_to, completed_at, challenges[]); empty challenges[] is valid",
+      "pass_criteria": "json.loads(report) succeeds; all required top-level fields present; each challenge entry has step, description, severity, resolved_by"
+    },
+    {
+      "id": "test-hub-indexes-report",
+      "description": "After hub Ozi receives a challenge report outgoing lug, migration-reports/index.json contains a new entry for the spoke_id + version_transition pair",
+      "pass_criteria": "index.json readable; entry present with matching spoke_id and version_transition; received_at set"
+    },
+    {
+      "id": "test-aggregation-threshold",
+      "description": "Three challenge reports for the same migration step (same version transition, same step label) result in a new hygiene rule in deprecated-patterns.json",
+      "pass_criteria": "After processing 3 reports with identical step, deprecated-patterns.json contains entry for that step_pattern; 2 reports do not trigger promotion"
+    },
+    {
+      "id": "test-learning-index-present-before-dispatch",
+      "description": "Hub Ozi cannot dispatch migration lugs for a new bootstrap version if learning-index.json is absent from the snapshot",
+      "pass_criteria": "Attempt to dispatch migration lugs without learning-index.json raises validation error in hub Ozi; dispatch blocked"
+    },
+    {
+      "id": "test-severity-escalation",
+      "description": "A warn-level challenge pattern that recurs in the next migration cycle is escalated to must_resolve_before_migration in the subsequent bootstrap version's learning-index.json",
+      "pass_criteria": "learning-index.json for the following version shows severity: must_resolve_before_migration for the matching step_pattern"
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "test_file": null,
+    "test_count": 0,
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": null,
+    "verification_note": "Design spec authored from plan file /home/mario/.claude/plans/how-can-our-design-warm-raven.md Loop 3A and 3B."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-harness-self-maintaining-wheel-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec (spec-harness-challenge-reports-v1). Read related spec spec-harness-self-maintaining-wheel-v1 for the migration lug contract and consolidation trigger. Check hub/WAI-Spoke/hub/harness/ for current migration-reports/ folder and harness-state.json. Confirm challenge_promotion_threshold field exists in harness-state.json or note that it must be added.",
+  "execute": "ROUTING: Steps 2 and 3 require modifying tools/ozi_autopilot.py (Basher-owned). Create a Basher impl lug (routed_to: BASHER) for each and deliver to basher/WAI-Spoke/lugs/incoming/ \u2014 do NOT edit tools/ directly. Non-Basher steps can be impl lugs here. Full sequence: (1) Add challenge_report field to migration lug schema (modify lug template at templates/migration-lug-template.json \u2014 check if this path is Basher-owned first). (2) BASHER LUG: Implement outgoing lug creation in spoke Ozi on migration completion. (3) BASHER LUG: Implement hub receipt + index update in hub Ozi consolidation pass. (4) Implement challenge aggregation logic in a hub-side Python script (not in tools/ \u2014 create as a new file in hub/WAI-Spoke/hub/harness/scripts/). (5) Implement learning-index.json generation step in consolidation (same hub-side script). (6) Add mandatory learning-index pre-read step to migration lug template.",
+  "verify": "All five tests in tests[] pass. learning-index.json present in at least one bootstrap snapshot in the test environment. migration-reports/index.json updated correctly after spoke delivers a challenge report. Aggregation threshold correctly blocks promotion at 2 reports, triggers it at 3.",
+  "model_fit": "haiku"
+}

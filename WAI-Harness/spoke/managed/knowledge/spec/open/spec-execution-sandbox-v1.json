@@ -1,0 +1,62 @@
+{
+  "id": "spec-execution-sandbox-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T14:00:00Z",
+  "updated_at": "2026-06-09T14:00:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260608-2053.mariov96",
+  "subject": "Execution isolation & sandboxed test runtime — protect the DB/filesystem/event-bus from a rogue or hallucinating agent; run generated tests in an isolated, post-validated runtime; right-sized to single-user-local with a container scale-path",
+  "title": "Execution Sandbox & Isolated Test Runtime",
+  "situation": "External blind review (S47, two independent external models) named this the SINGLE biggest risk from two angles: (A) no containerized/isolated execution layer — a hallucinating agent with Bash can corrupt harness.db, delete event-bus logs, or break its own runtime; (B) the test-at-birth + Pattern Gate paradigm assumes an automated test generator producing reliable, non-flaky tests across changing environments — without a ruggedized sandboxed runtime, broken/flaky generated tests either freeze the autonomous column (escalation storm) or pass broken code into MyWheel. The harness positions itself as protecting against AI-dev fragility yet runs agent-authored code directly against its own state.",
+  "why": "Autonomy is only safe if a bad write cannot destroy the substrate that observes and verifies it. The verification spine and observability spine both write to harness.db + the event journal; if an unsandboxed agent or a flaky generated test corrupts those, every downstream safety claim is void (review: 'renders all downstream claims of safety, observability, and self-certification completely void'). Right-sizing: our context is single-user-local (Mario, WSL, trusted), NOT hostile multi-tenant — so full container-per-agent is the SCALE-UP path, not the v1 hard requirement. v1 needs: isolated test execution, atomic post-validated writes, and hard protection of the harness substrate.",
+  "threat_model": {
+    "in_scope_v1": "accidental destruction by a hallucinating/buggy agent or a flaky generated test (single-user, trusted operator) — the realistic failure mode here",
+    "out_of_scope_v1": "malicious multi-tenant adversaries / compromised agents tampering with logs — revisit (container-per-agent, log HMAC) when the harness runs cloud/multi-tenant; logged, not built now",
+    "scale_path": "full container (Docker) or WASM per-agent isolation when multi-tenant or untrusted execution is introduced"
+  },
+  "v1_isolation_model": {
+    "test_runtime_sandbox": "generated verification_tests run in an ISOLATED runtime — a dedicated git worktree (reuse the concurrency worktree primitive) + a separate scratch DB/dir, NOT against the live harness.db or working tree. A flaky/broken test can fail loudly but cannot corrupt live state. Test output is captured; only pass/fail/null + evidence are written back, atomically.",
+    "atomic_post_validated_writes": "agent/tool file mutations land in a staging area, are validated (syntax/schema/scope), and are committed to the live tree atomically only on pass; a failed validation discards the staging copy (no partial corruption).",
+    "harness_substrate_protection": "harness.db, the event journal, and managed/ are PROTECTED paths — agent Bash cannot rm/truncate them (pre-tool-guard extension + WSL trash_bin rule); writes to them go only through the sanctioned single-writer queue (storage spec), never raw agent file ops.",
+    "scope_fences": "an agent operating on lug X may only write the paths declared in that lug's file_targets; a write outside the declared scope is staged + flagged (ties to self-healing AC22 + scope_fences), not silently applied."
+  },
+  "flaky_test_handling": {
+    "principle": "Broken/flaky generated tests must not freeze the autonomous column NOR pass broken code (review CRITICAL).",
+    "rules": [
+      "a generated test that fails to RUN (syntax/setup error) is distinct from one that runs and asserts FALSE — the former is a test-defect (routes to QA to repair), not a code failure (does not escalation-storm)",
+      "flakiness detection: a test with non-deterministic results across N runs in the sandbox is quarantined + flagged to QA, not treated as a hard gate",
+      "a quarantined/defective test blocks promotion of its lug (dual gate) but routes to QA repair with an SLA, rather than halting the whole queue",
+      "mechanical/script-backed tests are preferred precisely because they are least flaky (verification spec)"
+    ]
+  },
+  "constraints": [
+    "Generated tests NEVER run against live harness.db or the live working tree — isolated runtime only",
+    "harness.db + event journal + managed/ are protected paths: no raw agent rm/truncate; writes only via the single-writer queue",
+    "Agent file mutations are staged + validated + atomically committed on pass; failed validation discards (no partial writes)",
+    "An agent may only write paths in its lug's file_targets; out-of-scope writes are staged + flagged",
+    "v1 isolation = worktree + scratch DB + protected paths (single-user-local); container/WASM is the documented scale-path, not a v1 blocker",
+    "Test-run-error (cannot run) vs test-assert-false are handled distinctly — a defective test routes to QA, never triggers an escalation storm"
+  ],
+  "tests": [
+    "Substrate protection: an agent Bash attempting `rm harness.db` is blocked (protected path); the file survives",
+    "Isolated test run: a generated test that does `DROP TABLE` runs in the scratch DB and does NOT touch live harness.db",
+    "Atomic write: a staged mutation that fails schema validation is discarded; the live tree is unchanged (no partial write)",
+    "Scope fence: an agent on lug X writes a path NOT in file_targets -> staged + flagged, not applied to live",
+    "Flaky quarantine: a non-deterministic test (passes/fails across 5 sandbox runs) is quarantined + routed to QA, does NOT hard-halt the queue",
+    "Test-run-error vs assert-false: a syntactically broken generated test is classified test-defect (QA repair), not a code failure (no escalation storm)"
+  ],
+  "impl_lugs": [],
+  "health": {"test_coverage": "none — spec only", "last_impl_lug_completed": null, "spec_drift_risk": "low — authored from external blind-review (S47)", "open_questions": ["worktree-per-test cost at high test volume (batch tests per worktree?)", "when to graduate from worktree+scratch-DB to full container (trigger: multi-tenant or untrusted execution)"]},
+  "related_specs": ["spec-storage-layer-v1", "spec-verification-quality-v1", "spec-scheduler-dispatcher-v1", "spec-observability-oversight-v1"],
+  "perceive": "Read this spec + spec-verification-quality-v1 (test-at-birth it sandboxes) + spec-storage-layer-v1 (single-writer + protected paths) + the concurrency worktree primitive (reused for test isolation) + the pre-tool-guard hook (extended for protected paths).",
+  "execute": "1. Extend pre-tool-guard to protect harness.db + event journal + managed/ from raw agent rm/truncate. 2. Implement isolated test runtime (worktree + scratch DB) for generated verification_tests. 3. Implement staged+validated+atomic write commit for agent mutations. 4. Implement scope-fence (file_targets enforcement). 5. Implement flaky/test-defect classification + quarantine routing to QA. 6. Document the container/WASM scale-path (not built v1).",
+  "verify": "Run all tests[]. Confirm substrate protection, isolated test runs, atomic write discard-on-fail, scope fences, and flaky/defect classification that never escalation-storms.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

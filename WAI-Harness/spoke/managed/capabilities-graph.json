@@ -1,0 +1,1843 @@
+{
+  "harness_version": "4.0.0-pre",
+  "is_master": false,
+  "generated_at": null,
+  "entries": [
+    {
+      "id": "cap-skill-examples",
+      "name": "SKILL-EXAMPLES",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill Examples Quick Reference",
+      "solution": "Use SKILL-EXAMPLES (templates/commands/SKILL-EXAMPLES.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/SKILL-EXAMPLES.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-chat-to-track",
+      "name": "chat-to-track",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Chat-to-Track Exporter Prompt",
+      "solution": "Use chat-to-track (templates/commands/chat-to-track.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/chat-to-track.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-generate-teaching",
+      "name": "generate-teaching",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Generate Teaching",
+      "solution": "Use generate-teaching (templates/commands/generate-teaching.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/generate-teaching.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-spoke-telemetry-closeout",
+      "name": "spoke-telemetry-closeout",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Spoke Telemetry Closeout",
+      "solution": "Use spoke-telemetry-closeout (templates/commands/spoke-telemetry-closeout.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/spoke-telemetry-closeout.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-advisor-schema-slim",
+      "name": "wai-advisor-schema-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Advisor Schema \u2014 Fast Path",
+      "solution": "Use wai-advisor-schema-slim (templates/commands/wai-advisor-schema-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-advisor-schema-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-advisor-schema",
+      "name": "wai-advisor-schema",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Advisor Schema \u2014 Reference",
+      "solution": "Use wai-advisor-schema (templates/commands/wai-advisor-schema.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-advisor-schema.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-apply-all",
+      "name": "wai-apply-all",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Apply All \u2014 Parallel Dispatch Skill",
+      "solution": "Use wai-apply-all (templates/commands/wai-apply-all.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-apply-all.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-auto-off",
+      "name": "wai-auto-off",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Auto Off",
+      "solution": "Use wai-auto-off (templates/commands/wai-auto-off.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-auto-off.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-auto-on",
+      "name": "wai-auto-on",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Auto On",
+      "solution": "Use wai-auto-on (templates/commands/wai-auto-on.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-auto-on.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-auto-parallel",
+      "name": "wai-auto-parallel",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Auto Parallel",
+      "solution": "Use wai-auto-parallel (templates/commands/wai-auto-parallel.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-auto-parallel.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-auto-status",
+      "name": "wai-auto-status",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Auto Status",
+      "solution": "Use wai-auto-status (templates/commands/wai-auto-status.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-auto-status.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-benchmark",
+      "name": "wai-benchmark",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Benchmark",
+      "solution": "Use wai-benchmark (templates/commands/wai-benchmark.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-benchmark.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-brief-reference",
+      "name": "wai-brief-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Brief \u2014 Reference",
+      "solution": "Use wai-brief-reference (templates/commands/wai-brief-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-brief-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-brief",
+      "name": "wai-brief",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Brief \u2014 Context Export for External Sessions",
+      "solution": "Use wai-brief (templates/commands/wai-brief.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-brief.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-chain-load",
+      "name": "wai-chain-load",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Chain Load \u2014 Minimal Context Protocol",
+      "solution": "Use wai-chain-load (templates/commands/wai-chain-load.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-chain-load.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-chat-to-track",
+      "name": "wai-chat-to-track",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Chat-to-Track",
+      "solution": "Use wai-chat-to-track (templates/commands/wai-chat-to-track.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-chat-to-track.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-claude-maximizer-reference-slim",
+      "name": "wai-claude-maximizer-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Claude Maximizer Reference \u2014 Fast Path",
+      "solution": "Use wai-claude-maximizer-reference-slim (templates/commands/wai-claude-maximizer-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-claude-maximizer-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-claude-maximizer-reference",
+      "name": "wai-claude-maximizer-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Claude Maximizer \u2014 Reference",
+      "solution": "Use wai-claude-maximizer-reference (templates/commands/wai-claude-maximizer-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-claude-maximizer-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-claude-maximizer",
+      "name": "wai-claude-maximizer",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Claude Maximizer \u2014 Redirected",
+      "solution": "Use wai-claude-maximizer (templates/commands/wai-claude-maximizer.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-claude-maximizer.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-closeout-feedback-v2-slim",
+      "name": "wai-closeout-feedback-v2-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Closeout Feedback \u2014 Fast Path",
+      "solution": "Use wai-closeout-feedback-v2-slim (templates/commands/wai-closeout-feedback-v2-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-closeout-feedback-v2-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-closeout-reference",
+      "name": "wai-closeout-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Closeout \u2014 Reference",
+      "solution": "Use wai-closeout-reference (templates/commands/wai-closeout-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-closeout-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-closeout-slim",
+      "name": "wai-closeout-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Closeout \u2014 Fast Path",
+      "solution": "Use wai-closeout-slim (templates/commands/wai-closeout-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-closeout-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-closeout",
+      "name": "wai-closeout",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "0. Test Gate",
+      "solution": "Use wai-closeout (templates/commands/wai-closeout.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-closeout.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-compact-resume",
+      "name": "wai-compact-resume",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Compact Resume \u2014 Post-Compaction Recovery Protocol",
+      "solution": "Use wai-compact-resume (templates/commands/wai-compact-resume.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-compact-resume.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-complexity-gate-reference",
+      "name": "wai-complexity-gate-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Complexity Gate \u2014 Reference",
+      "solution": "Use wai-complexity-gate-reference (templates/commands/wai-complexity-gate-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-complexity-gate-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-complexity-gate",
+      "name": "wai-complexity-gate",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Complexity Gate",
+      "solution": "Use wai-complexity-gate (templates/commands/wai-complexity-gate.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-complexity-gate.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-context-guard",
+      "name": "wai-context-guard",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Context Guard",
+      "solution": "Use wai-context-guard (templates/commands/wai-context-guard.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-context-guard.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-contribute",
+      "name": "wai-contribute",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Contribute",
+      "solution": "Use wai-contribute (templates/commands/wai-contribute.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-contribute.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-corpus-tests-slim",
+      "name": "wai-corpus-tests-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Corpus Tests \u2014 Fast Path",
+      "solution": "Use wai-corpus-tests-slim (templates/commands/wai-corpus-tests-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-corpus-tests-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-corpus-tests",
+      "name": "wai-corpus-tests",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Corpus Tests \u2014 Skill Reference",
+      "solution": "Use wai-corpus-tests (templates/commands/wai-corpus-tests.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-corpus-tests.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-crew-convention-slim",
+      "name": "wai-crew-convention-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Crew Convention \u2014 Fast Path",
+      "solution": "Use wai-crew-convention-slim (templates/commands/wai-crew-convention-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-crew-convention-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-crew-convention",
+      "name": "wai-crew-convention",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Crew Convention \u2014 canonical folder layout, inheritance, and versioning",
+      "solution": "Use wai-crew-convention (templates/commands/wai-crew-convention.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-crew-convention.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-crew-honesty",
+      "name": "wai-crew-honesty",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Crew Honesty Contract and Permission Ladder",
+      "solution": "Use wai-crew-honesty (templates/commands/wai-crew-honesty.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-crew-honesty.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-crew-track-schema",
+      "name": "wai-crew-track-schema",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Crew Track Schema \u2014 per-advisor `track.jsonl` event vocabulary",
+      "solution": "Use wai-crew-track-schema (templates/commands/wai-crew-track-schema.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-crew-track-schema.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-dogfood",
+      "name": "wai-dogfood",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Dogfood",
+      "solution": "Use wai-dogfood (templates/commands/wai-dogfood.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-dogfood.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-foundation-gate",
+      "name": "wai-foundation-gate",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Foundation Gate",
+      "solution": "Use wai-foundation-gate (templates/commands/wai-foundation-gate.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-foundation-gate.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-foundation-reference",
+      "name": "wai-foundation-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Foundation \u2014 Reference",
+      "solution": "Use wai-foundation-reference (templates/commands/wai-foundation-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-foundation-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-foundation",
+      "name": "wai-foundation",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Foundation",
+      "solution": "Use wai-foundation (templates/commands/wai-foundation.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-foundation.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-full-slim",
+      "name": "wai-full-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Full Wakeup \u2014 Fast Path",
+      "solution": "Use wai-full-slim (templates/commands/wai-full-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-full-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-full",
+      "name": "wai-full",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Step 7: Display Briefing",
+      "solution": "Use wai-full (templates/commands/wai-full.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-full.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-harness-adopt",
+      "name": "wai-harness-adopt",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Wheelwright Harness \u2014 Adopt/Init Flow",
+      "solution": "Use wai-harness-adopt (templates/commands/wai-harness-adopt.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-harness-adopt.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-health",
+      "name": "wai-health",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Health \u2014 Spoke Drift Check + Remediation",
+      "solution": "Use wai-health (templates/commands/wai-health.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-health.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ide-setup-reference",
+      "name": "wai-ide-setup-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI IDE Setup \u2014 Reference",
+      "solution": "Use wai-ide-setup-reference (templates/commands/wai-ide-setup-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ide-setup-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ide-setup",
+      "name": "wai-ide-setup",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI IDE Setup",
+      "solution": "Use wai-ide-setup (templates/commands/wai-ide-setup.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ide-setup.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-improve-reference-slim",
+      "name": "wai-improve-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Improve Reference \u2014 Fast Path",
+      "solution": "Use wai-improve-reference-slim (templates/commands/wai-improve-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-improve-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-improve-reference",
+      "name": "wai-improve-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Improve \u2014 Reference",
+      "solution": "Use wai-improve-reference (templates/commands/wai-improve-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-improve-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-improve-slim",
+      "name": "wai-improve-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Improve \u2014 Fast Path",
+      "solution": "Use wai-improve-slim (templates/commands/wai-improve-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-improve-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-improve",
+      "name": "wai-improve",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Improve",
+      "solution": "Use wai-improve (templates/commands/wai-improve.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-improve.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-init-v2",
+      "name": "wai-init-v2",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Init (with Observations)",
+      "solution": "Use wai-init-v2 (templates/commands/wai-init-v2.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-init-v2.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-initiative",
+      "name": "wai-initiative",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Initiative + Theme Tracker",
+      "solution": "Use wai-initiative (templates/commands/wai-initiative.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-initiative.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-knowme",
+      "name": "wai-knowme",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI KnowMe \u2014 Spoke Self-Portrait",
+      "solution": "Use wai-knowme (templates/commands/wai-knowme.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-knowme.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-compat-reference",
+      "name": "wai-lug-compat-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Compat \u2014 Reference",
+      "solution": "Use wai-lug-compat-reference (templates/commands/wai-lug-compat-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-compat-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-compat",
+      "name": "wai-lug-compat",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Compatibility Advisor",
+      "solution": "Use wai-lug-compat (templates/commands/wai-lug-compat.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-compat.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-schema-reference-slim",
+      "name": "wai-lug-schema-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Schema Reference \u2014 Fast Path",
+      "solution": "Use wai-lug-schema-reference-slim (templates/commands/wai-lug-schema-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-schema-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-schema-reference",
+      "name": "wai-lug-schema-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Schema \u2014 Reference",
+      "solution": "Use wai-lug-schema-reference (templates/commands/wai-lug-schema-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-schema-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-schema-slim",
+      "name": "wai-lug-schema-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Schema \u2014 Fast Path",
+      "solution": "Use wai-lug-schema-slim (templates/commands/wai-lug-schema-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-schema-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-lug-schema",
+      "name": "wai-lug-schema",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Lug Schema",
+      "solution": "Use wai-lug-schema (templates/commands/wai-lug-schema.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-lug-schema.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-mode",
+      "name": "wai-mode",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Mode",
+      "solution": "Use wai-mode (templates/commands/wai-mode.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-mode.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-advisor-init",
+      "name": "wai-ozi-advisor-init",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "wai-ozi-advisor-init \u2014 Ozi Advisor Init Routine",
+      "solution": "Use wai-ozi-advisor-init (templates/commands/wai-ozi-advisor-init.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-advisor-init.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-autopilot-slim",
+      "name": "wai-ozi-autopilot-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Ozi Autopilot \u2014 Fast Path",
+      "solution": "Use wai-ozi-autopilot-slim (templates/commands/wai-ozi-autopilot-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-autopilot-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-autopilot",
+      "name": "wai-ozi-autopilot",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Ozi Autopilot \u2014 Spoke-Side Invocation Skill",
+      "solution": "Use wai-ozi-autopilot (templates/commands/wai-ozi-autopilot.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-autopilot.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-headless",
+      "name": "wai-ozi-headless",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Ozi Headless Runner",
+      "solution": "Use wai-ozi-headless (templates/commands/wai-ozi-headless.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-headless.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-review",
+      "name": "wai-ozi-review",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "wai-ozi-review",
+      "solution": "Use wai-ozi-review (templates/commands/wai-ozi-review.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-review.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-work-queue-monitor-reference-slim",
+      "name": "wai-ozi-work-queue-monitor-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Ozi Work Queue Monitor \u2014 Reference (Fast Path)",
+      "solution": "Use wai-ozi-work-queue-monitor-reference-slim (templates/commands/wai-ozi-work-queue-monitor-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-work-queue-monitor-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-work-queue-monitor-reference",
+      "name": "wai-ozi-work-queue-monitor-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Ozi Work Queue Monitor \u2014 Reference",
+      "solution": "Use wai-ozi-work-queue-monitor-reference (templates/commands/wai-ozi-work-queue-monitor-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-work-queue-monitor-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-work-queue-monitor-slim",
+      "name": "wai-ozi-work-queue-monitor-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Ozi Work Queue Monitor \u2014 Fast Path",
+      "solution": "Use wai-ozi-work-queue-monitor-slim (templates/commands/wai-ozi-work-queue-monitor-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-work-queue-monitor-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-ozi-work-queue-monitor",
+      "name": "wai-ozi-work-queue-monitor",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Skill: Ozi Work Queue Monitor",
+      "solution": "Use wai-ozi-work-queue-monitor (templates/commands/wai-ozi-work-queue-monitor.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-ozi-work-queue-monitor.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-pattern",
+      "name": "wai-pattern",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Pattern \u2014 The Work Contract",
+      "solution": "Use wai-pattern (templates/commands/wai-pattern.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-pattern.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-plan-validation",
+      "name": "wai-plan-validation",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Plan Validation",
+      "solution": "Use wai-plan-validation (templates/commands/wai-plan-validation.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-plan-validation.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-principles-reference",
+      "name": "wai-principles-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Principles \u2014 Reference",
+      "solution": "Use wai-principles-reference (templates/commands/wai-principles-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-principles-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-principles",
+      "name": "wai-principles",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Principles",
+      "solution": "Use wai-principles (templates/commands/wai-principles.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-principles.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-reference-slim",
+      "name": "wai-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Wakeup Protocol \u2014 Reference (Fast Path)",
+      "solution": "Use wai-reference-slim (templates/commands/wai-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-reference",
+      "name": "wai-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Wakeup Protocol \u2014 Reference",
+      "solution": "Use wai-reference (templates/commands/wai-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-rules",
+      "name": "wai-rules",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Rules",
+      "solution": "Use wai-rules (templates/commands/wai-rules.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-rules.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-savepoint",
+      "name": "wai-savepoint",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Savepoint",
+      "solution": "Use wai-savepoint (templates/commands/wai-savepoint.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-savepoint.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-signal-capture",
+      "name": "wai-signal-capture",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Signal Capture",
+      "solution": "Use wai-signal-capture (templates/commands/wai-signal-capture.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-signal-capture.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-slim",
+      "name": "wai-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Wakeup Protocol \u2014 Fast Path",
+      "solution": "Use wai-slim (templates/commands/wai-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-status",
+      "name": "wai-status",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Status",
+      "solution": "Use wai-status (templates/commands/wai-status.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-status.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-stewardship-framework",
+      "name": "wai-stewardship-framework",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Stewardship Framework",
+      "solution": "Use wai-stewardship-framework (templates/commands/wai-stewardship-framework.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-stewardship-framework.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-stewardship-guard",
+      "name": "wai-stewardship-guard",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Stewardship Guard",
+      "solution": "Use wai-stewardship-guard (templates/commands/wai-stewardship-guard.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-stewardship-guard.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-strategic-debt-log",
+      "name": "wai-strategic-debt-log",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Strategic Debt Log \u2014 deferred design cautions",
+      "solution": "Use wai-strategic-debt-log (templates/commands/wai-strategic-debt-log.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-strategic-debt-log.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-sync-v2",
+      "name": "wai-sync-v2",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Sync (with Observations)",
+      "solution": "Use wai-sync-v2 (templates/commands/wai-sync-v2.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-sync-v2.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-task-complete",
+      "name": "wai-task-complete",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Task Complete",
+      "solution": "Use wai-task-complete (templates/commands/wai-task-complete.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-task-complete.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tastegraph-export",
+      "name": "wai-tastegraph-export",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI TasteGraph Export",
+      "solution": "Use wai-tastegraph-export (templates/commands/wai-tastegraph-export.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tastegraph-export.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-test",
+      "name": "wai-test",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Test \u2014 Corpus Test Runner",
+      "solution": "Use wai-test (templates/commands/wai-test.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-test.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-time",
+      "name": "wai-time",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Time",
+      "solution": "Use wai-time (templates/commands/wai-time.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-time.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tool-advisor-reference-slim",
+      "name": "wai-tool-advisor-reference-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Tool Advisor Reference \u2014 Fast Path",
+      "solution": "Use wai-tool-advisor-reference-slim (templates/commands/wai-tool-advisor-reference-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tool-advisor-reference-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tool-advisor-reference",
+      "name": "wai-tool-advisor-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Tool Advisor Reference",
+      "solution": "Use wai-tool-advisor-reference (templates/commands/wai-tool-advisor-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tool-advisor-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tool-advisor",
+      "name": "wai-tool-advisor",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "wai tool-advisor",
+      "solution": "Use wai-tool-advisor (templates/commands/wai-tool-advisor.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tool-advisor.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tool-maximizer-gemini-reference",
+      "name": "wai-tool-maximizer-gemini-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Tool Maximizer: Gemini \u2014 Reference",
+      "solution": "Use wai-tool-maximizer-gemini-reference (templates/commands/wai-tool-maximizer-gemini-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tool-maximizer-gemini-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-tool-maximizer-gemini",
+      "name": "wai-tool-maximizer-gemini",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Tool Maximizer: Gemini \u2014 Redirected",
+      "solution": "Use wai-tool-maximizer-gemini (templates/commands/wai-tool-maximizer-gemini.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-tool-maximizer-gemini.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-generate-reference",
+      "name": "wai-track-generate-reference",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track Generate \u2014 Reference",
+      "solution": "Use wai-track-generate-reference (templates/commands/wai-track-generate-reference.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-generate-reference.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-generate",
+      "name": "wai-track-generate",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track Generate",
+      "solution": "Use wai-track-generate (templates/commands/wai-track-generate.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-generate.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-rebuild-slim",
+      "name": "wai-track-rebuild-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track Rebuild \u2014 Fast Path",
+      "solution": "Use wai-track-rebuild-slim (templates/commands/wai-track-rebuild-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-rebuild-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-rebuild",
+      "name": "wai-track-rebuild",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track Rebuild",
+      "solution": "Use wai-track-rebuild (templates/commands/wai-track-rebuild.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-rebuild.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-review-slim",
+      "name": "wai-track-review-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track Review (Historian) \u2014 Fast Path",
+      "solution": "Use wai-track-review-slim (templates/commands/wai-track-review-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-review-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track-review",
+      "name": "wai-track-review",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "wai-track-review",
+      "solution": "Use wai-track-review (templates/commands/wai-track-review.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track-review.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-track",
+      "name": "wai-track",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Track v1.0.2",
+      "solution": "Use wai-track (templates/commands/wai-track.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-track.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-upgrade-report-intake",
+      "name": "wai-upgrade-report-intake",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Upgrade Report Intake",
+      "solution": "Use wai-upgrade-report-intake (templates/commands/wai-upgrade-report-intake.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-upgrade-report-intake.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-wayfinder-slim",
+      "name": "wai-wayfinder-slim",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Wayfinder \u2014 Fast Path",
+      "solution": "Use wai-wayfinder-slim (templates/commands/wai-wayfinder-slim.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-wayfinder-slim.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai-wayfinder",
+      "name": "wai-wayfinder",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "Wayfinder \u2014 Scout Expedition Skill",
+      "solution": "Use wai-wayfinder (templates/commands/wai-wayfinder.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai-wayfinder.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    },
+    {
+      "id": "cap-wai",
+      "name": "wai",
+      "kind": "command",
+      "tier": "awareness",
+      "situation": "WAI Wakeup Protocol",
+      "solution": "Use wai (templates/commands/wai.md).",
+      "owner_advisor": null,
+      "file_paths": [
+        "templates/commands/wai.md"
+      ],
+      "symbol_refs": [],
+      "verification_ref": null,
+      "requires_tools": [],
+      "source": "spoke",
+      "status": "present",
+      "auto_generated": true
+    }
+  ]
+}

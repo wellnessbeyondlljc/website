@@ -1,0 +1,125 @@
+{
+  "id": "spec-session-wakeup-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 9,
+  "subject": {
+    "kind": "workflow",
+    "id": "session-wakeup",
+    "label": "Session Wakeup and Briefing"
+  },
+  "title": "Session Wakeup and Briefing -- structured context load at session start",
+  "what": "At every session start, the WAI wakeup protocol loads pre-computed context (BRIEF.md and wakeup-brief.json), scans for open lugs and pending signals, checks the teachings inbox, and presents a prioritized briefing. The wakeup brief is a pre-computed JSON snapshot generated at the previous closeout by generate_wakeup_brief.py.",
+  "why": "Without structured wakeup, an agent starts cold every session with no awareness of outstanding work, recent changes, or active signals. Structured wakeup compresses context loading from 20+ file reads to a single brief load.",
+  "audience": [
+    "agent"
+  ],
+  "use_cases": [
+    {
+      "title": "Fast-path wakeup from fresh brief",
+      "trigger": "wakeup-brief.json is fresh (generated at last closeout, no new signals)",
+      "outcome": "Agent loads brief directly, skips integrity/expediter steps, has full context quickly",
+      "persona": "agent"
+    },
+    {
+      "title": "Full wakeup with pending signals",
+      "trigger": "Signals in WAI-Spoke/signals/inbound/",
+      "outcome": "Agent applies signals first, then generates brief, presents full context including signal summary",
+      "persona": "agent"
+    },
+    {
+      "title": "Recovery from interrupted session",
+      "trigger": "Prev session marked INTERRUPTED in brief",
+      "outcome": "Wakeup presents recovery prompt showing last known state",
+      "persona": "agent"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Brief-first, read second",
+      "description": "Always load the pre-computed brief before reading individual files. The brief is cheaper than 10 separate reads."
+    },
+    {
+      "name": "Wakeup convergence",
+      "description": "Finish the full WAI Point briefing before asking for approval on teachings or side actions."
+    }
+  ],
+  "how": {
+    "trigger": "Session start (automated via user-prompt-submit.sh hook) or manual /wai invocation",
+    "steps_summary": [
+      "1. Load wakeup-brief.json - check if FRESH or STALE",
+      "2. If FRESH: fast-path (skip integrity, expediter, schedule checks)",
+      "3. If STALE: full wakeup (run integrity check, expediter, generate new brief)",
+      "4. Scan signals/inbound/ - apply any pending signals",
+      "5. Check seed/ingest/ for new teachings - adopt safe ones",
+      "6. Scan bytype/*/open/ and bytype/*/in_progress/ for active work",
+      "7. Present WAI Point briefing: epics, active work, signals, historian advice, next actions"
+    ],
+    "constraints": [
+      "Never guess context % - use /context output or state unknown",
+      "Finish briefing before acting on any item in the brief",
+      "Wakeup is read-only except for signal/teaching adoption"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Every session start",
+      "Manual /wai invocation"
+    ],
+    "not_when": [],
+    "frequency": "Once per session"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/wakeup-brief.json - pre-computed brief",
+      "WAI-Spoke/signals/inbound/ - pending signals",
+      "WAI-Spoke/seed/ingest/ - pending teachings",
+      "WAI-Spoke/lugs/bytype/*/open/ - open work"
+    ],
+    "outputs": [
+      "WAI Point briefing presented to agent",
+      "Signals applied and archived",
+      "Teachings adopted if safe"
+    ],
+    "state_changes": [
+      "Signals: inbound/ to processed/",
+      "Teachings: ingest/ to processed/",
+      "Session track: session_start event appended"
+    ]
+  },
+  "constraints": [
+    "Wakeup brief generation happens at closeout, not at wakeup start"
+  ],
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "medium",
+    "open_questions": [
+      "What triggers wakeup-brief.json to be marked STALE?"
+    ]
+  },
+  "subject_id": "session-wakeup",
+  "body": "The WAI wakeup protocol runs at every session start and produces the WAI Point briefing — a structured summary of project health, outstanding work, pending signals, and next actions. Three execution paths exist: FAST PATH (0 tool calls) when a fresh wakeup-brief.json is present in context via the session-start hook; BRIEF PATH (1 tool call) when wakeup-brief.json exists on disk but was not injected into context; and FULL PROTOCOL when neither condition holds. The fast path is the common case — session-start.sh pre-computes all wakeup data and injects it as a <wai-session-init> block before the first user prompt, enabling zero-read-tool wakeup. The briefing banner displays: session number and name, project version, active epic counts, open lug summary, expediter queue (ready/refinement counts), Navigator model recommendation, pending teachings count, hub signals count, tool advisor audit status, hook drift warnings, context feed staleness, and historian advice. After the banner, the agent asks for a vibe (build/fix/think/grind/ship/refine) unless SESSION_INTENT was pre-set in the session-init block. Intent routing shortcuts apply: savepoint resumes the pending savepoint lug, implement shows top-3 ROI lugs, refinement shows needs_refinement items, closeout invokes wai-closeout directly. The work queue interactive mode displays top-3 ready items with [W]ork / [R]eview / [A]uto-chain / [P]arallel dispatch options. A savepoint intercept fires when WAI-State.json._savepoint.status=pending, offering [C]ontinue (load only the savepoint lug, ~5k tokens) or [F]ull wakeup. Wakeup is read-only except for signal application and teaching adoption. The briefing must be completed in full before acting on any item in it.",
+  "done_when": [
+    "When wakeup-brief.json is fresh in context, the agent displays the WAI Point banner with zero Read tool calls",
+    "When SESSION_INTENT=savepoint and savepoint_resumed=true in session-intent.json, the agent skips the prompt and displays the resume note automatically",
+    "The banner includes Navigator recommendation line when recommendations-current.json is present and valid_through is in the future",
+    "When _savepoint.status=pending in WAI-State.json and SESSION_INTENT is absent, the agent presents the C/F intercept before asking for vibe",
+    "Hub signals count in the banner matches the number of unread files in {hub_path}/WAI-Hub/signals/inbox/ after boomerang and dedup suppression"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-session-track-v1",
+    "spec-teaching-pipeline-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

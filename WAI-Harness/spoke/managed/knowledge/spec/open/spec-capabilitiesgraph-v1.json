@@ -1,0 +1,146 @@
+{
+  "id": "spec-capabilitiesgraph-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T14:30:00Z",
+  "updated_at": "2026-06-09T14:56:45.262085+00:00",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260609-0713.mariov96",
+  "subject": "CapabilitiesGraph (CG) \u2014 the POLICY graph of the three-circle model: every capability a spoke is expected to have, tiered mandated/recommended/awareness, inherited hub\u2192group\u2192spoke\u2192local with mandated behavior un-overridable; the bar the adopt/upgrade gap report measures against",
+  "title": "CapabilitiesGraph v1 \u2014 Mandated/Recommended/Awareness Capability Policy Graph (Stream H, AC16)",
+  "situation": "Harness v4's object model names three circles: OPERATION (lugs/initiatives), POLICY (specs + CapabilitiesGraph), DOCUMENTATION (teachings/KB). Two of the three exist as real artifacts; POLICY's CapabilitiesGraph does not. Today a spoke has no machine-readable statement of WHICH capabilities it is expected to have, which are obligatory versus optional, who owns each, or where each is implemented. That knowledge is scattered: runnable commands live in a per-spoke capabilities-registry prototype (lug-capabilities-registry-spec-v1, runner-executed in track-prompt-lab + hub), resource/provider access lives in ToolGraph (spec-toolgraph-v1), behaviors live implicitly in specs and skills, and the storage layer (spec-storage-layer-v1) already declares a cg_entries table + cg_embeddings vector index with NO spec defining what fills them or how they resolve across the inheritance chain. Without the CG there is no bar: the adopt scenario (AC31) promises a 'gap report vs the CG capability bar' and the upgrade/coverage warmup (AC33, AC46 capability-missing gap) both reference a capability bar that is currently undefined. The value-prop demo (applying WheelWright to a non-WheelWright repo \u2192 gap report \u2192 roadmap) cannot produce a gap report without the bar the gap is measured against.",
+  "why": "The CG is the single source of truth for 'what should this wheel be able to do, and how strongly is that required.' It closes four gaps at once: (1) it defines the obligation bar so the adopt/upgrade gap report (AC31/AC46) becomes computable rather than hand-waved \u2014 a missing mandated capability is a typed capability-missing gap, a missing recommended one is a soft gap, an awareness item is informational; (2) it makes inheritance explicit and enforceable \u2014 the hub publishes the canonical superset, spokes inherit, and a spoke cannot silently weaken a mandated hub capability (the schema hard-blocks local overrides of mandated CG namespaces; ties to spec-guidance-language-v1 guardrails: 'a spoke cannot weaken a mandated hub guardrail'); (3) it gives every registered capability a verification anchor \u2014 each capability maps to its implementing file(s)/symbol(s) and its owner advisor, so certification_score (spec-verification-quality-v1) can be computed per capability and a loose/uncovered capability surfaces in the wakeup Certification/Coverage section rather than hiding; (4) it gives the policy circle a queryable home (SQLite cg_entries + vector cg_embeddings already speced in storage-layer) so an agent can ask 'what solutions exist for this situation' semantically instead of grepping skills. The CG generalizes the capabilities-registry prototype: a runnable command is one KIND of capability (kind=command), but the CG also registers behaviors, flows, advisors, and skills as capabilities with the same tiering and inheritance.",
+  "audience": [
+    "Ozi \u2014 reads the resolved spoke CG at session open to know which mandated capabilities are present/absent; will not report a spoke green while a mandated capability is missing or uncovered",
+    "Historian + Coverage/QA (Jordy) \u2014 the survey (AC31) reports findings AGAINST the CG bar; a mandated capability with no implementing file or no passing test is a gap surfaced by these advisors",
+    "Hygiene (Hank) \u2014 uses CG owner_advisor + file_paths to know the home of each capability when relocating misplaced files (AC34)",
+    "Migration engine (v4_migrate.py) \u2014 the adopt/upgrade gap report (AC31) is computed by diffing the resolved CG bar against what the survey actually found in the target repo",
+    "Hub Trainer \u2014 owns the hub canonical CG superset; canonicalizes broadly-useful capabilities up from spoke contributions and publishes mandated/recommended tiers fleet-wide (AC23, spec-trainer-advisor-v1)",
+    "Basher \u2014 distributes the managed CG (own-copy, MANIFEST-MD5 versioned) to every spoke; applies hub CG updates to managed/ on green (AC43)",
+    "Navigator \u2014 cross-reads CG owner/tier when a capability requires a tool, joining CG to ToolGraph access_matrix",
+    "capability_runner \u2014 resolves runnable capabilities (kind=command) from the CG instead of a standalone capabilities.json (supersedes lug-capabilities-registry-spec-v1 prototype on the runnable-command axis)"
+  ],
+  "core_principle": "The CapabilitiesGraph is POLICY, not inventory. It states what a wheel is EXPECTED to be able to do and how strongly that is required (tier), inherited from the fleet and un-weakenable where mandated. The implementing artifacts (files, commands, advisors) are referenced BY a capability entry, not defined by it \u2014 a capability can be present-and-tight, present-and-loose (implemented but uncertified), or absent (a gap). Absence of a mandated capability is a defect; absence of an awareness capability is nothing.",
+  "tiers": {
+    "mandated": "The spoke MUST have this capability. A missing or uncertified mandated capability is a capability-missing/test-null gap (spec-verification-quality-v1 gap_taxonomy) that blocks a green certification and appears on the Attention surface. Mandated entries are owned by the hub (source=hub) and are un-overridable on the behavior axis: a spoke may extend (addendum) but a local override of a mandated namespace is schema-hard-blocked (design \u00a715 'schema hard-block on local overrides of mandated CG namespaces'). Behavior axis: mandated CG wins regardless of source.",
+    "recommended": "The spoke SHOULD have this capability. Absence is a soft gap \u2014 surfaced in the gap report and coverage review but does not block green certification on its own. A spoke may decline a recommended capability with a logged decision (a decision event + a CG-local entry status=declined with rationale); silent absence is still surfaced as a soft gap.",
+    "awareness": "Informational only \u2014 a capability that exists somewhere in the fleet that this spoke may want to know about. No gap is generated by its absence. Used to seed discovery (the spoke can promote an awareness entry to a local recommended/adopted capability with a decision)."
+  },
+  "schema": {
+    "files": {
+      "hub_canonical": "WAI-Harness/hub/managed/capabilities-graph-hub.json \u2014 the canonical SUPERSET; every mandated + recommended capability the fleet defines. Owned by the hub Trainer; distributed by Basher.",
+      "spoke_managed": "WAI-Harness/spoke/managed/capabilities-graph.json \u2014 the spoke's distributed copy of the inherited (hub\u2192group) entries; agent-read-only, replaced on Basher update (own-copy, MANIFEST-MD5 versioned).",
+      "spoke_local": "WAI-Harness/spoke/local/capabilities-graph-local.json \u2014 spoke-owned addenda + config-axis overrides + declined/adopted decisions; never overwritten by Basher.",
+      "resolved_runtime": "WAI-Harness/spoke/managed/runtime/capabilities-effective.json \u2014 the materialized resolution of the full chain, written by the resolver; the artifact agents READ. Carries an inheritance trace per entry (which layer won, on which axis).",
+      "sqlite_mirror": "harness.db cg_entries table + cg_embeddings vector index (spec-storage-layer-v1) \u2014 the resolved entries are indexed here for FTS5 + semantic lookup. The JSON files are the durable source; the DB is the query index."
+    },
+    "capability_entry": {
+      "id": "string \u2014 stable kebab-case identifier, the merge key across layers (e.g. 'cap-closeout-ceremony', 'cmd-track-prompt-sync', 'cap-test-at-birth-gate')",
+      "name": "string \u2014 human label",
+      "kind": "string CHECK(kind IN ('command','behavior','flow','advisor','skill','gate')) \u2014 command=runnable script (the capabilities-registry axis); behavior=an enforced rule/standard; flow=a defined multi-step workflow (closeout, warmup); advisor=a required advisor presence; skill=a required skill/ceremony; gate=a required verification gate",
+      "tier": "string CHECK(tier IN ('mandated','recommended','awareness'))",
+      "situation": "string \u2014 the triggering scenario this capability addresses (searchable via cg_embeddings); the observable condition, NOT a summary (spec-object-quality-v4-v1)",
+      "solution": "string \u2014 how the capability is fulfilled: what behavior/command/flow satisfies it, in enough detail that a cold reader knows what 'present' means",
+      "owner_advisor": "string \u2014 the advisor that owns this capability's health (maps to the advisor whose patterns/ + analysis_trigger watch it); null only for human-owned capabilities",
+      "file_paths": "array<string> \u2014 complete relative-from-root paths of the implementing artifact(s); the home-map home of this capability (used by Hygiene AC34). Empty = capability is absent here (a gap if tier=mandated).",
+      "symbol_refs": "array<string> \u2014 GitNexus symbol names that implement this capability (joins to gitnexus_refs, spec-storage-layer-v1)",
+      "verification_ref": "string|null \u2014 the lug id / flow test / spec test that certifies this capability is present-and-tight; null means present-but-loose (uncovered) \u2192 surfaced as a test-null gap",
+      "requires_tools": "array<string> \u2014 tool_ids that must be in the spoke ToolGraph access_matrix for this capability to be operable (joins to spec-toolgraph-v1; a mandated capability requiring an absent tool is a blocking gap)",
+      "source": "string CHECK(source IN ('hub','group','spoke','local')) \u2014 which layer authored this entry; drives inheritance resolution",
+      "status": "string CHECK(status IN ('present','absent','loose','declined')) \u2014 resolved state on THIS spoke: present=implemented+certified; loose=implemented+uncertified; absent=not implemented; declined=recommended capability explicitly declined with rationale",
+      "decision_rationale": "string|null \u2014 required when status=declined or when a local override is recorded (config axis); the why, in full (spec-object-quality-v4-v1 mandatory field)",
+      "command": "string|null \u2014 for kind=command: the shell command with {hub_path}/{spoke_path} substitution tokens (carries the capabilities-registry runnable axis); null for non-command kinds",
+      "run": "object|null \u2014 for kind=command: {trigger: on-entry|on-demand|scheduled|on-event, auto: bool, run_schedule, run_after, event_triggers[]} (reuses the capabilities-registry prototype run grammar)",
+      "valid_until": "string|null \u2014 YYYY-MM-DD; for kind=command capabilities with an expiry, past which the resolver files a renewal lug (carried from the capabilities-registry prototype)",
+      "introduced_at": "ISO-8601",
+      "updated_at": "ISO-8601"
+    }
+  },
+  "inheritance": {
+    "chain": "hub \u2192 group \u2192 spoke(managed) \u2192 local \u2014 the universal v4 stacking order (design \u00a73). The resolver merges by capability id; later layers addend (new ids) or override (same id).",
+    "axes": {
+      "behavior_axis": "mandated CG wins regardless of source. A local layer CANNOT override a hub-mandated capability's tier, situation, solution, or verification_ref \u2014 the resolver schema-hard-blocks it and emits a decision event flagging the attempted weakening (ties to AC45 guardrails: a spoke cannot weaken a mandated hub guardrail).",
+      "config_axis": "local wins. A spoke may override the config-shaped fields of a non-mandated capability (run.schedule, run.auto, owner_advisor assignment within the spoke) and may addend new local capabilities. Config overrides require a decision_rationale and emit a decision event."
+    },
+    "trace": "Every resolved entry in capabilities-effective.json carries an inheritance_trace: [{layer, axis, action: inherited|addended|overridden|blocked, from_source}] so the resolved layer is OBSERVABLE \u2014 you can always see which layer won on which axis (design \u00a715: 'add inheritance-trace observability \u2014 you can see the resolved layer'). A blocked local override is recorded in the trace AND emitted as a decision event, never silently dropped.",
+    "superset_rule": "hub CG is a strict superset of every spoke's mandated+recommended entries: a spoke may NOT introduce a new mandated capability locally (mandated is a fleet decision, canonicalized by the Trainer AC23). A spoke proposing a new mandated capability bubbles it UP to the hub as a change-lug; until canonicalized it lives local as recommended."
+  },
+  "gap_computation": {
+    "principle": "The CG bar is what the adopt/upgrade gap report (AC31, AC46 capability-missing) is computed against. A gap is the diff between the resolved CG bar and what the survey actually found.",
+    "rules": [
+      "mandated + status in (absent, loose) \u2192 a BLOCKING gap (capability-missing if absent, test-null if loose); blocks green certification; appears on Attention",
+      "recommended + status=absent (and not declined) \u2192 a SOFT gap; appears in the gap report + coverage review; does not block green alone",
+      "recommended + status=declined \u2192 not a gap (decision logged); the decline rationale is shown in the report for transparency",
+      "awareness + status=absent \u2192 never a gap",
+      "mandated + requires_tools not all in ToolGraph access_matrix \u2192 a BLOCKING gap (capability inoperable for lack of a tool); surfaced with the missing tool_id named",
+      "the adopt scenario emits, per the value-prop, BOTH the gap list (above) AND a prioritized alignment roadmap (initiatives + lugs to close the mandated/recommended gaps) \u2014 the gap report is not just a list, it is actionable (project-wheelwright-value-prop)"
+    ]
+  },
+  "registration_rule": "Every spoke command, skill/ceremony, defined flow, required advisor, and verification gate is registered as a CG entry (AC16 'every spoke command registered in CG'). Registration is enforced at two points: (1) the capabilities-registry runner (kind=command) reads its runnable set FROM the CG (mandated+recommended commands), not a standalone capabilities.json \u2014 this supersedes lug-capabilities-registry-spec-v1's WAI-Spoke/capabilities.json on the runnable axis; (2) the migration/warmup completeness audit (AC46) checks that every skill in templates/commands/ and every flow definition has a matching CG entry, flagging unregistered capabilities as decision-undocumented gaps. An unregistered command is invisible to the policy circle and is itself a gap.",
+  "constraints": [
+    "A local layer may NEVER override the behavior-axis fields (tier/situation/solution/verification_ref) of a hub-mandated capability \u2014 the resolver hard-blocks and emits a decision event (design \u00a715; AC45)",
+    "A spoke may NOT author a new mandated capability locally \u2014 mandated is a fleet decision canonicalized by the hub Trainer (AC23); local proposals start as recommended and bubble up as change-lugs",
+    "Every mandated capability MUST carry file_paths (its home) and a verification_ref (its certification anchor) at the hub canonical layer; a hub mandated entry with null verification_ref fails the hub-side cold-reader gate",
+    "capabilities-effective.json is RESOLVED output \u2014 agents read it, never hand-edit it; edits go to spoke_local or (for mandated) up to the hub",
+    "Every resolved entry carries an inheritance_trace; a resolution with no trace is invalid (observability is mandatory, not optional)",
+    "status=declined requires a decision_rationale and emits a decision event; a recommended capability cannot be silently absent without surfacing as a soft gap",
+    "kind=command entries reuse the capabilities-registry run grammar exactly (trigger/auto/run_schedule/run_after/event_triggers, valid_until\u2192renewal lug); no second command vocabulary",
+    "requires_tools entries must reference tool_ids that exist in spec-toolgraph-v1 vocabulary; the CG never invents a tool the ToolGraph doesn't know",
+    "CG entries are dogfooded into harness.db cg_entries (spec-storage-layer-v1); the JSON files are the durable source of truth and the DB is the rebuildable index \u2014 never the reverse"
+  ],
+  "tests": [
+    "Resolution: hub CG with 3 mandated + 2 recommended entries, spoke local adds 1 local recommended \u2192 capabilities-effective.json has 6 entries with correct source attribution and an inheritance_trace per entry",
+    "Behavior-axis block: spoke_local attempts to override a hub-mandated entry's tier from mandated\u2192recommended \u2192 resolver REJECTS the override, keeps mandated, records action=blocked in the trace, and emits a type=decision event naming the attempted weakening",
+    "Config-axis win: spoke_local overrides a recommended command's run.schedule with a decision_rationale \u2192 resolved entry shows the local schedule, action=overridden, axis=config in the trace",
+    "Mandated-absent gap: a mandated capability with file_paths=[] (not implemented on this spoke) \u2192 gap_computation yields a BLOCKING capability-missing gap; Ozi does not report green",
+    "Mandated-loose gap: a mandated capability implemented (file_paths set) but verification_ref=null \u2192 a BLOCKING test-null gap surfaced in the Certification/Coverage section",
+    "Recommended-declined: a recommended capability with status=declined + decision_rationale \u2192 NOT counted as a gap; the rationale appears in the gap report",
+    "Recommended-absent soft gap: a recommended capability absent and not declined \u2192 a SOFT gap in the report; does NOT block green certification",
+    "Tool-gated capability: a mandated capability with requires_tools=['supabase-rest'] while the spoke ToolGraph access_matrix lacks supabase-rest \u2192 a BLOCKING gap naming the missing tool_id",
+    "Superset enforcement: spoke_local declares a NEW entry with tier=mandated \u2192 resolver downgrades it to recommended (local mandated not permitted) and emits a decision event instructing it be bubbled up as a change-lug",
+    "Command registration: capability_runner reads kind=command mandated+recommended entries from capabilities-effective.json and runs the on-entry ones; a runnable command present in templates/commands/ but absent from the CG is flagged by the completeness audit as a decision-undocumented gap",
+    "Adopt gap report: a synthetic non-WheelWright repo survey finds 2 of 5 mandated capabilities \u2192 gap report lists 3 blocking gaps AND a prioritized alignment roadmap with initiatives+lugs to close them",
+    "Inheritance trace observability: every entry in capabilities-effective.json has a non-empty inheritance_trace; an entry with no trace fails validation",
+    "SQLite mirror: resolved CG entries materialize into harness.db cg_entries with source preserved; a semantic query (cg_embeddings) for a novel situation returns the closest capability by cosine similarity (degrades to FTS5 if no embedder)"
+  ],
+  "impl_lugs": [
+    "impl-capabilitiesgraph-evaluator-v1"
+  ],
+  "health": {
+    "test_coverage": "mechanical \u2014 tools/resolve_capabilities_graph.py + compute_capability_gaps.py; tests/test_capabilitiesgraph.py (12 cases); seed hub CG validated; full suite green",
+    "last_impl_lug_completed": "2026-06-09T14:56:45.262085+00:00",
+    "spec_drift_risk": "low \u2014 initial spec",
+    "resolved_decisions": [
+      "CG is the POLICY circle artifact; it references implementing artifacts rather than containing them (S45)",
+      "CG generalizes lug-capabilities-registry-spec-v1: a runnable command is kind=command; the prototype's run grammar + valid_until\u2192renewal-lug behavior is carried verbatim; WAI-Spoke/capabilities.json is superseded by the CG on the runnable axis (S45)",
+      "Mandated is a fleet decision owned by the hub Trainer; spokes cannot author local mandated capabilities \u2014 they bubble up as change-lugs (ties AC23) (S45)",
+      "Behavior-axis mandated-wins + config-axis local-wins + inheritance-trace observability + schema-hard-block on local override of mandated namespaces \u2014 adopted directly from design \u00a73/\u00a715 (S45)"
+    ],
+    "open_questions": [
+      "Group layer: is 'group' (between hub and spoke) materialized now or deferred until a group CG actually exists? (proposed: schema supports it; resolver treats group as optional/empty until a group CG is published)",
+      "Renewal-lug emission for expired kind=command capabilities: resolver-emitted vs capability_runner-emitted, now that the runner reads from the CG? (proposed: capability_runner owns renewal, matching the prototype's proven behavior)",
+      "Should awareness entries propagate to every spoke (fleet discovery feed) or only on request? (proposed: hub publishes an awareness digest; spokes pull, do not auto-materialize)"
+    ]
+  },
+  "related_specs": [
+    "spec-storage-layer-v1",
+    "spec-toolgraph-v1",
+    "spec-verification-quality-v1",
+    "spec-object-quality-v4-v1",
+    "spec-v4-migration-home-map-v1",
+    "spec-guidance-language-v1",
+    "spec-trainer-advisor-v1",
+    "spec-hygiene-advisor-v1",
+    "lug-capabilities-registry-spec-v1"
+  ],
+  "perceive": "Read this spec fully. Read spec-storage-layer-v1 cg_entries/cg_embeddings table definitions (the DB mirror this resolves into). Read spec-toolgraph-v1 access_matrix (the tool gate requires_tools joins to). Read lug-capabilities-registry-spec-v1 + the live prototype at hub/tools/capability_runner.py + hub/WAI-Hub/reference/capabilities-base.json (the runnable-command axis this generalizes). Read spec-v4-migration-home-map-v1 warmup_sequence + completeness_audit (where the gap report consumes the CG bar). Confirm WAI-Harness/hub/managed/ and WAI-Harness/spoke/managed/ exist (MyWheel skeleton, phase-1).",
+  "execute": "1. Create WAI-Harness/hub/managed/capabilities-graph-hub.json seeded with the v4 mandated capabilities the fleet already requires (closeout ceremony, track-per-turn, test-at-birth gate, inbox-review-first, savepoint, manifest-integrity) + recommended (tool-advisor audit, savepoint-on-context-red). 2. Create the resolver tools/resolve_capabilities_graph.py \u2014 merges hub\u2192group\u2192spoke(managed)\u2192local by id, enforces behavior-axis mandated-wins + config-axis local-wins, schema-hard-blocks mandated namespace overrides (emit decision event), writes WAI-Harness/spoke/managed/runtime/capabilities-effective.json with an inheritance_trace per entry. 3. Create tools/compute_capability_gaps.py \u2014 diffs the resolved CG bar against a survey result, emits the typed gap list + alignment roadmap (consumed by v4_migrate.py adopt/upgrade). 4. Point capability_runner at capabilities-effective.json (kind=command entries) and retire the standalone WAI-Spoke/capabilities.json read path with a migration note. 5. Materialize resolved entries into harness.db cg_entries (spec-storage-layer-v1). 6. Register every templates/commands/ skill + every flow-definition as a CG entry (completeness audit pass). 7. Deliver impl lugs for each step to own incoming/. 8. Publish a teaching announcing the CG + the capabilities.json\u2192CG migration path (no silent retirement of the prototype's file).",
+  "verify": "1. python3 tools/resolve_capabilities_graph.py produces capabilities-effective.json; every entry has an inheritance_trace. 2. Behavior-axis block test passes (local mandated-override rejected + decision event). 3. compute_capability_gaps.py against a synthetic survey yields the correct blocking/soft/declined classification + a roadmap. 4. capability_runner runs on-entry commands sourced from the CG. 5. cg_entries populated in harness.db; semantic query returns the closest capability. 6. All tests[] pass.",
+  "execution_mode": "impl",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

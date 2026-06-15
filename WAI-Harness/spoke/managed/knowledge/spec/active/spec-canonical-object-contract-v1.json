@@ -1,0 +1,236 @@
+{
+  "id": "spec-canonical-object-contract-v1",
+  "type": "spec",
+  "status": "active",
+  "subject_id": "canonical-object-contract",
+  "title": "Canonical Object Contract: behavior, completeness, cross-linking, and flow expectations enforced across all WAI objects",
+  "version": "1.0.0",
+  "created_at": "2026-06-03T19:02:08Z",
+  "updated_at": "2026-06-03T21:10:26.327406+00:00",
+  "authored_by": "track-prompt-lab session-20260603-0053",
+  "routed_to": "LOCAL",
+  "summary": "Single source of truth for what makes a WAI object canonical. A validator (tools/validate_canonical.py) reads this contract and enforces it; harness gates (lug creation, autopilot grooming, closeout) call the validator so the expectations are maintained as the harness evolves rather than re-derived per session. Four dimensions: BEHAVIOR (declares enough to act on without conversation context), COMPLETENESS (required fields present and non-empty), CROSS-LINKING (references resolve to real objects), FLOW (lifecycle and location integrity).",
+  "dimensions": {
+    "behavior": "An object must declare enough that ANY agent can act on it without the authoring conversation. Lugs carry PEV + routing + model_fit; specs carry subject_id + lifecycle state; teachings carry safe_to_auto_adopt + a verify block; track turns carry thinking + decisions.",
+    "completeness": "All required fields present and non-empty. No placeholders. Referenced files must exist.",
+    "cross_linking": "Every reference resolves to a real object: dependencies / blocked_by / blocking -> existing lug ids; spec_id -> an active spec; teaching extends/source_lugs -> resolvable; memory [[links]] -> existing slugs (unresolved links are allowed only as explicit forward-references). Track entries carry origin_session_id + contributor so multi-session/forked track files retain exact provenance.",
+    "flow": "Lifecycle and location agree: a lug's folder matches its status; specs use draft/active/deprecated (never open/completed); completed lugs record outcome_verification; incoming/ and seed/ingest/ are transient, not graveyards."
+  },
+  "contract": {
+    "lug": {
+      "applies_to_types": [
+        "task",
+        "bug",
+        "feature",
+        "implementation",
+        "epic",
+        "policy",
+        "idea"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "status",
+        "title",
+        "created_at"
+      ],
+      "behavior_fields": [
+        "perceive",
+        "execute",
+        "routed_to",
+        "model_fit"
+      ],
+      "completeness_rules": [
+        {
+          "rule": "title_min_len",
+          "field": "title",
+          "min_chars": 10
+        },
+        {
+          "rule": "non_empty",
+          "fields": [
+            "perceive",
+            "execute"
+          ]
+        },
+        {
+          "rule": "has_pev",
+          "note": "perceive AND execute AND (verify OR acceptance_criteria) must all be present and non-empty"
+        },
+        {
+          "rule": "model_fit_enum",
+          "field": "model_fit",
+          "allowed": [
+            "haiku",
+            "sonnet",
+            "opus"
+          ]
+        },
+        {
+          "rule": "effort_range",
+          "field": "effort_score",
+          "min": 1,
+          "max": 5
+        },
+        {
+          "rule": "referenced_files_exist",
+          "fields": [
+            "target_files",
+            "files_to_read",
+            "files_to_edit"
+          ],
+          "severity": "warn"
+        }
+      ],
+      "cross_link_rules": [
+        {
+          "rule": "ids_resolve",
+          "fields": [
+            "dependencies",
+            "blocked_by",
+            "blocking"
+          ],
+          "resolves_to": "lug"
+        },
+        {
+          "rule": "spec_resolves",
+          "field": "spec_id",
+          "resolves_to": "active_spec"
+        }
+      ],
+      "flow_rules": [
+        {
+          "rule": "folder_matches_status",
+          "note": "a lug under bytype/{type}/open/ must have status open|o; in_progress/ -> in-progress|p; completed/ -> closed|resolved|c"
+        },
+        {
+          "rule": "completed_has_verification",
+          "when_status": [
+            "closed",
+            "resolved",
+            "c"
+          ],
+          "requires_one_of": [
+            "outcome_verification",
+            "verify_result",
+            "completed_at"
+          ]
+        }
+      ],
+      "exempt_types_from_pev": [
+        "epic",
+        "idea",
+        "policy"
+      ]
+    },
+    "spec": {
+      "required_fields": [
+        "id",
+        "type",
+        "status",
+        "subject_id",
+        "title"
+      ],
+      "completeness_rules": [
+        {
+          "rule": "lifecycle_enum",
+          "field": "status",
+          "allowed": [
+            "draft",
+            "active",
+            "deprecated"
+          ]
+        }
+      ],
+      "flow_rules": [
+        {
+          "rule": "folder_matches_status",
+          "note": "spec lugs live under bytype/spec/{draft,active,deprecated}/ matching status"
+        },
+        {
+          "rule": "indexed",
+          "note": "active specs must appear in WAI-SpecIndex.jsonl"
+        }
+      ]
+    },
+    "teaching": {
+      "required_frontmatter": [
+        "safe_to_auto_adopt"
+      ],
+      "behavior_fields": [
+        "verify",
+        "migration"
+      ],
+      "flow_rules": [
+        {
+          "rule": "processed_not_pending",
+          "note": "a teaching copied to seed/ingest/processed/ must not also be listed as pending/new"
+        }
+      ]
+    },
+    "track_entry": {
+      "required_fields": [
+        "event",
+        "ts"
+      ],
+      "completeness_rules": [
+        {
+          "rule": "turn_has_reasoning",
+          "when_event": "turn",
+          "requires_one_of": [
+            "thinking",
+            "decisions",
+            "assistant_text"
+          ],
+          "note": "synthesized entries satisfy via assistant_text"
+        },
+        {
+          "rule": "turn_has_attribution",
+          "when_event": "turn",
+          "expects": [
+            "contributor",
+            "kind",
+            "origin_session_id"
+          ],
+          "severity": "warn",
+          "note": "per-entry attribution enables safe multi-session / forked track files; kind in {user, agent}"
+        }
+      ],
+      "attribution_fields": [
+        "contributor",
+        "kind",
+        "origin_session_id"
+      ]
+    },
+    "memory": {
+      "required_frontmatter": [
+        "name",
+        "description",
+        "metadata.type"
+      ],
+      "cross_link_rules": [
+        {
+          "rule": "links_resolve",
+          "pattern": "[[slug]]",
+          "resolves_to": "memory",
+          "severity": "warn",
+          "note": "unresolved links allowed as explicit forward-references"
+        }
+      ]
+    }
+  },
+  "enforcement": {
+    "validator": "tools/validate_canonical.py (reads this spec; --json for machine output; exit 1 on error-severity violations)",
+    "gates": [
+      "lug creation \u2014 validate before writing a new lug to open/",
+      "autopilot grooming \u2014 Phase 0.5 _score_lug should defer ineligible (already partial; extend with cross-link + flow checks)",
+      "closeout \u2014 validate the spoke's object set; surface violations in the closeout report",
+      "harness evolution \u2014 any change to object schemas updates THIS spec first; the spec is the contract, code conforms to it"
+    ],
+    "consolidates": [
+      "ozi_autopilot._score_lug (completeness)",
+      "archie_advisor (wired-but-not-implemented)",
+      "hygiene scout (PEV + verification completeness)"
+    ]
+  }
+}

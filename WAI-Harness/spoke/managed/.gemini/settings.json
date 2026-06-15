@@ -1,0 +1,28 @@
+{
+  "general": {
+    "checkpointing": {
+      "enabled": true
+    }
+  },
+  "model": {
+    "compressionThreshold": 0.4,
+    "summarizeToolOutput": {
+      "run_shell_command": {
+        "tokenBudget": 1200
+      }
+    }
+  },
+  "context": {
+    "fileName": [
+      "GEMINI.md",
+      "AGENTS.md"
+    ],
+    "includeDirectoryTree": false,
+    "discoveryMaxDirs": 64,
+    "fileFiltering": {
+      "respectGitIgnore": true,
+      "respectGeminiIgnore": true,
+      "enableRecursiveFileSearch": true
+    }
+  }
+}

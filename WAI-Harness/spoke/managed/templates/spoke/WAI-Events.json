@@ -1,0 +1,86 @@
+{
+  "_description": "Valid events and triggers that skills can hook into. Skills reference these in their 'triggers' field.",
+  "_version": "1.0.0",
+
+  "lifecycle": {
+    "session.start": {
+      "description": "Agent session begins, context loading",
+      "fires_when": "New chat session initiated",
+      "payload": ["spoke_path", "hub_path", "exposure_context"]
+    },
+    "session.end": {
+      "description": "Agent session ending, cleanup opportunity",
+      "fires_when": "User ends session or context limit reached",
+      "payload": ["session_id", "work_completed"]
+    },
+    "closeout.start": {
+      "description": "Closeout protocol initiated",
+      "fires_when": "User invokes /wai-closeout",
+      "payload": ["session_id"]
+    },
+    "closeout.complete": {
+      "description": "Closeout finished, state persisted",
+      "fires_when": "Git commit successful after closeout",
+      "payload": ["session_id", "commit_hash", "lugs_created"]
+    }
+  },
+
+  "knowledge": {
+    "teach.received": {
+      "description": "New teaching files arrived in seed/ingest",
+      "fires_when": "Files detected in WAI-Spoke/seed/ingest/",
+      "payload": ["files", "upgrade_plan"]
+    },
+    "teach.adopted": {
+      "description": "Teaching files successfully adopted",
+      "fires_when": "Files moved from ingest to final locations",
+      "payload": ["files_adopted", "version"]
+    },
+    "learn.ready": {
+      "description": "High-impact lugs ready to share with hub",
+      "fires_when": "Lugs with impact >= 8 exist and not yet synced",
+      "payload": ["lug_ids", "count"]
+    },
+    "learn.complete": {
+      "description": "Signals successfully pushed to hub",
+      "fires_when": "Hub intake received lugs",
+      "payload": ["lug_ids", "hub_path"]
+    }
+  },
+
+  "work": {
+    "lug.created": {
+      "description": "New lug written",
+      "fires_when": "Any lug appended to WAI-Lugs.jsonl",
+      "payload": ["lug_id", "lug_type", "impact"]
+    },
+    "context.warning": {
+      "description": "Context usage threshold reached",
+      "fires_when": "Token usage exceeds 60%, 80%, or 90%",
+      "payload": ["percentage", "recommendation"]
+    },
+    "git.commit": {
+      "description": "Git commit executed",
+      "fires_when": "Successful git commit",
+      "payload": ["commit_hash", "message", "files"]
+    }
+  },
+
+  "user": {
+    "user.request": {
+      "description": "User asks for something",
+      "fires_when": "Any user message received",
+      "payload": ["message", "intent_detected"]
+    },
+    "user.confirm": {
+      "description": "User confirms an action",
+      "fires_when": "User responds yes/no to confirmation",
+      "payload": ["action", "confirmed"]
+    },
+    "skill.invoked": {
+      "description": "User explicitly invokes a skill",
+      "fires_when": "User types /skill-name",
+      "payload": ["skill_name", "args"]
+    }
+  }
+}

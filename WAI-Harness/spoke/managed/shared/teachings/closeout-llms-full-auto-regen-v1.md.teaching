@@ -1,0 +1,105 @@
+---
+id: closeout-llms-full-auto-regen-v1
+title: "Auto-regenerate llms-full.md on every closeout via closeout.sh Step 6"
+version: 1
+safe_to_auto_adopt: true
+target_files:
+  - tools/closeout.sh
+  - framework/docs/generate-llms-txt.sh
+  - templates/commands/wai-closeout.md
+---
+
+## Problem
+
+`framework/docs/llms-full.md` — the consolidated documentation file used by the
+website and external agents — was manually regenerated (or forgotten). It
+accumulated version drift (was at v2.0.47 while the framework ran v2.0.160+).
+Two bugs also existed in `generate-llms-txt.sh`:
+- Version hardcoded to `v2.0.47` — never updated
+- `find` excluded `llms-full.txt` instead of `llms-full.md`, causing self-inclusion
+
+## Fix
+
+### 1. `generate-llms-txt.sh` — dynamic version + self-exclusion fix
+
+Replace hardcoded version with WAI-State.json lookup:
+
+```bash
+# Before
+echo "# Version: 2.0.47" >> "$OUTPUT"
+...
+echo "Wheelwright AI Framework v2.0.47" >> "$OUTPUT"
+```
+
+```bash
+# After
+VERSION=$(jq -r '.wheel.version // "unknown"' "WAI-Spoke/WAI-State.json" 2>/dev/null || echo "unknown")
+echo "# Version: $VERSION" >> "$OUTPUT"
+...
+echo "Wheelwright AI Framework v${VERSION}" >> "$OUTPUT"
+```
+
+Fix self-inclusion in find:
+```bash
+# Before
+find framework/docs -name "*.md" -not -name "llms-full.txt" | sort | ...
+# After
+find framework/docs -name "*.md" -not -name "llms-full.md" | sort | ...
+```
+
+### 2. `tools/closeout.sh` — add Step 6 after backlog scoring
+
+Insert before the Summary block:
+
+```bash
+# ── Step 6: Regenerate llms-full.md ─────────────────────────────────────────
+header "Step 6: Docs (llms-full.md)"
+
+GEN_SCRIPT="$PROJECT_ROOT/framework/docs/generate-llms-txt.sh"
+if [ -f "$GEN_SCRIPT" ]; then
+    if $DRY_RUN; then
+        drylog "Would regenerate framework/docs/llms-full.md"
+    else
+        cd "$PROJECT_ROOT"
+        if bash "$GEN_SCRIPT" 2>/dev/null; then
+            log "framework/docs/llms-full.md regenerated (v${NEW_VERSION})"
+        else
+            log "llms-full.md regeneration failed — skipping (non-blocking)"
+        fi
+    fi
+else
+    log "generate-llms-txt.sh not found — skipping"
+fi
+```
+
+### 3. `wai-closeout.md` Step 7b — update instruction
+
+```markdown
+# Before
+2. Regenerate `docs/llm-full.txt` — concatenate source files...
+
+# After
+2. `framework/docs/llms-full.md` is regenerated automatically by `tools/closeout.sh`
+   Step 6 — verify it updated (check timestamp or line count changed)
+```
+
+## Prerequisites
+
+- `tools/closeout.sh` must exist with Steps 1–5 already present
+- `framework/docs/generate-llms-txt.sh` must exist
+
+## Batch Sequence
+
+1. Fix generate-llms-txt.sh: `grep -n "2.0.47\|llms-full.txt" framework/docs/generate-llms-txt.sh`
+2. Replace hardcoded version with dynamic lookup (see Fix section above)
+3. Fix find exclusion: `llms-full.txt` → `llms-full.md`
+4. Add Step 6 block to `tools/closeout.sh` before the Summary block
+5. Update Step 7b in `templates/commands/wai-closeout.md`
+6. Test: `bash framework/docs/generate-llms-txt.sh` — verify version matches WAI-State.json
+7. Verify: `head -3 framework/docs/llms-full.md` shows correct version
+
+## Notes
+
+`docs/llm-full.txt` (the old file using `=== FILE: ===` delimiters) was retired
+simultaneously. Add `docs/llm-full.txt` to `.gitignore` and `git rm` it if present.
+The website and external agents should reference `framework/docs/llms-full.md`.

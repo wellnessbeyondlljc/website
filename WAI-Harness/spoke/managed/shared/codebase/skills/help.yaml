@@ -1,0 +1,262 @@
+id: help
+name: "Help / Expert Routing"
+role: advisor
+model_tier: standard
+
+trigger: "on_demand"  # /help "query"
+
+description: >
+  Self-aware help system that routes questions to the right expertise.
+  Searches local documentation first, then uses registry to route to expert spokes.
+  Creates help-request lugs for unanswered questions.
+
+scope:
+  reads:
+    - "local teaching files"
+    - "local skills (use_cases)"
+    - "local EXTENSION.md"
+    - "local BRIEF.md"
+    - "local WAI-Lugs.jsonl (decisions, learnings)"
+    - "hub/registry.yaml (expertise map)"
+    - "WAI-Spoke/WAI-Guide.md (project identity)"
+
+  writes:
+    - "local WAI-Lugs.jsonl (help-request lugs only)"
+    - "WAI-Spoke/lugs/outgoing/ (if escalating)"
+
+prerequisites:
+  - "Hub registry.yaml must be readable (to see expertise map)"
+  - "Local teaching files and skills must be present"
+
+output:
+  on_success: "Answer returned with source file, version, created_at"
+  on_local_ambiguity: "Multiple answers found, clarification requested"
+  on_escalation: "help-request lug created, submitted to expert spoke/hub"
+  on_unanswered: "Escalated to framework or hub for consideration"
+
+algorithm:
+  step_1_parse_query:
+    description: "Understand what the user is asking"
+    extract:
+      - question_text: "full query"
+      - question_type: "how-to | what-is | pattern | expert-specific"
+      - domain: "inferred domain (WAI, email, marketing, etc.)"
+
+  step_2_search_local:
+    description: "Search spoke's own files first (fastest, most relevant)"
+    search_in:
+      - teaching_files: "WAI-Spoke/seed/ingest/ — search by title, description"
+      - skills: "framework/skills/ — search use_cases, description"
+      - decisions: "WAI-Spoke/WAI-Lugs.jsonl — filter by type=decision|learning"
+      - brief: "BRIEF.md — operational rules for this spoke"
+      - extension: "EXTENSION.md — role, lens, behaviors"
+      - guide: "WAI-Guide.md — project identity, goals"
+
+    return_if_found:
+      - result: "Answer found"
+      - source_file: "path to file"
+      - version: "file metadata (created_at, created_by)"
+      - confidence: "high | medium"
+
+  step_3_evaluate_results:
+    if_found_and_clear:
+      action: "Return answer with source and version"
+      format: |
+        Here's what I found (current as of {created_at}):
+        {answer}
+        Source: {file_path} (v{version}, created by {created_by})
+
+    if_multiple_answers:
+      action: "Ask user for clarification"
+      format: |
+        I found multiple possible answers. Which applies?
+        1. {answer_1} (from {source_1})
+        2. {answer_2} (from {source_2})
+        Tell me which, or I'll ask an expert.
+
+    if_nothing_found:
+      action: "Escalate to registry routing"
+      goto: "step_4_route_to_expert"
+
+  step_4_categorize_question:
+    description: "Determine if this is WAI mechanics or domain knowledge"
+
+    question_categories:
+      category_wai_mechanics:
+        patterns:
+          - "How do I.*WAI|skills|lugs|teaching|registry"
+          - "What is.*lug|skill|teaching file"
+          - "How do I create.*skill|teaching file"
+          - "How does.*WAI work"
+        routing: "wheelwright/framework (authority on WAI)"
+
+      category_domain_knowledge:
+        patterns:
+          - "How do I implement.*OAuth|email|payment|auth"
+          - "How do I integrate.*third-party|external|API"
+          - "How do we build.*feature|system|architecture"
+          - Implementation/technical questions outside WAI mechanics
+        routing: "Option 1: Ask hub KB | Option 2: Ask external agent (GPT, research)"
+
+      category_cross_spoke_patterns:
+        patterns:
+          - "Does anyone.*|How do other.*handle"
+          - "What patterns.*|Best practices for"
+          - Wheel-wide operational questions
+        routing: "wheelwright/hub (knows cross-spoke learnings)"
+
+  step_5_route_with_correct_destination:
+    description: "Route to framework (WAI only), hub (patterns), or external (domain knowledge)"
+
+    if_wai_mechanics:
+      action: "Route to wheelwright/framework"
+      reason: "Framework is authority on WAI mechanics only"
+      scope: "How to use skills, lugs, teaching files, registry, agent patterns"
+
+    if_domain_knowledge:
+      action: "Offer user two options"
+      option_1: "Check hub KB — what have our projects learned?"
+      option_2: "Query external source — GPT, research, documentation"
+      reason: "Framework does not maintain domain KB. Hub maintains cross-project patterns."
+      create_lug: false  # Don't create help-request lug to framework for domain Qs
+
+    if_cross_spoke_pattern:
+      action: "Route to wheelwright/hub"
+      reason: "Hub has synthesized learnings across spokes"
+      scope: "Cross-project patterns, shared solutions, architectural trends"
+      create_lug: true  # Submit to hub as pattern inquiry
+
+  step_6_escalate_if_needed:
+    description: "For WAI and pattern questions, escalate as help-request lug"
+
+    if_wai_mechanics_not_found:
+      create_lug: true
+      lug_type: "help-request"
+      destination: "wheelwright/framework"
+      reason: "Framework should expand its teaching files"
+
+    if_domain_knowledge_needed:
+      create_lug: false  # Don't send to framework
+      action: "Offer user choices"
+      choice_1: "Check hub KB as pattern inquiry lug (what have our projects learned?)"
+      choice_2: "Query external source (GPT, documentation, research)"
+      reason: "Framework is for WAI mechanics only, not domain knowledge"
+
+    if_cross_spoke_pattern:
+      create_lug: true
+      lug_type: "pattern-inquiry"
+      destination: "wheelwright/hub"
+      reason: "Hub synthesizes patterns across spokes"
+
+    lug_structure_for_framework:
+      id: "help-request-wai-{spoke-name}-{timestamp}"
+      type: "help-request"
+      title: "WAI Help request: {question_summary}"
+      description: "{full question text}"
+      asked_by_spoke: "{current spoke path}"
+      question_category: "wai-mechanics"
+      status: "published"
+      impact: "4"
+
+    lug_structure_for_hub:
+      id: "pattern-inquiry-{spoke-name}-{timestamp}"
+      type: "pattern-inquiry"
+      title: "Pattern question: {question_summary}"
+      description: "{full question text}"
+      asked_by_spoke: "{current spoke path}"
+      question_category: "cross-spoke-pattern"
+      status: "published"
+      impact: "4"
+
+  step_7_wait_for_response:
+    description: "Expert (framework or hub) receives lug and responds"
+
+    if_framework_receives:
+      action: "Framework reads WAI help-request"
+      response: "Improves teaching file on the topic, or creates new teaching file"
+      teaching_file: "Created teaching file sent back via teach cycle"
+      all_spokes_benefit: true
+
+    if_hub_receives:
+      action: "Hub reads pattern-inquiry lug"
+      response: "Searches cross-project KB, synthesizes pattern, creates response lug"
+      response_lug: "Pattern summary with sources and how other projects approached it"
+      asking_spoke_receives: "Response on next teach cycle with cross-project learnings"
+
+use_cases:
+  - scenario: "Spoke asks: How do I create a teaching file?"
+    question_type: "WAI mechanics"
+    local_search: "finds wai-v2-migration-state-v2.md.teaching in local files"
+    action: "Return teaching file with version, created_at, created_by"
+    outcome: "Agent reads local file, learns without escalation"
+
+  - scenario: "Spoke asks: How do I create a skill?"
+    question_type: "WAI mechanics"
+    local_search: "finds help.yaml (this skill) + framework/templates/skill-contract.spec.md"
+    action: "Return both resources with version info"
+    outcome: "Agent has everything needed to create a skill"
+
+  - scenario: "Spoke asks: What patterns have other spokes discovered?"
+    question_type: "Cross-spoke pattern"
+    local_search: "no local answer (cross-spoke question)"
+    routing: "matches 'patterns' → route to wheelwright/hub"
+    action: "Create pattern-inquiry lug, submit to hub"
+    outcome: "Hub responds with cross-spoke patterns and learnings"
+
+  - scenario: "Email spoke asks: How do I integrate OAuth?"
+    question_type: "Domain knowledge (implementation)"
+    local_search: "no local teaching file on OAuth"
+    routing: "NOT framework (wrong scope). Framework only teaches WAI."
+    action: "Offer user: (1) Check hub KB? (2) Query ChatGPT?"
+    outcome: "User chooses: Hub has 'project X solved OAuth this way' OR ChatGPT provides implementation guidance"
+    framework_stays_clean: "Framework not polluted with domain knowledge"
+
+  - scenario: "Any spoke asks: What does {other_project} do?"
+    question_type: "Project identity"
+    registry_lookup: "find {other_project} in registry"
+    direct_route: "Ask that project directly (via pattern-inquiry lug)"
+    outcome: "Project responds with current role/capabilities from its EXTENSION.md"
+
+  - scenario: "Spoke asks: How do we handle authentication across spokes?"
+    question_type: "Cross-spoke pattern"
+    local_search: "no local answer"
+    routing: "hub (cross-spoke architectural question)"
+    action: "Create pattern-inquiry, submit to hub"
+    outcome: "Hub synthesizes 'here's how projects X, Y, Z approached auth' + shared learnings"
+
+tests:
+  - name: "Local search finds teaching file (WAI mechanics)"
+    input: "/help 'How do I create a teaching file?'"
+    expected: "Returns wai-v2-migration-state-v2.md.teaching with version"
+
+  - name: "WAI mechanics question to framework"
+    input: "/help 'How do I create a skill?'"
+    expected: "Categorizes as WAI mechanics, routes to wheelwright/framework"
+
+  - name: "Cross-spoke pattern question to hub"
+    input: "/help 'What patterns do other spokes follow?'"
+    expected: "Categorizes as cross-spoke pattern, creates pattern-inquiry lug, routes to hub"
+
+  - name: "Domain knowledge question NOT sent to framework"
+    input: "/help 'How do I integrate OAuth?'"
+    expected: "Categorizes as domain knowledge, offers user: 'Check hub KB or query external source (GPT)?'"
+    important: "Does NOT create help-request lug to framework"
+
+  - name: "User chooses hub for domain question"
+    input: "User answers 'Check hub KB' to OAuth question"
+    expected: "Creates pattern-inquiry lug: 'Any patterns on OAuth integration?', submits to hub"
+
+  - name: "Direct project lookup"
+    input: "/help 'Tell me about wheelwright/website'"
+    expected: "Looks up in registry, returns website spoke's role/offers/lens"
+
+  - name: "Framework stays clean of domain knowledge"
+    input: "Multiple domain questions asked"
+    expected: "None create help-request lugs to framework. Framework only receives WAI mechanics questions."
+
+notes:
+  - "Help requests are permanent (lugs). Over time, patterns emerge of what spokes need to know."
+  - "Framework sees help-request lugs and creates teaching files for unanswered questions."
+  - "Each spoke inherits teaching files on next teach cycle, so the next spoke asking gets local answer."
+  - "Registry is self-documenting. Spokes' role/lens/offers tell you who to ask about what."
+  - "This skill is self-aware: it knows its own limitations and routes intelligently."

@@ -1,0 +1,234 @@
+{
+    "wheelwright": {
+        "version": "1.0.0",
+        "structure_version": "v1",
+        "description": "Wheelwright Hub - Central knowledge aggregator and teaching coordinator",
+        "framework_path": null,
+        "hub_path": null,
+        "tagline": "The hub teaches, learns, and coordinates all your wheels",
+        "is_hub": true
+    },
+    "_wai_bootstrap": {
+        "_purpose": "Instructions for AI assistants working with this hub",
+        "find_framework": {
+            "check_order": [
+                "1. Read framework_path from hub_profile below",
+                "2. Check if 'WAI' command is in PATH",
+                "3. Look for ~/projects/wheelwright",
+                "4. Look for ~/.wheelwright"
+            ],
+            "if_not_found": "Ask user: 'Where is your Wheelwright framework? (git clone https://github.com/wheelwright-ai/framework)'",
+            "after_found": "Update framework_path in hub_profile"
+        },
+        "update_hub": {
+            "note": "Hub sync is managed via teaching ingest — teachings distributed at closeout, adopted on wakeup"
+        },
+        "add_wheel": {
+            "note": "Run /wai-init-v2 from the new project to register it with the hub"
+        }
+    },
+    "_hub_profile": {
+        "user": {
+            "name": null,
+            "email": null,
+            "github": {
+                "username": null,
+                "url": null,
+                "auth_method": "ssh",
+                "ssh_key_path": "~/.ssh/id_rsa"
+            }
+        },
+        "work_style": {
+            "description": null,
+            "typical_projects": [],
+            "preferred_ais": [
+                "Claude",
+                "GitHub Copilot",
+                "ChatGPT"
+            ],
+            "coding_preferences": {
+                "languages": [],
+                "frameworks": [],
+                "patterns": [],
+                "avoid": []
+            }
+        },
+        "hub_config": {
+            "created_at": null,
+            "hub_path": null,
+            "framework_path": null,
+            "version": "3.0.0",
+            "auto_teach_on_recon": false,
+            "signal_noise_threshold": 8,
+            "_note": "framework_path: Set during 'WAI hub create' to point to wheelwright framework location"
+        },
+        "learning_philosophy": {
+            "share_threshold": 8,
+            "description": "Only share high-impact learnings (impact >= 8) to keep signals valuable. Quality over quantity.",
+            "what_to_share": [
+                "Architectural breakthroughs",
+                "Patterns that saved significant time",
+                "Critical bugs avoided",
+                "Performance optimizations with measurable impact",
+                "Cross-project applicable solutions"
+            ],
+            "what_not_to_share": [
+                "Project-specific implementation details",
+                "Minor refactorings",
+                "Routine bug fixes",
+                "Personal preferences without impact justification"
+            ]
+        },
+        "wheel_contributions": {
+            "description": "Wheels can update this section to improve hub intelligence",
+            "suggested_patterns": [],
+            "workflow_improvements": [],
+            "tool_recommendations": []
+        }
+    },
+    "_session_state": {
+        "last_session_id": null,
+        "last_modified_by": null,
+        "last_modified_at": null,
+        "requires_review": false,
+        "review_reason": null,
+        "session_count": 0,
+        "current_session": null,
+        "last_closeout": null,
+        "protocol_completed": false
+    },
+    "analytics": {
+        "hub_operations": {
+            "total_teach_operations": 0,
+            "total_wheels_taught": 0,
+            "total_learnings_received": 0,
+            "total_learnings_distributed": 0,
+            "avg_teaching_duration_seconds": 0
+        },
+        "wheel_registry": {
+            "total_wheels": 0,
+            "active_wheels": 0,
+            "archived_wheels": 0,
+            "last_registry_update": null
+        },
+        "knowledge_base": {
+            "total_patterns": 0,
+            "categories": {
+                "architecture": 0,
+                "performance": 0,
+                "testing": 0,
+                "security": 0,
+                "workflow": 0,
+                "tools": 0
+            },
+            "high_impact_patterns": 0,
+            "last_kb_update": null
+        },
+        "sessions": {
+            "total_count": 0,
+            "total_turns": 0,
+            "total_duration_seconds": 0,
+            "avg_duration_seconds": 0
+        },
+        "token_efficiency": {
+            "total_tokens_used": 0,
+            "tokens_saved_estimate": 0,
+            "baseline_tokens_estimate": 0,
+            "context_limit": 200000,
+            "avg_tokens_per_session": 0
+        },
+        "quality_metrics": {
+            "decisions_count": 0,
+            "high_impact_count": 0
+        },
+        "time_tracking": {
+            "total_time_together_seconds": 0,
+            "total_time_ai_alone_seconds": 0
+        },
+        "last_updated": null
+    },
+    "feature_toggles": {
+        "_description": "Toggle hub features for testing and configuration",
+        "session_continuity": true,
+        "token_efficiency": true,
+        "analytics": true,
+        "closeout_processing": true,
+        "hub_learning": true,
+        "quality_gates": true,
+        "auto_distribute_learnings": true,
+        "verify_signatures": true
+    },
+    "wheel": {
+        "name": "hub",
+        "abbrev": "HUB",
+        "version": "3.0.0",
+        "type": "hub",
+        "description": "Central knowledge aggregator and teaching coordinator",
+        "repository": null,
+        "created": null,
+        "last_updated": null,
+        "status": "active",
+        "workspace": {
+            "ide_cmd": null,
+            "run_cmd": null,
+            "cli_cmd": null,
+            "hub_cmd": null,
+            "paths": {
+                "primary": null,
+                "windows": {
+                    "root": null,
+                    "spoke": null,
+                    "hub": null
+                },
+                "wsl": {
+                    "root": null,
+                    "spoke": null,
+                    "hub": null
+                }
+            }
+        }
+    },
+    "hub": {
+        "summary": "Central knowledge aggregator coordinating all Wheelwright wheels",
+        "objectives": [
+            "Aggregate high-impact learnings from all wheels",
+            "Distribute framework updates to all wheels",
+            "Maintain global pattern library",
+            "Track wheel health and activity"
+        ],
+        "decisions": [],
+        "constraints": [
+            "Only distribute learnings with impact >= 8",
+            "Verify all upgrade plan signatures",
+            "Maintain wheel isolation (no cross-contamination)"
+        ]
+    },
+    "context": {
+        "current_phase": "operational",
+        "next_actions": [
+            "Monitor wheel registry for new wheels",
+            "Process incoming learnings from wheels",
+            "Distribute framework updates to wheels"
+        ],
+        "blockers": [],
+        "insights": []
+    },
+    "ai_rules": {
+        "context_loading": "Read WAI-Spoke/WAI-Guide.md first, then WAI-State.json and WAI-State.md",
+        "session_state": "Update _session_state when making significant changes",
+        "hub_operations": {
+            "on_teach": "Verify hub signature, process upgrade plans for all wheels",
+            "on_learning": "Filter by impact threshold, categorize, distribute to relevant wheels",
+            "on_registry_update": "Validate wheel paths, update analytics"
+        },
+        "stewardship": {
+            "principle": "Hub is the knowledge steward for all wheels",
+            "behaviors": [
+                "Maintain signal quality (threshold >= 8)",
+                "Verify all incoming data signatures",
+                "Keep wheel contexts isolated",
+                "Track and report hub health metrics"
+            ]
+        }
+    }
+}

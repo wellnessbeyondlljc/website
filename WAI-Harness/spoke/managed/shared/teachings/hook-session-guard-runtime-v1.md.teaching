@@ -1,0 +1,110 @@
+# Teaching: Hook Session Guard — Runtime File (not WAI-State.json) v1
+
+**Family:** hook-session-guard
+**Version:** 1.0
+**Created:** 2026-03-28
+**Impact:** 9
+**Source Session:** session-20260328
+**safe_to_auto_adopt:** true
+
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| Hook file exists | `test -f ".claude/hooks/user-prompt-submit.sh" && echo PASS \|\| echo FAIL` | Hook update |
+
+## Batch Sequence
+
+**Batch:** hook-session-guard-v1
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Does
+
+Fixes a protocol bug where the Claude Code hook was writing `protocol_completed` and `protocol_last_run` directly into `WAI-State.json` on every session start. This immediately re-dirtied WAI-State.json after each closeout commit, causing permanent "uncommitted changes" on wakeup.
+
+**Root cause:** `.claude/hooks/user-prompt-submit.sh` used `jq` to mutate WAI-State.json as its session-guard mechanism.
+
+**Fix:** Session guard state moves to `WAI-Spoke/runtime/session-guard.json` (gitignored). WAI-State.json is now only written during closeout (Step 5), never by hooks.
+
+---
+
+## Migration
+
+### 1. Update `.claude/hooks/user-prompt-submit.sh`
+
+Replace the block that reads/writes `protocol_completed` and `protocol_last_run` from WAI-State.json:
+
+**Remove this pattern:**
+```bash
+# Skip if protocol already ran this session
+PROTOCOL_COMPLETED=$(jq -r '._session_state.protocol_completed // false' "$STATE_FILE" 2>/dev/null || echo "false")
+[[ "$PROTOCOL_COMPLETED" == "true" ]] && exit 0
+
+# Mark protocol as triggered
+TMP=$(mktemp)
+jq '._session_state.protocol_completed = true |
+    ._session_state.protocol_last_run = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' "$STATE_FILE" > "$TMP" && mv "$TMP" "$STATE_FILE"
+```
+
+**Replace with:**
+```bash
+# Session guard uses a runtime file (gitignored) to avoid dirtying WAI-State.json
+RUNTIME_DIR="$PROJECT_DIR/WAI-Spoke/runtime"
+GUARD_FILE="$RUNTIME_DIR/session-guard.json"
+mkdir -p "$RUNTIME_DIR"
+
+# Read guard state (if exists)
+GUARD_SESSION_ID=""
+GUARD_COMPLETED="false"
+if [[ -f "$GUARD_FILE" ]]; then
+  GUARD_SESSION_ID=$(jq -r '.session_id // ""' "$GUARD_FILE" 2>/dev/null || echo "")
+  GUARD_COMPLETED=$(jq -r '.protocol_completed // false' "$GUARD_FILE" 2>/dev/null || echo "false")
+fi
+
+# Detect new session: compare guard's session_id vs state's last_session_id
+LAST_SESSION_ID=$(jq -r '._session_state.last_session_id // ""' "$STATE_FILE" 2>/dev/null || echo "")
+
+# New session if guard is empty or matches the last committed session
+if [[ -z "$GUARD_SESSION_ID" || "$GUARD_SESSION_ID" == "$LAST_SESSION_ID" ]]; then
+  NEW_SESSION_ID="session-$(date +%Y%m%d-%H%M)"
+  printf '{"session_id":"%s","protocol_completed":false,"started_at":"%s"}\n' \
+    "$NEW_SESSION_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$GUARD_FILE"
+  GUARD_COMPLETED="false"
+fi
+
+# Skip if protocol already ran this session
+[[ "$GUARD_COMPLETED" == "true" ]] && exit 0
+
+# Mark protocol as triggered (in runtime file only — WAI-State.json stays clean)
+TMP=$(mktemp)
+jq '.protocol_completed = true |
+    .protocol_last_run = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' "$GUARD_FILE" > "$TMP" && mv "$TMP" "$GUARD_FILE"
+```
+
+### 2. Add to `.gitignore`
+
+```
+WAI-Spoke/runtime/session-guard.json
+```
+
+### 3. Remove stale fields from `WAI-State.json`
+
+Remove `protocol_completed` and `protocol_last_run` from `_session_state` if present:
+```bash
+jq 'del(._session_state.protocol_completed) | del(._session_state.protocol_last_run)' \
+  WAI-Spoke/WAI-State.json > /tmp/wai-state-tmp.json && mv /tmp/wai-state-tmp.json WAI-Spoke/WAI-State.json
+```
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

@@ -1,0 +1,33 @@
+{
+  "id": "spec-cross-spoke-sovereignty-working-agreement-v1",
+  "type": "spec",
+  "status": "completed",
+  "completed_at": "2026-05-29T00:00:00Z",
+  "completed_by": "session-20260529-0144",
+  "outcome": "Spec authored: spec-cross-spoke-sovereignty-v1.json. Anti-pattern added to CLAUDE.md. Teaching published: wai-spoke-sovereignty-v1.md.teaching.",
+  "title": "Author canonical spec: spoke sovereignty - cross-spoke changes must travel via lug, not direct edits",
+  "routed_to": "FRAMEWORK",
+  "source_spoke": "basher",
+  "source_spoke_wheel_id": "basher",
+  "created_at": "2026-05-27T23:35:01.467681+00:00",
+  "gathered_by": "claude-sonnet-4-6 (session-20260526-2109)",
+  "model_fit": "haiku",
+  "impact": 9,
+  "effort": 2,
+  "roi": 4.5,
+  "urgency": 2,
+  "perceive": "There is no canonical framework spec establishing that spokes must not directly modify files in other spokes (including framework). The absence of this rule allows agents to reach across spoke boundaries and make untraceable, undocumented changes. The basher agent demonstrated this failure mode in session-20260526-2109: it directly edited four framework files (ozi_autopilot.py, score_backlog.py, generate_wakeup_brief.py, wai-lug-schema.md) without submitting a lug to framework first. The rule exists implicitly in CLAUDE.md anti-patterns but is not formalized as a framework spec that generates teachings for all spokes.",
+  "execute": "1. Author a framework spec lug (type: spec) titled Spoke Sovereignty: Cross-Spoke Change Protocol. The spec must cover: (a) Rule: an agent operating in Spoke A must never directly write, edit, or delete files in Spoke B directory - all changes must be requested via a lug delivered to Spoke B incoming/. (b) Rule: framework is a spoke - the same rule applies to framework files. (c) Rule: if work in Spoke A identifies a needed change in Spoke B, the agent must compose a properly-formed lug with PEV, target_files, effort_score, model_fit, acceptance_criteria and deliver it to Spoke B incoming/ immediately - not defer to closeout. (d) Rule: the sending spoke writes a copy to its own outgoing/ with delivered_at set. (e) Rationale: direct cross-spoke edits are untraceable (no lug history), undocumented (no perceive/verify), unsupervised (no acceptance criteria), and create ghost changes that may be overwritten or misunderstood by future agents. 2. Add an anti-pattern entry to framework CLAUDE.md: Direct cross-spoke file edits: Never edit files in another spoke directory directly - compose and deliver a lug to that spoke incoming/ instead. 3. Publish as a framework teaching to hub teachings_repo/framework/current/ for distribution to all active spokes.",
+  "verify": "Spec lug exists in framework WAI-Spoke/lugs/bytype/spec/. Anti-pattern added to CLAUDE.md. Teaching published to hub.",
+  "acceptance_criteria": [
+    "Canonical spec document authored and stored in framework WAI-Spoke",
+    "Spec covers all four rules with rationale",
+    "Anti-pattern entry added to framework CLAUDE.md",
+    "Teaching generated from spec and published to hub teachings_repo/framework/current/"
+  ],
+  "target_files": [
+    "CLAUDE.md",
+    "WAI-Spoke/lugs/bytype/spec/open/spec-cross-spoke-sovereignty-v1.json",
+    "teachings_repo/spoke/current/wai-spoke-sovereignty-v1.md.teaching"
+  ]
+}

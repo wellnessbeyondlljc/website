@@ -1,0 +1,176 @@
+{
+  "id": "spec-observability-oversight-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T02:10:00Z",
+  "updated_at": "2026-06-09T18:00:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Observability & Oversight spine \u2014 unified event bus + correlation, workflows as observable objects, live oversight surfaces with freshness contracts, the three-question confidence model; cross-cutting",
+  "title": "Observability & Oversight Spine (v4)",
+  "situation": "An S46 audit of the current solution found solid append-only event streams (track.jsonl, provider_usage, lifecycle, advisors/*/runs.jsonl, activity-events-queue, capability-runs) BUT severe oversight gaps: no live dashboard (queue depth, advisor exec state, budget burn, tool latency), no event correlation/causality (events exist but no cause\u2192effect chain), no trend detection (velocity/adoption/quality curves), stale surfaces (KPI ~1wk, ozi-brief ~3-5d, health themes never graded, hub-status ~3d), and no single 'what needs me' attention surface. The user cannot reliably answer 'what is happening, is it on track, what needs me.' v4 must make patterns + workflows well-defined and OBSERVABLE so the user has oversight and confidence.",
+  "why": "Oversight is the precondition for trusting autonomy. A wheel that rolls on its own is only safe to let roll if the user can see it rolling true and be pulled in exactly when needed. Fragmented, stale, correlation-less telemetry gives data without confidence. This spine unifies emission (one typed event bus), adds causality (correlation across the cause\u2192effect chain), makes every workflow a first-class observable object with live status, and guarantees surface freshness \u2014 turning scattered logs into oversight. It is the mirror of the Verification spine: verification proves work is correct; observability proves the user can SEE it is correct, live.",
+  "audience": [
+    "User \u2014 the primary consumer: oversight surfaces + the three-question confidence model",
+    "Ozi \u2014 reads the live state to drive the loops; surfaces attention items",
+    "every advisor/pattern/workflow \u2014 emits typed events (silent operation is banned)",
+    "Historian \u2014 mines the correlated event stream for trends",
+    "Hub (Surveyor/Cartologist) \u2014 aggregates spoke observability into the fleet dashboard"
+  ],
+  "unified_event_bus": {
+    "principle": "Every pattern, workflow, advisor run, test, gate, and state transition emits ONE typed event to a single stream. Silent operation is banned (parallels no-silent-failure). Existing streams (track/gate-log/provider_usage/lifecycle/runs/test_results) become typed views over, or feeders into, this bus.",
+    "event_schema": {
+      "event_id": "string",
+      "ts": "ISO-8601",
+      "spoke": "wheel_id",
+      "session": "session fingerprint",
+      "actor": "string \u2014 advisor|pattern|agent|workflow that emitted it",
+      "type": "string \u2014 taxonomy below",
+      "subject_ref": "string \u2014 lug/flow/test/bolt/advisor id this is about",
+      "status": "started|progress|approved|halted|escalate|pass|fail|null|completed",
+      "evidence": "string|object \u2014 what was observed",
+      "correlation_id": "string \u2014 groups all events of one causal chain",
+      "parent_event": "event_id|null \u2014 the event that caused this one"
+    },
+    "event_taxonomy": [
+      "session",
+      "lug_state",
+      "gate",
+      "test",
+      "bolt",
+      "advisor_run",
+      "workflow_step",
+      "evolution_proposal",
+      "hygiene_action",
+      "verdict",
+      "migration",
+      "attention",
+      "provider_usage",
+      "failure",
+      "decision",
+      "dispatch_audit"
+    ],
+    "storage": "events land in the storage layer (spec-storage-layer-v1) events/gate_log/test_results tables + a JSONL mirror; correlation_id enables the causality queries the audit found missing",
+    "durability": {
+      "principle": "Autonomy rests on the bus, so the bus must not silently lose events (blind-review HIGH). Emission is durable + replayable, not fire-and-forget.",
+      "rules": [
+        "write path: append to a local JSONL journal FIRST (synchronous, crash-safe), then index into SQLite; the JSONL journal is the source of truth, SQLite is the query view",
+        "write-ack: an actor whose event write fails (disk full, db lock) gets an error, not silent success \u2014 failure to emit is itself a logged failure event",
+        "replay: on recovery, unindexed journal entries replay into SQLite; the dispatcher replays unacked wakes (spec-scheduler-dispatcher-v1)",
+        "backpressure: under load, lower-priority event indexing batches; journal append never blocks (it is the floor)",
+        "hub-unreachable: events buffer locally with a sync-pending flag and push on hub recovery (never dropped)"
+      ]
+    }
+  },
+  "correlation_layer": {
+    "principle": "Events are linked cause\u2192effect so the user can see WHY, not just WHAT. correlation_id groups a chain; parent_event links each step to its cause.",
+    "example_chain": "user sets a goal (correlation_id=C) \u2192 Expediter scores+queues (parent=goal) \u2192 Autopilot dispatches lug (parent=queue) \u2192 Pattern Gate certifies (parent=dispatch) \u2192 bolt closes (parent=gate) \u2192 KPI velocity updates (parent=bolt). One query on C returns the whole story.",
+    "decision_events": {
+      "principle": "Events alone trace WHAT happened, not WHY (blind-review HIGH). Every decision that changes flow \u2014 a gate halt/escalate, a Trainer rejection/canonicalization, a Hygiene delete, an Autopilot skip, a dispatch breaker trip \u2014 MUST emit a type=decision event FIRST, carrying the data/criterion that drove it and the alternatives weighed, linked as the parent of the resulting action event.",
+      "rule": "no rejection/escalation/destructive action without a preceding decision event; 'why did Trainer reject this?' is answerable by querying the decision event on the chain"
+    },
+    "enables": [
+      "impact analysis (did this lug completion unblock others?)",
+      "explain-the-last-N-events",
+      "blocker drill-down (what is this stalled on?)",
+      "explain-why (decision events expose the reasoning, not just the outcome)"
+    ]
+  },
+  "workflows_as_observable_objects": {
+    "principle": "Every workflow (warmup sequence, evolution loop, migration, closeout, adoption) is a FIRST-CLASS object with live status \u2014 which step, who, when, outcome \u2014 not an implicit sequence buried in code.",
+    "workflow_record": {
+      "workflow_id": "string",
+      "kind": "warmup|evolution|migration|closeout|adoption|certification",
+      "steps": [
+        {
+          "step": "string",
+          "status": "pending|running|done|halted|skipped",
+          "actor": "string",
+          "started_at": "ISO-8601",
+          "ended_at": "ISO-8601|null",
+          "evidence_ref": "string"
+        }
+      ],
+      "current_step": "string",
+      "overall_status": "running|completed|halted|escalated",
+      "correlation_id": "string"
+    },
+    "surface": "live workflow status is queryable + shown on the dashboard (e.g. 'warmup: step 2/7 coverage-review running'); a halted/escalated workflow raises an attention item"
+  },
+  "oversight_surfaces": {
+    "live_dashboard": "rolling 1h/24h/7d: queue depth + predicted clearance ETA, advisors currently running, session budget burn vs plan, tool latency/success (Sentinel contracts measured, not just declared), workflow live status, fleet Christmas-tree (hub). Closes the audit's #1 gap (no live view).",
+    "wakeup_brief_sections": "Pattern Health, Quality Health (coverage %, null rate, stale tests, failing suites), Certification (green/null rate), Adoption-correctness (Hygiene score), Evolution (open proposals/verdicts), and a delta ('what changed since last session').",
+    "attention_surface": "the single 'what needs ME' list \u2014 escalations, halted workflows, needs-you lugs, stalled-2x lugs, RFC reviews, sign-off requests \u2014 each with a reason (why it bubbled up). Closes the audit's 'no attention/escalation system' gap. PRIORITIZED, not a flat backlog (blind-review MED): each item has a priority function (severity x age x blast-radius); a response SLA per item (unanswered past SLA escalates to Octo/Wilbur, never stalls silently); a max-depth alarm (queue over N items is itself a P1 'attention overloaded' signal). Triage is computed for the user, not dumped on them.",
+    "trend_detection": "velocity, adoption, quality, approval-rate curves over time (not snapshots) \u2014 Historian-computed; surfaces 'what is getting worse'.",
+    "wheel_kpis": "'faster and straighter' needs defined baselines (review MED). The canonical wheel-health KPIs, each trended + baseline-anchored (Trainer measures post-adoption deltas against these): FASTER = lead_time (lug open\u2192done), time_to_green (session\u2192certified), throughput (lugs/session); STRAIGHTER = first_attempt_approval_rate, retry_rate, halt_rate, null_rate, rework_rate (reopened lugs), escalation_rate. Each KPI has a baseline captured at flow/version boundaries; an improvement claim ('the wheel rolls straighter') is provable as a baseline delta, not a vibe.",
+    "control_panel": "the four-panel model (Goals/Guardrails/Now/Results) mapped to surfaces \u2014 the user's steering wheel."
+  },
+  "freshness_contracts": {
+    "principle": "Every oversight surface declares an update cadence (SLA); a surface past its cadence is flagged STALE on its own face (the audit found silently-stale KPI/ozi-brief/themes). Freshness is itself observable.",
+    "examples": [
+      "live_dashboard: <=5min",
+      "wakeup sections: regenerated at session start",
+      "KPI/trends: nightly",
+      "certification: per advisor-scout run"
+    ],
+    "rule": "a stale surface shows a STALE badge + age; it is never presented as current.",
+    "remediation": "flagging is not enough (blind-review MED: the audit found silently-stale surfaces; just badging them repeats the problem). A freshness PROBE runs on cadence; a surface overdue past its contract raises an Attention item routed to that surface's owning advisor (Surveyor=dashboard, QA=Quality Health, etc.) to regenerate it. Staleness triggers repair, not just a badge.",
+    "remediation_backoff": "external review A (infinite-loop cascade): if the owning advisor is throttled/budget-depleted/hung, naive regeneration re-fails and re-warns, flooding the bus. Regeneration uses EXPONENTIAL BACKOFF with a hard ceiling (max 3 attempts/hour per surface); after the ceiling the surface is marked STALE-UNRECOVERABLE on the Attention surface (escalation), not retried in a loop."
+  },
+  "confidence_model": {
+    "principle": "The user can ALWAYS answer three questions, each backed by a surface:",
+    "questions": {
+      "what_is_happening": "Now \u2014 live dashboard + workflow status",
+      "is_it_on_track": "Trajectory \u2014 trend curves + KPI projection + certification",
+      "what_needs_me": "Attention \u2014 the escalation/needs-you list with reasons"
+    },
+    "assertion": "if any of the three cannot be answered from a fresh surface, that is itself an observability defect to fix."
+  },
+  "constraints": [
+    "Silent operation is banned: every advisor/pattern/workflow/test/gate emits a typed event \u2014 no unobserved work",
+    "Every event carries correlation_id + parent_event (where applicable) so causality is reconstructable",
+    "Every workflow is a first-class observable object with live step status \u2014 no implicit code-buried sequences",
+    "Every oversight surface declares + honors a freshness contract; stale surfaces self-flag, never presented as current",
+    "Observability data is read-only to consumers; only the emitting actor writes its events",
+    "The three confidence questions must always be answerable from a fresh surface"
+  ],
+  "tests": [
+    "Emission completeness: run a session; assert every advisor run, gate, test, and bolt produced a typed event on the bus (no silent actors)",
+    "Correlation: trigger a goal\u2192queue\u2192dispatch\u2192gate\u2192bolt chain; one query on correlation_id returns the full ordered chain with parent links",
+    "Workflow object: start the warmup workflow; query live status returns current_step + per-step states; halting step 2 raises an attention item",
+    "Live dashboard: queue depth, running advisors, budget burn, and tool latency render from <=5min-fresh data",
+    "Attention surface: an escalation + a stalled-2x lug + a sign-off request all appear with reasons",
+    "Freshness: a surface past its cadence shows a STALE badge with age; a fresh one does not",
+    "Confidence: from a cold session open, all three questions (what's happening / on track / needs me) are answerable from fresh surfaces",
+    "Trend: velocity + approval-rate curves render over a 7d window from the event stream"
+  ],
+  "impl_lugs": [
+    "impl-observability-dashboard-surface-v1"
+  ],
+  "health": {
+    "test_coverage": "partial - oversight-surface layer (dashboard/attention/freshness/confidence model) covered by test_observability_dashboard.py (7 tests, AC1-4 of the impl lug = spec tests Confidence/Live-dashboard/Attention/Freshness). Uncovered: emission-completeness, correlation-chain, workflow-object live status, trend curves (deferred follow-ons, need a populated event bus + Historian).",
+    "last_impl_lug_completed": "impl-observability-dashboard-surface-v1",
+    "spec_drift_risk": "low \u2014 initial spec",
+    "open_questions": [
+      "Dashboard delivery: terminal/wakeup-rendered vs Minder web panel vs both (proposed: wakeup + Minder web, same data)",
+      "Event bus: derive existing streams into the bus (views) vs migrate emitters to write the bus directly (proposed: emitters write the bus; legacy streams become views during migration)",
+      "Attention push: surface-on-pull (wakeup/dashboard) vs Minder/Telegram push for P1 (proposed: pull always + push for escalations)"
+    ]
+  },
+  "related_specs": [
+    "spec-storage-layer-v1",
+    "spec-verification-quality-v1",
+    "spec-trainer-advisor-v1",
+    "spec-hygiene-advisor-v1"
+  ],
+  "perceive": "Read this spec + spec-storage-layer-v1 (events/test_results tables) + the S46 observability audit in architecture_harness_v4. Inventory existing streams (track, gate-log, provider_usage, lifecycle, runs.jsonl, activity-events) to derive into the bus.",
+  "execute": "1. Define the unified event schema + taxonomy; make every advisor/pattern/workflow/test/gate emit it (storage layer events table + JSONL mirror). 2. Add correlation_id + parent_event threading. 3. Implement workflow-as-object with live step status. 4. Build oversight surfaces: live dashboard, wakeup sections, attention surface, trend curves, freshness badges. 5. Wire the three-question confidence model. 6. Add freshness contracts + stale-flagging. 7. Hub aggregation into the fleet dashboard.",
+  "verify": "Run all tests[]. Confirm no silent actors, correlation chains reconstruct, workflow live status renders, all surfaces honor freshness contracts, and the three confidence questions are answerable from fresh surfaces.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

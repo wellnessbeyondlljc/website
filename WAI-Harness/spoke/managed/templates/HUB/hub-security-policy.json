@@ -1,0 +1,86 @@
+{
+  "_purpose": "Hub security policies for safe knowledge distribution",
+  "_structure_version": "3.0",
+
+  "metadata": {
+    "created_at": null,
+    "framework_version": "3.0.0",
+    "description": "Security settings for hub-spoke communication and teaching"
+  },
+
+  "verification": {
+    "enabled": true,
+    "algorithm": "sha256-hmac",
+    "fingerprint_rotation_days": 90,
+    "require_hub_signature": true,
+    "require_file_hash_verification": true,
+    "description": "All taught files must be signed and verified before adoption"
+  },
+
+  "trust_model": {
+    "hub_fingerprint": null,
+    "public_key": null,
+    "key_rotation_schedule": "quarterly",
+    "revocation_list": [],
+    "description": "Hub signs all upgrade-adoption-plans with its fingerprint"
+  },
+
+  "file_integrity": {
+    "hash_algorithm": "sha256",
+    "verify_file_hashes_before_adoption": true,
+    "corrupted_file_action": "reject",
+    "description": "Each file includes hash for integrity verification"
+  },
+
+  "knowledge_distribution": {
+    "allowed_targets": ["spoke", "hub", "universal"],
+    "require_explicit_approval": false,
+    "min_impact_score_for_sharing": 8,
+    "learnings_private_to_hub": false,
+    "description": "Control what knowledge is distributed and to whom"
+  },
+
+  "wheel_security": {
+    "require_wheel_authentication": false,
+    "whitelist_enabled": false,
+    "whitelisted_wheels": [],
+    "require_learning_verification": true,
+    "max_learning_size_mb": 100,
+    "description": "Security settings for connected wheels"
+  },
+
+  "audit_logging": {
+    "enabled": true,
+    "log_file": "audit.jsonl",
+    "log_events": [
+      "teach_command",
+      "wheel_registration",
+      "learning_received",
+      "signature_verification",
+      "hash_verification_failure"
+    ],
+    "retention_days": 365,
+    "description": "Log all security-relevant events"
+  },
+
+  "compliance": {
+    "enforce_version_compatibility": true,
+    "min_framework_version": "3.0.0",
+    "breaking_changes_require_review": true,
+    "auto_rollback_on_failure": false,
+    "description": "Ensure compatibility and safety during upgrades"
+  },
+
+  "secrets_management": {
+    "encrypt_sensitive_data": false,
+    "allowed_secret_types": ["github_token", "api_key", "ssh_key"],
+    "secret_distribution": "never",
+    "description": "Secrets should never be distributed; only references"
+  },
+
+  "_instructions": {
+    "for_hub_ai": "Enforce these policies when creating and distributing upgrade plans. Refuse adoption of unsigned or unverified files.",
+    "for_spokes": "Verify all received teaching against these policies before adoption.",
+    "updating": "Update after security incidents or when refining trust model. Notify all wheels of policy changes."
+  }
+}

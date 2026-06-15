@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "spec-intra-agent-comms-v1",
+  "message_types": {
+    "consult": {
+      "required": ["question", "context"],
+      "properties": {
+        "question": {"type": "string"},
+        "context": {"type": "object"},
+        "response_schema": {"oneOf": [{"type": "object"}, {"type": "null"}]}
+      }
+    },
+    "handoff": {
+      "required": ["chain_id", "completed_children", "deferred_children", "file_scope", "context_summary"],
+      "properties": {
+        "chain_id": {"type": "string"},
+        "completed_children": {"type": "array", "items": {"type": "string"}},
+        "deferred_children": {"type": "array", "items": {"type": "string"}},
+        "file_scope": {"type": "array", "items": {"type": "string"}},
+        "context_summary": {"type": "string"}
+      }
+    },
+    "collaborative": {
+      "required": ["artifact_type", "artifact_id", "contribution"],
+      "properties": {
+        "artifact_type": {"type": "string", "enum": ["spec", "design", "plan"]},
+        "artifact_id": {"type": "string"},
+        "contribution": {"type": "string"},
+        "draft_path": {"oneOf": [{"type": "string"}, {"type": "null"}]}
+      }
+    },
+    "response": {
+      "required": ["in_reply_to", "answer"],
+      "properties": {
+        "in_reply_to": {"type": "string", "format": "uuid"},
+        "answer": {},
+        "verdict": {"oneOf": [{"type": "string", "enum": ["proceed", "modify", "reject"]}, {"type": "null"}]}
+      }
+    },
+    "ack": {
+      "required": ["in_reply_to"],
+      "properties": {
+        "in_reply_to": {"type": "string", "format": "uuid"}
+      }
+    }
+  }
+}

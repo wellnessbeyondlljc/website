@@ -1,0 +1,29 @@
+# Historian configuration (optional — defaults apply if absent)
+historian:
+  cycling_threshold: 3  # sessions before pattern classified as cycling (default: 3)
+
+# Behavioral nudges written by Historian from frustration findings
+nudges: []
+
+entries:
+  - id: "data-mutation-safety-v1"
+    category: "boundaries"
+    status: "accepted"
+    statement: "Prioritize read-only operations. Any data mutation must be explicitly confirmed."
+    session_source: "PathFinder"
+    proposed_by: "historian"
+    proposed_at: "2026-03-25T00:00:00Z"
+  - id: "proportional-response-v1"
+    category: "approach"
+    status: "accepted"
+    statement: "Responses should be proportionate to the request's complexity and scope. Avoid over-engineering simple tasks."
+    session_source: "PathFinder"
+    proposed_by: "historian"
+    proposed_at: "2026-03-25T00:00:00Z"
+  - id: "lean-scope-first-v1"
+    category: "workflow"
+    status: "accepted"
+    statement: "Start with the leanest possible implementation to validate the core idea, then iterate."
+    session_source: "PathFinder"
+    proposed_by: "historian"
+    proposed_at: "2026-03-25T00:00:00Z"

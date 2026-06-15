@@ -1,0 +1,317 @@
+{
+  "id": "spec-fleet-improvement-loop-v1",
+  "type": "spec",
+  "status": "completed",
+  "version": "1.2.0",
+  "created_at": "2026-05-31T08:29:40Z",
+  "updated_at": "2026-05-31T09:55:27Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.249",
+  "impact": 9,
+  "subject": {
+    "kind": "protocol",
+    "id": "fleet-improvement-loop",
+    "label": "Fleet Improvement Loop — RFC + Learn Directive"
+  },
+  "title": "Fleet Improvement Loop — RFC drafts with learn directive, iterative instruction improvement across cohorts",
+  "what": "A general-purpose fleet deployment protocol where the requestor sends a draft lug to an initial cohort of spokes with a learn directive. Each spoke performs a dry-run, returns structured RFC feedback on instruction quality and goal alignment, and the hub patches the instructions before advancing to the next cohort. Spokes in later cohorts receive an improved version of the lug. The requestor defines cohort size, feedback threshold, priority level, and advance mode at time of need. Herald manages response collection for high-priority RFCs; low-priority RFCs wait passively in hub inbox. Any lug type can carry a learn_directive — the pattern is not harness-specific.",
+  "why": "Parallel convoy is fast but destroys the improvement signal — by the time spoke N responds, spokes 2 through N-1 already have the original version. When deploying to 20+ spokes, instructions that are ambiguous, incomplete, or environment-dependent cause silent failures across the fleet. The RFC + learn directive loop converts deployment into a learning pipeline: early cohorts improve the instructions for later ones. Over multiple fleet cycles, instruction quality compounds. This is the mechanism by which the fleet teaches itself to be better at receiving new work.",
+  "audience": [
+    "ozi",
+    "navigator",
+    "herald",
+    "admin"
+  ],
+  "use_cases": [
+    {
+      "title": "Hub initiates RFC fleet deployment",
+      "trigger": "Requestor (human or hub Ozi) creates an rfc_job with a draft lug, cohort_config, stated_goals, and feedback_questions",
+      "outcome": "Hub writes draft lug + learn_directive wrapper to first cohort of spokes; herald notified if priority=high",
+      "persona": "navigator"
+    },
+    {
+      "title": "Spoke receives RFC lug and returns feedback",
+      "trigger": "Spoke Ozi finds lug with learn_directive=true in incoming/; dry_run=true in learn_directive",
+      "outcome": "Spoke executes dry-run; builds rfc_response with instruction_feedback, goal_alignment, dry_run_result; delivers to hub via outgoing lug",
+      "persona": "ozi"
+    },
+    {
+      "title": "Hub collects responses and patches instructions",
+      "trigger": "feedback_threshold responses received (or timeout passed for high-priority RFC)",
+      "outcome": "Hub agent reads all responses; diffs instruction_feedback suggestions against current lug execute/verify fields; produces patched lug version; if advance_mode=review writes diff to human inbox; if advance_mode=auto advances immediately",
+      "persona": "navigator"
+    },
+    {
+      "title": "Herald monitors high-priority RFC responses",
+      "trigger": "rfc_job.priority=high and response_deadline set",
+      "outcome": "Herald polls agent_messages for RFC response notifications; if deadline passes with insufficient responses, Herald logs timeout and advances with available feedback",
+      "persona": "herald"
+    },
+    {
+      "title": "Requestor triggers RFC for any lug type",
+      "trigger": "Any spoke or hub Ozi wants fleet-wide improvement on a capability (teaching rollout, schema migration, skill deployment, etc.)",
+      "outcome": "Same loop applies regardless of lug type — the learn_directive is a portable wrapper, not a harness-specific contract",
+      "persona": "ozi"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Requestor owns cohort config at time of need",
+      "description": "Cohort size, feedback threshold, priority level, and advance mode are not architectural constants — they are defined by the requestor when creating the rfc_job. A high-urgency fleet patch may use cohort_size=1 and advance_mode=auto. A careful migration may use cohort_size=3 and advance_mode=review. The framework enforces the loop; the requestor controls the parameters."
+    },
+    {
+      "name": "Learn directive is a portable wrapper",
+      "description": "Any lug type (implementation, task, teaching, migration) can carry a learn_directive block. The directive does not change the lug's execution semantics — it adds a post-execution feedback step. This means the same improvement loop applies to harness migration, capability rollouts, schema changes, and skill deployments without any lug-type-specific logic."
+    },
+    {
+      "name": "Instruction quality feedback vs outcome feedback",
+      "description": "Challenge reports (spec-harness-challenge-reports-v1) record execution outcomes — what succeeded, what failed, what errors occurred. RFC feedback records instruction quality — what was ambiguous, what was missing, what the execute/verify steps should say instead. These are complementary: challenge reports improve reliability; RFC feedback improves clarity. Both travel back to hub; both are indexed separately."
+    },
+    {
+      "name": "Herald as response process manager",
+      "description": "For high-priority RFCs, the requestor sets a response_deadline. Herald monitors agent_messages for rfc_response notifications from the targeted spokes. If the deadline passes with fewer than feedback_threshold responses, Herald logs the timeout and returns available feedback to the improvement step. For low-priority RFCs, there is no active monitoring — hub's Phase 1 picks up responses on its next run."
+    },
+    {
+      "name": "Improvement is patching, not replacement",
+      "description": "Hub applies RFC feedback by patching specific fields in the draft lug (execute steps, verify steps, perceive guidance) — not replacing the entire lug. The diff is recorded in the lug's modification_log so future readers can see how instructions evolved across cohorts. The final version in the last cohort is the most refined."
+    },
+    {
+      "name": "Master/student peer verification",
+      "description": "The last spoke in cohort N to complete becomes the designated expert (master) for cohort N+1 (student). The master is the only agent with lived experience of how the current instruction set mapped to reality. It verifies the student's implementation — not as a gatekeeper, but as a design authority. The student can also consult the master pre-execution: 'before I interpret step 3 my own way, is this what you meant?' The master answers from experience, preventing divergent interpretations from compounding across the fleet. Hub infrastructure routes the messages; design knowledge stays with the agent."
+    },
+    {
+      "name": "Termination is explicit",
+      "description": "The loop ends when: (a) all spokes in the registry have received the lug, (b) requestor-defined max_cohorts is reached, or (c) two consecutive cohorts return no improvement suggestions (convergence). At termination, the final lug version is promoted from rfc draft to standard lug status and archived in the hub's improvement-loop-history/."
+    }
+  ],
+  "how": {
+    "trigger": "Requestor creates rfc_job object and submits to hub Ozi",
+    "steps_summary": [
+      "1. Requestor creates rfc_job: {draft_lug, cohort_config: {cohort_size, feedback_threshold, advance_mode, priority, max_cohorts, response_deadline_hours}, stated_goals: [], feedback_questions: []}",
+      "2. Hub Ozi writes rfc_job to hub/WAI-Spoke/hub/rfc-jobs/{job_id}.json; assigns cohort_0 from hub-registry.json (first N active spokes by health score or random sample)",
+      "3. Hub Ozi wraps draft_lug with learn_directive block: {dry_run: true, feedback_questions: [...], rfc_job_id, cohort_index, stated_goals}; writes wrapped lug to each cohort_0 spoke's incoming/",
+      "4. If priority=high: Herald notified with rfc_job_id, cohort spoke ids, response_deadline",
+      "5. Spoke Ozi detects lug with learn_directive in incoming/; executes dry_run; builds rfc_response: {spoke_id, rfc_job_id, cohort_index, dry_run_result: {success, errors, duration_s}, instruction_feedback: [{step, current_text, suggested_text, reason}], goal_alignment: {aligned: bool, gaps: []}}",
+      "6. Spoke writes rfc_response as outgoing lug (type: rfc_response, routed_to: HUB) to WAI-Spoke/lugs/outgoing/",
+      "7. Hub Phase 1 (or Herald for high-priority): collects rfc_response lugs for the job; when response_count >= feedback_threshold OR deadline passed: advance",
+      "8. Hub Ozi runs improvement step: reads all instruction_feedback items; for each step with >=2 consistent suggestions: patches that field in draft_lug; records patch in draft_lug.modification_log[]; increments draft_lug version suffix (v1.0 → v1.1 → ...)",
+      "9. If advance_mode=review: write diff lug to requestor's incoming/ with before/after for each patched field; wait for approval",
+      "10. If advance_mode=auto (or after review approval): assign cohort_1 (next N spokes not yet targeted); write improved lug to each cohort_1 spoke's incoming/; update rfc_job.cohorts_dispatched",
+      "9b. Hub records expert_spoke = last spoke_id to complete in cohort_index N; stores in rfc_job.expert_registry[N]",
+      "9c. Hub delivers peer_review_request lug to expert_spoke incoming/: {type: peer_review_request, rfc_job_id, cohort_being_reviewed: N+1, reviewee_spokes: [list of cohort N+1 spoke_ids]}",
+      "10b. When cohort N+1 spoke completes execution: _inject_rfc_instructions appends a step to write peer_review_submission to outgoing/: {type: peer_review_submission, rfc_job_id, cohort_index: N+1, implementation_summary: what was done, questions: [any ambiguities encountered]}",
+      "10c. Hub Phase 1 detects peer_review_submission in cohort N+1 spoke outgoing/ — routes to expert_spoke incoming/ as peer_review_request payload",
+      "10d. Expert_spoke Phase 1 processes peer_review_request: reads implementation_summary + questions, compares to its own experience, writes peer_review_response to outgoing/: {approved: bool, refinements: [{step, suggested_change, reason}], design_notes: free text}",
+      "10e. Hub routes peer_review_response to cohort N+1 spoke incoming/; if refinements present: spoke applies them and re-runs affected verify steps before final rfc_response",
+      "10f. Optional pre-execution: cohort N+1 spoke can write peer_consultation to outgoing/ BEFORE executing (ask expert: 'is my interpretation of step X correct?'); expert responds via peer_consultation_response; spoke waits up to 1 hub cycle before proceeding with best judgment",
+      "11. Repeat steps 5-10f for each cohort until termination condition met",
+      "12. On termination: promote final lug version to standard status; write to hub/WAI-Spoke/hub/rfc-jobs/history/{job_id}/final-lug.json; update rfc_job.status=completed"
+    ],
+    "constraints": [
+      "rfc_job must define stated_goals — the feedback step is grounded against these goals; without them instruction_feedback is unanchored",
+      "feedback_threshold must be <= cohort_size; default: ceil(cohort_size * 0.67)",
+      "advance_mode=auto is only permitted when priority=low — high-priority deployments affecting production behavior require advance_mode=review",
+      "Herald integration requires spec-herald-daemon-v1 to be implemented; without Herald, high-priority RFCs degrade to low-priority passive collection",
+      "The improvement step patches execute/verify/perceive fields only — lug metadata (id, type, routed_to, model_fit, acceptance_criteria) is not patched by RFC feedback",
+      "Convergence termination: if two consecutive cohorts return zero instruction_feedback items with suggested_text, the job is considered converged and terminates",
+      "Spoke dry-run does not execute destructive steps — lug must define which steps are safe for dry-run; steps without a dry_run_safe flag are skipped in dry-run mode"
+    ]
+  },
+  "schema": {
+    "inputs": [
+      {
+        "name": "rfc_job",
+        "description": "Created by requestor to initiate a fleet improvement loop deployment",
+        "schema": {
+          "id": "string — rfc-job-{slug}-v{n}",
+          "type": "rfc_job",
+          "status": "enum: active | completed | terminated",
+          "draft_lug": "object — the lug to be improved and deployed (any valid lug type)",
+          "cohort_config": {
+            "cohort_size": "integer — spokes per cohort (default 3)",
+            "feedback_threshold": "integer — responses needed before advancing (default ceil(cohort_size*0.67))",
+            "advance_mode": "enum: auto | review",
+            "priority": "enum: high | low",
+            "max_cohorts": "integer | null — null means run until all spokes covered",
+            "response_deadline_hours": "integer | null — only meaningful if priority=high"
+          },
+          "stated_goals": "list[string] — what the requestor considers success; each RFC response rates alignment against these",
+          "feedback_questions": "list[string] — specific questions the requestor wants feedback on (e.g. 'Was step 3 clear?', 'Did the verify pass on first run?')",
+          "cohorts_dispatched": "list[{cohort_index, spoke_ids, dispatched_at, responses_received}]",
+          "learning_cycle_log": "list[LearningCycleEntry] — one entry per cohort-to-cohort transition; empty until first advance",
+          "expert_registry": "dict[cohort_index_str → spoke_id] — last spoke to complete each cohort; becomes master for the next cohort",
+          "created_at": "ISO 8601 datetime",
+          "created_by": "string — spoke_id or 'human'"
+        }
+      },
+      {
+        "name": "learn_directive",
+        "description": "Block added to any lug to trigger post-execution feedback collection",
+        "schema": {
+          "dry_run": "bool — if true, spoke executes only dry_run_safe steps",
+          "feedback_questions": "list[string] — from rfc_job, passed through",
+          "stated_goals": "list[string] — from rfc_job, passed through",
+          "rfc_job_id": "string",
+          "cohort_index": "integer"
+        }
+      },
+      {
+        "name": "rfc_response",
+        "description": "Feedback lug returned by spoke after dry-run execution",
+        "schema": {
+          "spoke_id": "string",
+          "rfc_job_id": "string",
+          "cohort_index": "integer",
+          "dry_run_result": {
+            "success": "bool",
+            "steps_executed": "integer",
+            "steps_skipped": "integer (non-dry_run_safe steps)",
+            "errors": "list[string]",
+            "duration_s": "number"
+          },
+          "instruction_feedback": [
+            {
+              "field": "string — 'execute' | 'verify' | 'perceive'",
+              "step_label": "string — which step within the field",
+              "current_text": "string — verbatim from the lug",
+              "suggested_text": "string — the spoke's suggested improvement",
+              "reason": "string — why the current text was unclear or insufficient"
+            }
+          ],
+          "goal_alignment": {
+            "aligned": "bool",
+            "gaps": "list[string] — stated_goals that the lug instructions do not appear to address"
+          },
+          "question_responses": "list[{question, answer}] — responses to feedback_questions"
+        }
+      }
+    ],
+    "types": {
+      "LearningCycleEntry": {
+        "cycle_index": "integer — 0-based; matches cohort_from",
+        "cohort_from": "integer — cohort index that provided the feedback",
+        "cohort_to": "integer — cohort index that received the improved lug",
+        "feedback_contributors": "list[{spoke_id, patches_contributed, response_received_at}] — spokes whose rfc_response triggered at least one patch",
+        "patches_applied": "integer — count of fields patched in this cycle",
+        "patch_summary": "list[string] — human-readable description of each patch (e.g. 'execute/step 3: clarified bootstrap path')",
+        "improvement_version": "string — lug version suffix after patching (e.g. 'v1.1')",
+        "first_recipient_spoke": "string — spoke_id of the first spoke in cohort_to; this spoke is the verification that the improvement was deployed",
+        "last_contributor_spoke": "string — spoke_id of the final spoke in cohort_from to return feedback; serves as attribution anchor for the improvement",
+        "cycle_completed_at": "ISO 8601 datetime — when the improvement step ran and cohort_to was dispatched",
+        "no_change": "bool — true if threshold was met but no patches applied (instructions already optimal); still recorded for completeness",
+        "expert_spoke": "string — spoke_id of the master who reviewed cohort_to's work",
+        "peer_review_outcome": "enum: approved | refinement_applied | consultation_only | no_review — approved=master confirmed implementation; refinement_applied=master sent changes that were applied; consultation_only=student pre-consulted but no post-review; no_review=expert unavailable",
+        "peer_consultations": "integer — count of pre-execution consultation exchanges between student and master this cycle"
+      }
+    },
+    "outputs": [
+      {
+        "name": "patched_lug",
+        "description": "Improved version of draft_lug after hub improvement step; version suffix incremented",
+        "schema": {
+          "_all_original_fields": "preserved",
+          "modification_log": [
+            {
+              "version": "string — e.g. 'v1.1'",
+              "cohort_index": "integer",
+              "patches": [
+                {
+                  "field": "string",
+                  "step_label": "string",
+                  "before": "string",
+                  "after": "string",
+                  "source_spoke_count": "integer"
+                }
+              ],
+              "patched_at": "ISO 8601 datetime"
+            }
+          ]
+        }
+      }
+    ],
+    "state_changes": [
+      "rfc_job.learning_cycle_log grows by one LearningCycleEntry per cohort advance; entries are permanent — never removed",
+      "rfc_job.expert_registry[N] = last spoke_id to complete cohort N; set when cohort N's final rfc_response arrives",
+      "rfc_job.cohorts_dispatched grows by one entry per cohort advance",
+      "rfc_job.status = completed on termination",
+      "hub/WAI-Spoke/hub/rfc-jobs/history/{job_id}/ created with final-lug.json and cohort-responses/ on completion",
+      "draft_lug.version suffix incremented per improvement step (v1.0 → v1.1 → ...)"
+    ]
+  },
+  "constraints": [
+    "stated_goals is required — an rfc_job without stated_goals cannot be dispatched",
+    "advance_mode=auto only permitted for priority=low",
+    "Spoke dry-run skips steps not marked dry_run_safe=true — lug authors must mark safe steps",
+    "Herald dependency: high-priority RFC response monitoring requires spec-herald-daemon-v1 implemented",
+    "Improvement step patches execute/verify/perceive only — structural lug fields are immutable",
+    "Convergence terminates after 2 zero-feedback cohorts",
+    "rfc_response is mandatory — if a spoke does not respond within deadline (high-priority) or by next hub consolidation (low-priority), it is skipped and counted against the threshold"
+  ],
+  "tests": [
+    {
+      "id": "test-rfc-job-dispatches-to-cohort",
+      "description": "Creating an rfc_job with cohort_size=2 results in exactly 2 spokes receiving the wrapped draft lug with learn_directive in their incoming/",
+      "pass_criteria": "2 spoke incoming/ directories contain the wrapped lug; learn_directive.rfc_job_id matches job id; learn_directive.dry_run=true"
+    },
+    {
+      "id": "test-spoke-returns-rfc-response",
+      "description": "Spoke Ozi processing a lug with learn_directive produces a valid rfc_response outgoing lug",
+      "pass_criteria": "outgoing/ contains rfc_response lug with spoke_id, rfc_job_id, dry_run_result, instruction_feedback (may be empty list), goal_alignment"
+    },
+    {
+      "id": "test-hub-patches-on-threshold",
+      "description": "When feedback_threshold responses received, hub improvement step patches fields with >=2 consistent suggestions and records modification_log entry",
+      "pass_criteria": "Patched lug version incremented; modification_log has one entry with correct cohort_index and patches; only execute/verify/perceive fields patched"
+    },
+    {
+      "id": "test-advance-mode-review-gates",
+      "description": "advance_mode=review produces a diff lug in the requestor's incoming/ before advancing to next cohort; next cohort does not receive lug until diff is approved",
+      "pass_criteria": "diff lug present in requestor incoming/; next cohort spokes have empty incoming/ until approval lug written back"
+    },
+    {
+      "id": "test-convergence-termination",
+      "description": "Two consecutive cohorts returning zero instruction_feedback items triggers job termination; final lug written to history/",
+      "pass_criteria": "rfc_job.status=completed; final-lug.json present in history directory; no further cohorts dispatched after convergence"
+    },
+    {
+      "id": "test-learn-directive-generalization",
+      "description": "A non-harness lug (e.g. task lug for skill deployment) with learn_directive behaves identically to a migration lug with learn_directive",
+      "pass_criteria": "Same rfc_response schema produced; same hub improvement loop applies; no harness-specific code paths triggered"
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "test_file": null,
+    "test_count": 0,
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": "2026-05-31T17:00:00Z",
+    "verification_note": "Spec verified session-20260531-1650. Structure complete: 5 use_cases, 7 patterns, 12-step how with peer-review sub-steps, 3 schema input types (rfc_job, learn_directive, rfc_response), LearningCycleEntry type with 13 fields, modification_log output schema, 6 state_change entries. All 4 related_specs exist in open/: spec-harness-challenge-reports-v1, spec-herald-daemon-v1, spec-intra-agent-comms-v1, spec-harness-self-maintaining-wheel-v1. 2 dependencies verified (herald-daemon + intra-agent-comms, both with graceful-degradation notes). 7 constraints documented at top-level; 7 process constraints in how.constraints. 6 tests with pass_criteria. Internal consistency confirmed: learn_directive is portable across lug types (pattern 2), advance_mode=auto gated on priority=low (constraint), termination conditions explicit (pattern 7). No open questions. Spec drift risk: low."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-harness-challenge-reports-v1",
+    "spec-herald-daemon-v1",
+    "spec-intra-agent-comms-v1",
+    "spec-harness-self-maintaining-wheel-v1"
+  ],
+  "dependencies": [
+    {
+      "spec_id": "spec-herald-daemon-v1",
+      "required_for": "high-priority RFC response monitoring; degrades gracefully to passive collection without it"
+    },
+    {
+      "spec_id": "spec-intra-agent-comms-v1",
+      "required_for": "agent_messages channel for rfc_response delivery; outgoing lug path available as fallback"
+    }
+  ],
+  "outcome": "Spec reviewed and locked. Defines the Fleet Improvement Loop protocol: a general-purpose cohort-based deployment loop where draft lugs carry a learn_directive, spoke cohorts return structured rfc_response feedback on instruction quality, hub patches execute/verify/perceive fields before advancing to the next cohort, and a master/student peer verification pattern routes lived execution experience forward. Terminates on all-spokes coverage, max_cohorts, or convergence (2 zero-feedback cohorts). Full schema defined for rfc_job, learn_directive, rfc_response, LearningCycleEntry, and patched_lug. 6 test cases specified. Herald + intra-agent-comms are soft dependencies (graceful degradation documented). Spec is implementation-ready; impl lugs can be created against it immediately.",
+  "execution_mode": "tender",
+  "routed_to": "LOCAL",
+  "execution_substrate": null,
+  "gt_convoy_hint": "completed: spec locked and ready for impl",
+  "completed_at": "2026-05-31T17:00:00Z"
+}

@@ -1,0 +1,195 @@
+# Teaching: WAI Lug Advisor v2 — Canonical Storage, PEV Chain, Type System
+
+**Type:** Protocol Correction + Enhancement
+**Version:** 2.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** true
+**Affects:** Lug authoring, signal routing, lug type system, PEV pattern
+**Supersedes:** Any prior lug-advisor teaching or WAI-Signals.jsonl usage instructions
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone and has no dependencies.
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 1 of 6
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Provides
+
+Three significant updates to lug authoring guidance:
+
+1. **Canonical Storage Declaration** — Single source of truth for where lugs live. Corrects a prior contradiction where signal lugs were sometimes directed to `WAI-Signals.jsonl`.
+2. **PEV Chain Pattern** — Linked lug chains (perceive→execute→verify) as first-class pattern instead of fields stuffed on a single record.
+3. **Canonical Type System** — `work.kind` replaces `task/bug/feature` as top-level types. Dual-read compatibility preserved.
+
+---
+
+## Why This Matters
+
+### Canonical Storage
+Prior versions of `wai-lug-advisor.md` contained a table row directing signals to `WAI-Signals.jsonl`. This contradicted every other protocol file. Agents following the lug advisor literally would write signals to the wrong place. `WAI-Signals.jsonl` is now **retired** — signals are high-impact lugs (impact >= 8) stored in `WAI-Lugs.jsonl`.
+
+### PEV Chain
+Stuffing perceive/execute/verify as fields on a single lug makes the relationship between problem framing, intended action, and proof invisible to cross-lug analysis. Linked lugs with `pev_role` + `pev_chain_id` make the chain queryable and explicit.
+
+### Type System
+`type: "task"`, `type: "bug"`, `type: "feature"` as top-level types are legacy. The canonical model uses `type: "work"` with `work.kind: "task|bug|feature"`. This enables richer querying and consistent top-level type filtering.
+
+---
+
+## What Changed in templates/commands/wai-lug-advisor.md
+
+### 1. Canonical Storage section added (near top)
+
+```
+## Canonical Storage
+
+Single source of truth: This file is the canonical declaration for lug storage.
+
+| What | Where | Notes |
+|------|-------|-------|
+| All lugs | WAI-Spoke/WAI-Lugs.jsonl | Append-only JSONL, one object per line |
+| Signals | WAI-Spoke/WAI-Lugs.jsonl | Signals ARE lugs with impact >= 8 — no separate file |
+| Inbox/outbox | WAI-Spoke/lugs/inbox/ and lugs/outbox/ | Delivery channel only — not durable storage |
+| Hub bulletin | WAI-Hub/Signals/incoming/ | High-impact lugs copied here at closeout |
+
+WAI-Spoke/WAI-Signals.jsonl is RETIRED. Do not create it or write to it.
+```
+
+### 2. Signal row in lug type table corrected
+
+Old: `No — record in WAI-Signals.jsonl`
+New: `No — signals ARE lugs; store in WAI-Lugs.jsonl (no separate file)`
+
+### 3. PEV Chain Pattern section added
+
+Each lug in a chain carries:
+- `pev_role`: `perceive` | `execute` | `verify`
+- `pev_chain_id`: shared identifier for the chain
+
+Example:
+```json
+{"id": "pev-auth-perceive", "type": "work", "pev_role": "perceive", "pev_chain_id": "pev-auth-20260322", "title": "Auth: problem framing", "evidence": ["Users can bypass 2FA via API"]}
+{"id": "pev-auth-execute", "type": "work", "pev_role": "execute", "pev_chain_id": "pev-auth-20260322", "title": "Auth: implementation plan", "plan": "Add 2FA enforcement middleware"}
+{"id": "pev-auth-verify", "type": "work", "pev_role": "verify", "pev_chain_id": "pev-auth-20260322", "title": "Auth: verification criteria", "criteria": ["API requests without valid 2FA token receive 403"]}
+```
+
+Compatibility: existing lugs with perceive/execute/verify as plain fields remain valid.
+
+### 4. Canonical Type System section added
+
+Top-level canonical types: `epic`, `work`, `decision`, `finding`, `test`, `session-summary`, `signal`
+
+`work.kind` replaces task/bug/feature as top-level:
+```json
+{"id": "work-fix-auth-20260322", "type": "work", "work": {"kind": "bug"}, "title": "Fix auth bypass"}
+```
+
+Dual-read: `type: "task"` is treated as `type: "work", work.kind: "task"`. Do NOT bulk-rewrite existing lugs.
+
+---
+
+## Resolving {framework_path}
+
+Throughout this teaching, `{framework_path}` refers to the root of the Wheelwright framework repository. Resolve it by reading `WAI-State.json` at `wheel.framework_path`, or ask the user where the framework is installed (typically `~/projects/wheelwright/framework`).
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+echo "Framework path: $FRAMEWORK_PATH"
+# If empty, ask the user or check ~/projects/wheelwright/framework
+```
+
+---
+
+## How to Apply This Teaching
+
+**Recommended application order for the canonical evolution batch:**
+T-01 (this) → T-05 (signals retired) → T-03 (P11) → T-04 (guide fix) → T-02 (closeout) → T-06 (hub bulletin)
+
+### Step 1 — Update lug-advisor command file
+
+```bash
+cp "$FRAMEWORK_PATH/templates/commands/wai-lug-advisor.md" WAI-Spoke/commands/wai-lug-advisor.md
+```
+
+If your spoke has a local copy at `WAI-Spoke/commands/wai-lug-advisor.md`, replace it.
+
+### Step 2 — Retire WAI-Signals.jsonl (if it exists)
+
+```bash
+# Check if it exists
+ls WAI-Spoke/WAI-Signals.jsonl 2>/dev/null && echo "EXISTS" || echo "Not present — skip to Step 3"
+```
+
+If it exists, use the full migration script in Teaching 5 (`signal-wai-signals-retired-v1.md.teaching`) to audit and rescue any signals before archiving. Teaching 5 contains the complete rescue script.
+
+Quick archive (only if you have already confirmed no signals need rescuing):
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/WAI-Signals.jsonl "WAI-Spoke/seed/ingest/processed/WAI-Signals-retired-$(date +%Y%m%d).jsonl"
+```
+
+### Step 3 — For new lugs going forward
+
+- Use `type: "work"` + `work.kind: "task|bug|feature"` instead of `type: "task"` etc.
+- For structured work: use PEV chain with `pev_role` + `pev_chain_id`
+- Do NOT rewrite existing lugs in bulk
+
+### Step 4 — Move teaching to processed
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/seed/ingest/skill-wai-lug-advisor-v2.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+- Agents writing signals will store them in `WAI-Lugs.jsonl`, not a separate file
+- PEV chains enable cross-lug queries like "find all execute lugs without a verify partner"
+- Type filtering becomes consistent: `select(.type == "work")` returns all executable work
+- No disruption to existing lugs — dual-read compatibility preserved
+
+---
+
+## Verification
+
+After applying:
+
+```bash
+# 1. Confirm WAI-Signals.jsonl does not exist in root
+ls WAI-Spoke/WAI-Signals.jsonl 2>/dev/null && echo "FAIL — still exists, retire it" || echo "PASS — correctly absent"
+
+# 2. Confirm lug-advisor has Canonical Storage section
+grep -q "Canonical Storage" WAI-Spoke/commands/wai-lug-advisor.md && echo "PASS — section present" || echo "FAIL — section missing"
+
+# 3. Confirm no stale USAGE of WAI-Signals.jsonl (retirement notices are fine)
+# Check for old routing instructions like "record in WAI-Signals.jsonl"
+grep -q "record in WAI-Signals\|write to WAI-Signals\|append to WAI-Signals\|WAI-Signals.jsonl |" WAI-Spoke/commands/wai-lug-advisor.md && echo "FAIL — stale usage instruction found" || echo "PASS — clean (retirement notice is acceptable)"
+```
+
+---
+
+## Backward Compatibility
+
+- All existing lugs with `type: "task"`, `type: "bug"`, `type: "feature"` remain valid
+- Existing PEV fields (perceive/execute/verify on single lug) remain valid
+- No bulk rewrites required
+- WAI-Signals.jsonl content is preserved in processed/ (not deleted)
+
+---
+
+**Teaching Package:** skill-wai-lug-advisor-v2
+**Safe to Auto-Adopt:** Yes
+**Impact:** Corrects active wrong behavior (signal routing). Non-destructive for existing lugs.

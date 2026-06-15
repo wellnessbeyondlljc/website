@@ -1,0 +1,110 @@
+{
+  "id": "spec-hub-spoke-sync-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 7,
+  "subject": {
+    "kind": "protocol",
+    "id": "hub-spoke-sync",
+    "label": "Hub-Spoke Lug Sync"
+  },
+  "title": "Hub-Spoke Lug Sync -- cross-spoke lug distribution protocol",
+  "what": "The hub-spoke sync protocol distributes lugs between spokes using outgoing/incoming directories as the transport layer. A spoke places lugs in WAI-Spoke/lugs/outgoing/ for the hub to pick up. The hub distributes them to target spokes' incoming/ directories. Delivery confirmations flow back. Signals use the faster signal channel.",
+  "why": "Without hub-spoke sync, framework improvements require direct filesystem access to each spoke - which is not possible across machines. The outgoing/incoming transport layer decouples delivery from direct access.",
+  "audience": [
+    "admin",
+    "dev"
+  ],
+  "use_cases": [
+    {
+      "title": "Distributing a FRAMEWORK impl lug",
+      "trigger": "Framework spoke creates an impl lug with routed_to=FRAMEWORK",
+      "outcome": "At closeout, lug copied to outgoing/. Hub picks it up and distributes to each active spoke's incoming/. Each spoke adopts at next session.",
+      "persona": "admin"
+    },
+    {
+      "title": "Teaching distribution",
+      "trigger": "Hub authors a *.teaching file",
+      "outcome": "Teaching distributed to all spoke seed/ingest/ directories via transport. Each spoke adopts at next session start.",
+      "persona": "admin"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Outgoing is fire-and-forget",
+      "description": "The spoke places lugs in outgoing/ and closes out. Hub pickup is asynchronous - the spoke does not wait for acknowledgment."
+    },
+    {
+      "name": "FRAMEWORK vs SIGNAL routing",
+      "description": "FRAMEWORK routes work that can queue for normal dispatch. SIGNAL routes urgent patches applied at next session start. Never conflate them."
+    }
+  ],
+  "how": {
+    "trigger": "Closeout: any lug with routed_to=FRAMEWORK or SIGNAL is copied to outgoing/",
+    "steps_summary": [
+      "1. At closeout: scan bytype/ for lugs with routed_to=FRAMEWORK or SIGNAL",
+      "2. Copy to WAI-Spoke/lugs/outgoing/",
+      "3. Hub gardener picks up outgoing/ contents at next hub session",
+      "4. Hub distributes to each spoke's incoming/ per routing target",
+      "5. Spoke wakeup reads incoming/, acknowledges, processes lug"
+    ],
+    "constraints": [
+      "Never modify a lug in outgoing/ after placement - may already be in transit",
+      "Delivery confirmation must be sent back to source spoke on receipt"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Closeout (automated)",
+      "Manual outgoing/ placement for urgent items"
+    ],
+    "not_when": [],
+    "frequency": "Each closeout with FRAMEWORK or SIGNAL lugs"
+  },
+  "schema": {
+    "inputs": [
+      "bytype/ lugs with routed_to=FRAMEWORK or SIGNAL"
+    ],
+    "outputs": [
+      "WAI-Spoke/lugs/outgoing/ - lugs queued for hub",
+      "Receiving spoke WAI-Spoke/lugs/incoming/ - delivered"
+    ],
+    "state_changes": [
+      "Lug copies placed in outgoing/",
+      "Delivery confirmations in incoming/processed/"
+    ]
+  },
+  "constraints": [
+    "FRAMEWORK lugs are for all spokes - never route spoke-specific work as FRAMEWORK"
+  ],
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "hub-spoke-sync",
+  "body": "The hub-spoke sync protocol moves lugs and teachings between spokes without requiring direct filesystem access across machines. The transport mechanism is a symmetric outgoing/incoming directory pair: a spoke writes to WAI-Spoke/lugs/outgoing/, the hub gardener reads it and copies to each target spoke's WAI-Spoke/lugs/incoming/. The spoke wakeup protocol processes incoming/ at session start. Delivery is asynchronous — the originating spoke does not wait for acknowledgment and closes out immediately after writing to outgoing/. Three routing values trigger outgoing placement: FRAMEWORK (improvement relevant to all spokes), SPOKE/{spoke_id} (work for a specific spoke), and ASSESSOR (model telemetry deposited to the hub assessor inbox). The routing value SIGNAL is fully deprecated — no new lugs should use it. Cross-spoke lugs must pass a pre-delivery checklist before placement: perceive, execute, and verify must be non-empty; destination_wheel_id must be resolvable in hub-registry.json; acceptance_criteria must be non-empty; effort_score and model_fit must be set. After checklist passes, the lug is written to outgoing/ and simultaneously copied to the target spoke's incoming/ via hub-registry.json path lookup. Teaching distribution follows the same transport layer but uses the seed/ingest/ target directory on each spoke rather than lugs/incoming/. Delivery confirmations flow back as delivery_confirmation lugs in the originating spoke's incoming/ directory.",
+  "done_when": [
+    "A lug with routed_to=FRAMEWORK placed in outgoing/ at closeout is present in the target spoke's WAI-Spoke/lugs/incoming/ after the hub gardener run",
+    "hub-registry.json lookup resolves a wheel_id to the correct spoke filesystem path for delivery",
+    "The pre-delivery checklist rejects a lug with empty perceive and does not copy it to outgoing/",
+    "A delivery_confirmation lug is written to the originating spoke's incoming/ after the target spoke acknowledges receipt",
+    "Lugs with routed_to=SPOKE/{spoke_id} land in that specific spoke's incoming/ and not in any other spoke's incoming/"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-signal-routing-v1",
+    "spec-teaching-pipeline-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

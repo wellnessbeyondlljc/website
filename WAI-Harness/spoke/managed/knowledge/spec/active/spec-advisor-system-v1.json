@@ -1,0 +1,138 @@
+{
+  "id": "spec-advisor-system-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "system",
+    "id": "advisor-system",
+    "label": "Advisor System"
+  },
+  "title": "Advisor System -- scheduled AI analysis agents with automated remediation",
+  "what": "The advisor system is a registry of AI agents (advisors), each with a defined mandate, schedule, and preferred model. Advisors run on a schedule (nightly/weekly) and produce advisory reports plus remediation lugs. Ozi dispatches advisors. Each advisor reads spoke state, identifies gaps or risks, and writes findings as lugs.",
+  "why": "Without advisors, spoke health checks require manual sessions. Advisors automate quality control - architecture review, spec fidelity, tool config drift, historical pattern analysis - without human-triggered sessions.",
+  "audience": [
+    "admin",
+    "dev"
+  ],
+  "use_cases": [
+    {
+      "title": "Nightly spec fidelity check by Sage",
+      "trigger": "Nightly run after gardener",
+      "outcome": "Sage scans WAI-SpecIndex.jsonl, identifies specs with no tests or stale content, creates remediation lugs",
+      "persona": "admin"
+    },
+    {
+      "title": "Weekly architecture review by Archie",
+      "trigger": "Weekly schedule",
+      "outcome": "Archie reviews impl lug patterns, flags architectural drift, writes advisory report",
+      "persona": "dev"
+    },
+    {
+      "title": "Tool advisor audit on config drift",
+      "trigger": "AGENTS.md or CLAUDE.md modified",
+      "outcome": "Tool advisor compares tool configs against best practices, flags mismatches",
+      "persona": "dev"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Advisor is stub until activated",
+      "description": "New advisors start with status=stub - registered but not dispatching. Activate by implementing the advisor script and setting status=active."
+    },
+    {
+      "name": "Advisor output = report + lugs",
+      "description": "Every advisor run produces two outputs: a human-readable report and machine-actionable remediation lugs."
+    }
+  ],
+  "how": {
+    "trigger": "Ozi dispatch per run_schedule in schedule-index.json",
+    "steps_summary": [
+      "1. Ozi reads schedule-index.json, identifies advisors due to run",
+      "2. For each advisor: route to preferred_model_class",
+      "3. Advisor reads spoke state (lugs, skills, configs, code)",
+      "4. Advisor identifies gaps, risks, or improvements",
+      "5. Writes advisory report to WAI-Spoke/advisors/{id}_report.md",
+      "6. Creates remediation lugs in bytype/work/open/"
+    ],
+    "constraints": [
+      "Advisors detect and route - they never fix in place (detect-signal-route principle)",
+      "run_after field must be respected (Sage runs after Gardener)"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Ozi nightly/weekly schedule",
+      "Manual invocation via wai-tool-advisor skill"
+    ],
+    "not_when": [
+      "Mid-implementation - advisors are analytical, not implementers"
+    ],
+    "frequency": "Per schedule"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/ state (lugs, skills, advisors, sessions)",
+      "WAI-Spoke/advisors/registry.json - advisor definitions"
+    ],
+    "outputs": [
+      "WAI-Spoke/advisors/{id}_report.md - advisory report",
+      "bytype/work/open/ - remediation lugs"
+    ],
+    "state_changes": [
+      "last_run_at updated in registry.json and schedule-index.json",
+      "New remediation lugs created"
+    ]
+  },
+  "constraints": [
+    "Advisors write to report + lugs only - never directly modify behavioral configs",
+    "run_after field must be respected"
+  ],
+  "tests": [
+    {
+      "test_file": "tests/behavioral/test_tool_advisor.py",
+      "test_names": [],
+      "coverage_area": "tool advisor behavior and output",
+      "last_verified": null
+    },
+    {
+      "test_file": "tests/behavioral/test_tool_advisor_redirects.py",
+      "test_names": [],
+      "coverage_area": "tool advisor redirect handling",
+      "last_verified": null
+    }
+  ],
+  "impl_lugs": [
+    "impl-sage-advisor-v1"
+  ],
+  "health": {
+    "test_coverage": "partial",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "When does status change from stub to active?"
+    ]
+  },
+  "subject_id": "advisor-system",
+  "body": "The advisor system is a registry of AI agents, each with a defined mandate, schedule, preferred model class, and escalation path. Advisors run on a nightly or weekly schedule dispatched by Ozi (or manually via wai-tool-advisor skill). Each advisor reads the spoke state — lugs, sessions, skill files, configs — identifies gaps or risks within its mandate, then writes two outputs: a human-readable advisory report and machine-actionable remediation lugs in bytype/work/open/. Advisors are registered in WAI-Spoke/advisors/registry.json and scheduled in WAI-Spoke/advisors/schedule-index.json. The run_after field in schedule-index.json enforces sequencing (e.g., Sage runs after Gardener). New advisors start at status=stub and are promoted to status=active once their script is implemented. The detect-signal-route principle is mandatory: advisors detect problems and route findings; they never fix in place. Escalation paths are declared in each advisor's YAML charter — typically escalating to Ozi via a LOCAL-routed lug. Each advisor run appends a record to WAI-Spoke/advisors/{id}/runs.jsonl and emits a lifecycle event to WAI-Spoke/advisors/lifecycle.jsonl. Advisors that require pilot evaluation define a pilot_contract in their charter with KPIs, promotion criteria, and a minimum observation window before any behavioral conclusions are drawn. Advisor attribution fields (created_by_advisor, advisor_run_id, advisor_confidence) are required on all lugs authored by an advisor to enable ROI measurement.",
+  "done_when": [
+    "Registry at WAI-Spoke/advisors/registry.json contains an entry for each active advisor with id, schedule, preferred_model_class, and status fields",
+    "Each advisor run appends a record to WAI-Spoke/advisors/{id}/runs.jsonl with trigger_type, findings_count, and completed_at",
+    "An advisor-generated lug includes created_by_advisor, advisor_run_id, and advisor_confidence fields",
+    "Advisors with run_after dependencies in schedule-index.json do not dispatch before their prerequisite completes in the same nightly run",
+    "An advisor at status=stub produces no dispatch output and does not appear in wakeup advisor summary"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-ozi-queue-v1",
+    "spec-spec-system-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

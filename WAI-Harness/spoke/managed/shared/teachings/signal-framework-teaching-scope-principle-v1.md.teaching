@@ -1,0 +1,39 @@
+# Teaching: Framework Teaching Adoption Scope — templates/commands/ only
+
+**Type:** signal
+**safe_to_auto_adopt:** true
+**Created:** 2026-03-24
+**Impact:** 8
+
+## Prerequisites
+
+None — standalone.
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+## What This Teaching Provides
+
+When adopting teachings on the **framework spoke** specifically:
+
+- **Project scope** = `templates/commands/` and other project files
+- **WAI-Spoke/** = session infrastructure — never modified as part of project development
+- Teaching adoption on the framework spoke is a **verification pass**, not an apply pass
+- If the change is already in `templates/commands/`, move teaching to processed without edits
+- The framework is always ahead of its own teachings — it generates them, then distributes downstream
+
+## Signal Lug (embed verbatim)
+
+```json
+{"id":"signal-framework-teaching-scope-principle-v1","type":"signal","title":"Framework teaching adoption = verify templates/commands/ only; WAI-Spoke/ is spoke infrastructure","description":"When adopting teachings on the framework spoke, check templates/commands/ (project scope). If change already present, move teaching to processed without edits. Never modify WAI-Spoke/ as part of project development work. WAI-Spoke/ is session infrastructure only.","impact":8,"created_by":"claude-sonnet-4-6","created_at":"2026-03-24T05:50:00Z","session_id":"session-20260324-0540","rationale":"Prevents scope confusion for future agents working on the framework. The framework generates teachings for downstream spokes but is always ahead of its own teachings — adoption here is a verification pass."}
+```
+
+## Idempotency
+
+If lug id `signal-framework-teaching-scope-principle-v1` already exists in `WAI-Lugs.jsonl` — skip append. Move teaching to processed.

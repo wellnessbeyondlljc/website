@@ -1,0 +1,53 @@
+{
+  "id": "spec-advisor-coverage-taxonomy-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-28T00:30:00Z",
+  "updated_at": "2026-05-28T00:30:00Z",
+  "routed_to": "FRAMEWORK",
+  "impact": 8,
+  "subject": { "kind": "schema", "id": "advisor-coverage-taxonomy", "label": "Advisor Coverage Taxonomy" },
+  "title": "Advisor Coverage Taxonomy — structured dimension model for scout swarms",
+  "what": "Each advisor owns a coverage_taxonomy.yaml that defines its watchable dimensions, the target number of scouts per dimension, which scouts currently fill each slot, and a coverage_score. Scouts are meant to swarm — multiple scouts per dimension probe from different angles (broad sweep, threshold alert, trend, quality). An advisor with <80% coverage on any P1 dimension is under-instrumented.",
+  "why": "Without a taxonomy, advisors accumulate scouts randomly. Dense coverage of easy dimensions, blind spots in critical ones. The taxonomy makes gaps visible to Ozi, Wilbur, and the advisor itself — enabling predictable expansion and budget allocation.",
+  "scout_angle_types": {
+    "broad_sweep": "Finds anything wrong in this dimension — wide net, any signal",
+    "threshold": "Alerts only when a count or age crosses a defined limit",
+    "trend": "Detects whether this dimension has been getting worse over time",
+    "quality": "Checks structural soundness, not just presence (exists vs. is good)"
+  },
+  "schema": {
+    "advisor_id": "string",
+    "taxonomy_version": "semver",
+    "coverage_target_score": "float 0-1 (default 0.80)",
+    "overall_coverage_score": "float — fraction of dimension slots filled",
+    "dimensions": [
+      {
+        "id": "string — kebab-case dimension identifier",
+        "label": "string — human display name",
+        "description": "string — what gap this dimension detects",
+        "priority": "P1|P2|P3|P4|P5",
+        "target_scouts": "int — how many scouts this dimension should have when fully instrumented",
+        "scouts": [
+          { "id": "scout id", "status": "ready|draft|gap" }
+        ],
+        "coverage_score": "float — len(non-gap scouts) / target_scouts",
+        "gap_risk": "low|medium|high — consequence of this dimension being under-covered"
+      }
+    ],
+    "gap_scouts_needed": [
+      { "dimension": "dimension_id", "scout_id": "proposed scout id", "priority": "P1-P5" }
+    ],
+    "total_gaps": "int",
+    "total_slots": "int",
+    "current_covered": "int"
+  },
+  "coverage_rules": {
+    "p1_minimum": "All P1 dimensions must reach coverage_score >= 0.75 before advisor is considered production-ready",
+    "swarm_minimum": "Any dimension with target_scouts >= 3 must have at least 2 non-gap scouts or it fails Ozi's coverage gate",
+    "gap_scout_creation": "Gap scouts are created by the advisor during reflection or by Ozi init — they go to scouts/spoke_local/draft/ with status=gap cleared to status=draft",
+    "promotion_path": "draft → ready requires 7 days minimum + all required fields present (enforced by scout-vera-lifecycle-draft-scout-stale-v1)"
+  },
+  "reference_implementation": "WAI-Spoke/advisors/vera/coverage_taxonomy.yaml"
+}

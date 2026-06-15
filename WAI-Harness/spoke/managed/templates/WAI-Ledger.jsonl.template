@@ -1,0 +1,33 @@
+# WAI Session Ledger Template
+#
+# Purpose: Append-only log of commitments (requests, agreements, deliveries)
+#          Survives context loss and prevents premature completion declarations
+#
+# Origin: Created after WAI v2 migration context loss incident (2026-02-12)
+#         where token exhaustion caused agent to misinterpret scope and
+#         declare completion with 2 phases unfinished
+#
+# Schema per entry:
+# {
+#   "id": "led-YYYY-MM-DD-NNN",
+#   "timestamp": "ISO 8601 datetime",
+#   "session_id": "session-NNN",
+#   "type": "request|agreement|clarification|amendment|delivery|verification|rejection",
+#   "content": "Plain language description",
+#   "source": "conductor|agent",
+#   "references": "led-ID (optional - threads conversation)",
+#   "commit": "git hash (for deliveries)",
+#   "status": "open|fulfilled|amended|rejected",
+#   "lug_ids": ["lug-IDs"] (optional - Lugs created to fulfill this)
+# }
+#
+# Lifecycle:
+# request (conductor) → agreement (agent) → delivery (agent) → verification (conductor)
+#
+# On session start: Read ledger, filter status:open, surface in briefing
+# On session close: Reconcile open entries, create deliveries or flag unfulfilled
+# On context loss: New agent reads ledger, compares agreements against codebase
+#
+# CRITICAL: This file is append-only. Never delete lines.
+#           Protected by WAI-Integrity.md
+

@@ -1,0 +1,60 @@
+---
+id: wai-savepoint-v1
+title: WAI Savepoint — mid-arc context reset without full closeout
+version: 1
+type: protocol-addition
+safe_to_auto_adopt: true
+created_at: 2026-04-23
+source_session: session-20260423-1536
+---
+
+## Problem
+
+Long implementation arcs would hit ~80% context with work still in progress. The only option was either a full closeout (losing momentum) or continuing until context collapse (losing data).
+
+## Addition
+
+A savepoint is a lightweight mid-arc state save. It preserves the in-progress lug state and a resume note so the next session can load only the lug (~5k tokens) instead of running full wakeup.
+
+## What was added
+
+**New skill:** `templates/commands/wai-savepoint.md`
+- 6-step protocol: identify lug → capture progress → write `savepoint_note` to lug → write `_savepoint` to WAI-State → git commit → output confirmation
+- Does NOT run closeout, does NOT change lug status, does NOT write closeout track entry
+
+**Hook change:** `WAI-Spoke/hooks/session-start.sh` (and `_hooks/`)
+- Reads `WAI-State._savepoint` at session start
+- If `status == "pending"`: outputs `Savepoint: PENDING [lug_id] — resume_note` in CONTEXT HEALTH block
+
+**Protocol change:** `templates/commands/wai.md` fast path
+- Banner: shows `⚑ Savepoint: [lug_id] — [resume_note]` if CONTEXT HEALTH contains pending savepoint
+- Step 2c (new): savepoint intercept for non-intent path — prompts `[C]ontinue / [F]ull wakeup`
+  - C path: read lug + 2 track entries only (~5k tokens), set `_savepoint.status = "resumed"`, skip vibe/queue
+  - F path: clear `_savepoint`, continue with normal wakeup
+
+## Prerequisites
+
+- Spoke uses bytype lug storage (post-S51)
+- `templates/commands/wai.md` has intent router (Step 2b) present
+
+## Batch Sequence
+
+1. Copy `wai-savepoint.md` to `templates/commands/` and `.claude/commands/`
+2. Add SAVEPOINT_STATUS block to `session-start.sh` (9b+ section, before output)
+3. Add `Savepoint: PENDING` line to CONTEXT HEALTH output block
+4. Add banner line in `wai.md` Step 2 (after Queue line)
+5. Add Step 2c savepoint intercept between Step 2b and Step 3
+
+## Verification
+
+```bash
+# Create a test savepoint entry in WAI-State
+python3 -c "
+import json
+s = json.load(open('WAI-Spoke/WAI-State.json'))
+s['_savepoint'] = {'lug_id': 'test-lug', 'resume_note': 'test note', 'status': 'pending', 'saved_at': '2026-01-01T00:00:00Z', 'session_id': 'test'}
+json.dump(s, open('WAI-Spoke/WAI-State.json', 'w'), indent=2)
+"
+bash WAI-Spoke/hooks/session-start.sh 2>/dev/null | grep -A1 "Savepoint:"
+# Expected: Savepoint: PENDING [test-lug] — test note
+```

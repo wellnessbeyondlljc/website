@@ -1,0 +1,171 @@
+name: folder-hygiene
+role: advisor
+model: lightweight
+description: "Enforces framework directory structure and detects artifacts that need cleanup"
+
+trigger:
+  events:
+    - on_demand
+    - pre_closeout
+  conditions:
+    - "User requests cleanup review"
+    - "Session has significant file changes"
+
+scope:
+  reads:
+    - "Root directory structure"
+    - ".gitignore"
+    - "WAI-Manifest.yaml (framework_version)"
+  writes:
+    - "WAI-Lugs.jsonl (diagnosis Lugs for violations)"
+
+prerequisites:
+  - "Git repository exists"
+  - "WAI-Spoke structure exists"
+
+behavior:
+  on_trigger: |
+    1. **Check for artifacts that should be deleted:**
+       - Zone.Identifier files (*:Zone.Identifier)
+       - Backup files (*.v1-backup, *.bak, *-backup*)
+       - Python cache (__pycache__/, *.pyc)
+       - OS artifacts (.DS_Store, Thumbs.db)
+
+    2. **Check for empty orphan directories:**
+       - Empty dirs not serving a purpose
+       - Nested redundant structures (e.g., docs/docs/)
+       - Test directories (my_new_*, test_*)
+
+    3. **Check root directory hygiene:**
+       - Too many .md files at root (threshold: 15)
+       - Utility scripts that should be in archive/scripts/
+       - Files that belong in specific subdirectories
+
+    4. **Validate expected structure:**
+       Required for spoke:
+       - BRIEF.md (root)
+       - EXTENSION.md (root)
+       - WAI-Spoke/WAI-Manifest.yaml
+       - WAI-Spoke/WAI-Lugs.jsonl
+       - WAI-Spoke/WAI-Ledger.jsonl
+
+       Required for hub:
+       - hub/BRIEF.md
+       - hub/WAI-Integrity.md
+       - hub/registry.yaml
+       - hub/intake/ directory
+
+    5. **Report findings:**
+       - Create diagnosis Lug for each category of violations
+       - Suggest cleanup commands
+       - Note items requiring human decision
+
+  structure_policies: |
+    Root directory should contain ONLY:
+    - README.md, CONTRIBUTING.md, CLAUDE.md, GEMINI.md (identity docs)
+    - BRIEF.md, EXTENSION.md (WAI identity)
+    - WAI-*-Spec.md files (specifications)
+    - WAI-v2-Implementation-Plan-Revised.md (if active)
+    - AI-AGENT-*.md (agent protocol docs)
+    - Core directories: framework/, hub/, WAI-Spoke/, benchmarks/, archive/
+
+    Historical/session docs go to:
+    - reference/historical/ (session notes, closeouts, phases)
+    - reference/architecture/ (architecture decisions)
+    - reference/v1-data/ (v1 artifacts)
+
+    Utility scripts go to:
+    - archive/scripts/ (one-time migration/utility scripts)
+
+    Empty directories:
+    - Delete unless serving placeholder purpose
+    - Document placeholder purpose in README.md
+
+  gitignore_recommendations: |
+    Ensure .gitignore includes:
+    - *:Zone.Identifier
+    - *.Zone.Identifier
+    - *.v1-backup
+    - __pycache__/
+    - *.pyc
+    - .DS_Store
+    - Thumbs.db
+
+output:
+  success:
+    type: "hygiene_check_passed"
+    data:
+      violations_found: 0
+      structure_valid: true
+  findings:
+    type: "hygiene_violations"
+    data:
+      artifacts_to_delete:
+        - "*.Zone.Identifier (4 files)"
+        - "*.v1-backup (7 files)"
+      orphan_directories:
+        - "my_new_hub/"
+        - "sessions/"
+      root_clutter:
+        - "130 .md files at root (should be < 15)"
+        - "13 utility scripts (should be in archive/scripts/)"
+      missing_structure:
+        - "WAI-Spoke/WAI-Ledger.jsonl not found"
+      recommendations:
+        - "Run: rm -f *:Zone.Identifier"
+        - "Move CLI-*.md to reference/historical/"
+
+use_cases:
+  - scenario: "New developer joins project, notices messy root directory"
+    what_happens: "folder-hygiene detects root clutter, suggests cleanup"
+    why_it_matters: "Consistent structure across all projects"
+    user_trigger: "Manual: /folder-hygiene or auto at closeout"
+
+  - scenario: "After major refactoring, many artifacts left behind"
+    what_happens: "Pre-closeout trigger detects artifacts, flags for cleanup"
+    why_it_matters: "Don't commit temporary files"
+    user_trigger: "Auto at pre_closeout"
+
+  - scenario: "v1 to v2 migration left backup files"
+    what_happens: "folder-hygiene identifies *.v1-backup files for deletion"
+    why_it_matters: "Clean transition, no legacy cruft"
+    user_trigger: "Manual review"
+
+  - scenario: "Zone.Identifier files from Windows/WSL transfers"
+    what_happens: "folder-hygiene identifies and suggests adding to .gitignore"
+    why_it_matters: "Cross-platform hygiene"
+    user_trigger: "Auto detection"
+
+tests:
+  - name: "Detects Zone.Identifier files"
+    setup: "Create test:Zone.Identifier file"
+    action: "Trigger folder-hygiene"
+    expected: "File flagged for deletion"
+
+  - name: "Detects empty orphan directories"
+    setup: "Create empty my_test_dir/"
+    action: "Trigger folder-hygiene"
+    expected: "Directory flagged for deletion"
+
+  - name: "Detects root clutter"
+    setup: "Place 20+ .md files at root"
+    action: "Trigger folder-hygiene"
+    expected: "Root clutter warning with move suggestions"
+
+  - name: "Validates spoke structure"
+    setup: "Remove WAI-Spoke/WAI-Manifest.yaml"
+    action: "Trigger folder-hygiene"
+    expected: "Missing structure warning"
+
+notes: |
+  Lightweight model sufficient - file system checks and pattern matching.
+
+  This skill exists because:
+  - 130 .md files accumulated at root during WAI development
+  - Zone.Identifier files appeared from WSL file transfers
+  - v1 migration left backup files that should be cleaned
+  - Empty test directories were never removed
+
+  Run periodically to maintain clean structure.
+
+  Consider making this part of pre_closeout to catch issues before commit.

@@ -1,0 +1,53 @@
+{
+  "wheel": {
+    "wheel_id": "wellnessbeyondlljc-website",
+    "name": "Wellness Beyond LLJC Website",
+    "version": "0.1.0",
+    "structure_version": "v4",
+    "status": "greenfield-stub",
+    "description": "Client website for Wellness Beyond LLJC \u2014 purpose/stack/content to be confirmed.",
+    "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub"
+  },
+  "_project_foundation": {
+    "completed": true,
+    "completed_at": "2026-06-15T11:11:22.256784+00:00",
+    "completed_with": "greenfield-stub",
+    "identity": {
+      "type": "spoke",
+      "name": "Wellness Beyond LLJC Website",
+      "one_liner": "Client website for Wellness Beyond LLJC \u2014 purpose, stack, and content scope TO BE CONFIRMED in the first session.",
+      "success_looks_like": "TBD \u2014 confirm goals + stack with operator before substantive work."
+    },
+    "boundaries": {
+      "in_scope": [
+        "TBD \u2014 confirm in first session"
+      ],
+      "out_of_scope": [
+        "TBD"
+      ]
+    },
+    "approach": "TBD \u2014 greenfield; likely a client site build/rebuild (cf. the Hines client sites). Confirm before work.",
+    "philosophy": "Onboarded as a greenfield stub (empty dir) per operator; refine identity first.",
+    "evolution_log": [
+      {
+        "at": "2026-06-15T11:11:22.256784+00:00",
+        "note": "Greenfield v4 onboard (empty dir, no source yet); provisional foundation pending operator confirmation of purpose/stack."
+      }
+    ]
+  },
+  "_session_state": {
+    "session_count": 0,
+    "last_session_id": null,
+    "last_closeout": null,
+    "next_session_recommendation": "Run /wai to begin. FIRST: confirm project identity/purpose/stack with operator (foundation is a provisional greenfield stub).",
+    "requires_review": true,
+    "mode": "execution",
+    "track_path": "WAI-Harness/spoke/local/sessions/session-bootstrap-20260615/track.jsonl"
+  },
+  "feature_toggles": {},
+  "_work_queue": {},
+  "_savepoint": {
+    "active_ids": [],
+    "count": 0
+  }
+}

@@ -1,0 +1,125 @@
+name: framework-updater
+role: worker
+model: standard
+description: "Updates spoke templates when framework version changes - cascades new patterns"
+
+trigger:
+  events:
+    - on_demand
+  conditions:
+    - "user invokes /framework-update OR"
+    - "hub-watcher reports framework_update_available"
+
+scope:
+  reads:
+    - "framework/templates/*.template"
+    - "hub/WAI-Manifest.yaml (framework version)"
+    - "spoke/WAI-Manifest.yaml (current version)"
+    - "spoke files (to compare with templates)"
+  writes:
+    - "spoke files (where updates applied)"
+    - "spoke/WAI-Manifest.yaml (update framework_version)"
+    - "update log to observations.jsonl"
+
+prerequisites:
+  - "framework/templates/ directory exists"
+  - "git working tree clean (safe-refactor enforced)"
+
+behavior:
+  on_trigger: |
+    1. Compare hub framework_version with spoke framework_version
+    2. Read framework/templates/ to identify changed templates
+    3. For each template that changed:
+       a. Read current spoke file
+       b. Detect if spoke made local modifications
+       c. If no local mods: Replace with new template
+       d. If local mods: Present diff, ask user to merge
+    4. Update spoke/WAI-Manifest.yaml framework_version
+    5. Record update in observations.jsonl
+
+  on_conflicts: |
+    - If spoke file modified AND template changed: HUMAN GATE
+    - Show 3-way diff: old template | spoke version | new template
+    - Ask user: "Accept new template", "Keep spoke version", "Merge manually"
+    - Log decision as Lug (type: decision, resolution: accepted/deferred)
+
+  template_cascade: |
+    Templates that auto-update (if no local mods):
+    - WAI-Manifest.yaml (structure changes)
+    - BRIEF.md (hub-level policy additions)
+    - WAI-Lugs.jsonl.template (schema examples)
+
+    Templates that require review (always ask):
+    - EXTENSION.md (identity changes affect behavior)
+    - PROJECT.md (shared across extensions)
+
+output:
+  success:
+    type: "framework_updated"
+    data:
+      from_version: "2.0.0"
+      to_version: "2.1.0"
+      files_updated: ["WAI-Manifest.yaml"]
+      files_skipped: ["EXTENSION.md (local modifications)"]
+  conflict:
+    type: "update_conflicts"
+    data:
+      conflicting_files: ["BRIEF.md"]
+      action: "Review and merge manually"
+
+use_cases:
+  - scenario: "Framework v2.1 adds new PEV field to Lug schema"
+    what_happens: "framework-updater updates WAI-Lugs.jsonl.template with example"
+    why_it_matters: "Spokes see new schema patterns immediately"
+    user_trigger: "/framework-update after hub-watcher notification"
+
+  - scenario: "Hub adds mandatory security policy to BRIEF.md"
+    what_happens: "framework-updater detects BRIEF.md template change, checks if spoke modified BRIEF"
+    why_it_matters: "Security policies cascade from hub → project → spoke"
+    reference: "Phase 4 - BRIEF cascade documentation"
+
+  - scenario: "Spoke has custom EXTENSION.md behaviors, template changes"
+    what_happens: "framework-updater shows diff, asks user to review, doesn't auto-replace"
+    why_it_matters: "Identity files are sacred - can't auto-replace without user review"
+    user_trigger: "Human gate on template conflicts"
+
+  - scenario: "All templates current, user runs /framework-update"
+    what_happens: "framework-updater reports 'Already on latest version 2.1.0'"
+    why_it_matters: "No false updates - quiet when current"
+    user_trigger: "/framework-update (on-demand)"
+
+  - scenario: "Git working tree dirty when update attempted"
+    what_happens: "safe-refactor fires first, creates checkpoint, then update proceeds"
+    why_it_matters: "Template updates are structural changes - checkpoint required"
+    reference: "safe-refactor Skill integration"
+
+tests:
+  - name: "Updates non-modified templates automatically"
+    setup: "Spoke has unmodified WAI-Manifest.yaml, hub has new version"
+    action: "Trigger framework-updater"
+    expected: "WAI-Manifest.yaml updated, no user prompt"
+
+  - name: "Detects local modifications, asks user"
+    setup: "Spoke modified BRIEF.md, hub has new BRIEF template"
+    action: "Trigger framework-updater"
+    expected: "Diff shown, user prompted for merge decision"
+
+  - name: "Updates framework_version in manifest"
+    setup: "Spoke v2.0.0, update to v2.1.0"
+    action: "Complete framework-updater"
+    expected: "spoke/WAI-Manifest.yaml shows framework_version: 2.1.0"
+
+  - name: "Logs update decisions as Lugs"
+    setup: "User chooses 'keep spoke version' for conflicting file"
+    action: "framework-updater records decision"
+    expected: "Decision Lug created with resolution: deferred"
+
+notes: |
+  Standard model needed for:
+  - Diff analysis (detect semantic changes)
+  - Merge conflict reasoning
+  - User communication (explain why review needed)
+
+  Implements the "template cascade" pattern - framework changes flow to spokes.
+
+  Related to WAI-MIGRATION.yaml pattern - future v3 migration could use this Skill.

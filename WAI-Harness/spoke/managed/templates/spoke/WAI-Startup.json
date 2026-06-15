@@ -1,0 +1,136 @@
+{
+  "_description": "Defines what loads into context at session start. This IS the skill manifest - we eat our own dogfood.",
+  "_version": "1.0.0",
+
+  "exposure": {
+    "context": "spoke.chat:local",
+    "supported": ["spoke.chat:local", "spoke.chat:external"],
+    "node_types": ["spoke", "hub"]
+  },
+
+  "on_startup": {
+    "load_state": {
+      "description": "Load project identity and current state",
+      "files": [
+        "WAI-Spoke/WAI-State.json",
+        "WAI-Spoke/WAI-State.md"
+      ],
+      "required": true
+    },
+    "check_teachings": {
+      "description": "Check for pending framework updates",
+      "path": "WAI-Spoke/seed/ingest/",
+      "triggers": ["teach.received"]
+    },
+    "load_events": {
+      "description": "Load valid event definitions",
+      "file": "WAI-Spoke/startup/events.json",
+      "required": true
+    }
+  },
+
+  "skills_exposed": {
+    "_note": "Skills available at startup. Agent sees name + triggers, full skill loads on invocation.",
+
+    "wai": {
+      "triggers": ["session.start", "user asks 'where are we'", "user asks 'wai'"],
+      "brief": "Unified briefing - project state, active work, context health",
+      "nodes": ["spoke", "hub"]
+    },
+    "wai-foundation": {
+      "triggers": ["no foundation exists", "user says 'foundation'", "scope change requested"],
+      "brief": "Project identity, goals, boundaries - personality and memory stored in lugs",
+      "nodes": ["spoke", "hub"],
+      "lug_type": "foundation"
+    },
+    "wai-status": {
+      "triggers": ["user asks 'status'", "user asks 'health check'"],
+      "brief": "Integration health check - git, hub connection, pending items",
+      "nodes": ["spoke", "hub"]
+    },
+    "wai-closeout": {
+      "triggers": ["session.end", "user says 'closeout'", "context.warning at 80%"],
+      "brief": "Save session state - lugs, version bump, git commit",
+      "nodes": ["spoke", "hub"]
+    },
+    "deprecated-wai-teach": {
+      "triggers": ["framework updated", "user says 'teach'", "outbox has items"],
+      "brief": "Push outbox to target's inbox - templates, lugs, signals",
+      "nodes": ["spoke", "hub", "framework"],
+      "paths_required": ["spoke_path", "hub_path"]
+    },
+    "deprecated-wai-learn": {
+      "triggers": ["session.start"],
+      "brief": "Automatic inbox processing on wakeup - no manual invocation",
+      "nodes": ["spoke", "hub"],
+      "auto": true,
+      "note": "Learning is passive. Teach is active."
+    },
+    "wai-time": {
+      "triggers": ["user asks about context", "user asks 'how much time'"],
+      "brief": "Token usage estimate and recommendations",
+      "nodes": ["spoke", "hub"]
+    },
+    "wai-rules": {
+      "triggers": ["user asks about boundaries", "scope question"],
+      "brief": "Project boundaries and guidelines",
+      "nodes": ["spoke", "hub"]
+    },
+    "wai-principles": {
+      "triggers": ["user asks about principles", "P1-P9 reference needed"],
+      "brief": "WAI principles P1-P9 - persistence, verification, stewardship, etc.",
+      "nodes": ["spoke", "hub"]
+    }
+  },
+
+  "advisors": {
+    "_note": "Auto-triggered advisors that monitor and intervene",
+
+    "foundation-advisor": {
+      "triggers": ["session.start", "no foundation lugs exist"],
+      "action": "Check foundation, gather if missing, verify if exists"
+    },
+    "complexity-advisor": {
+      "triggers": ["task involves 2+ files OR 6+ steps"],
+      "action": "Warn user, suggest breakdown"
+    },
+    "stewardship-advisor": {
+      "triggers": ["scope drift detected", "out-of-scope request"],
+      "action": "Flag before proceeding"
+    },
+    "context-advisor": {
+      "triggers": ["context.warning"],
+      "action": "Warn at 60%, recommend closeout at 80%, urgent at 90%"
+    },
+    "signal-advisor": {
+      "triggers": ["lug.created with impact >= 8"],
+      "action": "Flag for hub consideration"
+    }
+  },
+
+  "sequences": {
+    "_note": "Multi-step flows that chain events",
+
+    "full_closeout": {
+      "steps": [
+        "closeout.start",
+        "reconcile lugs",
+        "extract signals",
+        "capture incomplete work",
+        "bump version",
+        "update state",
+        "git commit",
+        "closeout.complete"
+      ]
+    },
+    "teach_cycle": {
+      "steps": [
+        "build upgrade plan",
+        "sign with hub fingerprint",
+        "distribute to spoke ingest",
+        "update registry",
+        "teach.received fires on spoke"
+      ]
+    }
+  }
+}

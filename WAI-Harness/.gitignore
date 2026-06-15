@@ -1,0 +1,45 @@
+# WAI-Harness — v4 tracking model (redressed S46)
+#
+# DURABLE work-state is TRACKED + restorable: lugs, savepoints, sessions, WAI-State,
+# the hub registry, teachings_repo, learnings, initiatives, advisor definitions.
+# Only DERIVED / regenerable runtime is ignored (a tool re-creates it; it is never
+# the source of truth). This SUPERSEDES the prior blanket `spoke/local/** + hub/local/**`
+# ignore, which made the home's work-state unrestorable.
+#
+# managed/ stays tracked + MANIFEST-MD5-verified (integrity checks are managed-scoped,
+# so tracking local/ does not affect harness integrity/parity/upgrade verification).
+
+# --- regenerable runtime (re-created by a tool; not source of truth) ---
+**/runtime/
+**/.autosave/
+**/ozi-brief.json
+**/octo-brief.json
+**/wakeup-brief.json
+
+# advisor-derived scans / reports / queues (regenerated every run):
+**/WAI-Hub/advisors/*/reports/
+**/WAI-Hub/advisors/*/scan_state.json
+**/WAI-Hub/advisors/*/scan_history.jsonl
+**/WAI-Hub/advisors/gardener/passes.jsonl
+**/WAI-Hub/advisors/octo/council_directives.json
+**/WAI-Hub/advisors/octo/hub_work_queue.json
+**/WAI-Hub/advisors/octo/reports/
+**/WAI-Hub/advisors/quartermaster/inventory.json
+**/octo/job-queue.jsonl
+**/octo/spoke-summaries/
+
+# --- build / OS / secrets (never source) ---
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/.pytest_cache/
+**/.ruff_cache/
+**/.DS_Store
+.venv/
+venv/
+ENV/
+env/
+**/.env.local
+**/.env.*.local
+**/.claude/settings.local.json
+**/.claude/.provider

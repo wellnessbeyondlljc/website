@@ -1,0 +1,54 @@
+{
+  "_purpose": "Hub project registry - tracks wheels connected to this hub",
+  "_structure_version": "3.0",
+
+  "metadata": {
+    "created_at": null,
+    "last_updated_at": null,
+    "framework_version": "3.0.0",
+    "hub_fingerprint": null,
+    "description": "Auto-managed registry of wheels taught by this hub"
+  },
+
+  "wheels": [
+    {
+      "_template": "Example wheel entry - delete this after first use",
+      "wheel_id": "project-name",
+      "path": "/path/to/project",
+      "status": "active",
+      "taught_at": "2026-02-01T00:00:00Z",
+      "taught_version": "3.0.0",
+      "last_sync": "2026-02-01T00:00:00Z",
+      "learnings_contributed": 0,
+      "signals_received": [],
+      "adoptions": []
+    }
+  ],
+
+  "teaching_history": [
+    {
+      "_template": "Teaching event - auto-created by teach command",
+      "event_id": "teach-2026-02-01",
+      "timestamp": "2026-02-01T00:00:00Z",
+      "framework_version": "3.0.0",
+      "upgrade_adoption_plan": "upgrade-adoption-plan.json",
+      "wheels_taught": 0,
+      "files_distributed": [],
+      "status": "complete"
+    }
+  ],
+
+  "statistics": {
+    "total_wheels": 0,
+    "active_wheels": 0,
+    "last_teach": null,
+    "total_learnings_received": 0,
+    "total_signals_received": 0
+  },
+
+  "_instructions": {
+    "for_teach_command": "Add wheel entries when teaching a spoke. Auto-update on each teach.",
+    "for_hub_ai": "Read this to understand which wheels are connected and their teaching history.",
+    "manual_editing": "Safe to edit wheel_id, path, and status. Do not edit metadata or timestamps."
+  }
+}

@@ -1,0 +1,197 @@
+name: wai-signal-capture
+role: advisor
+model: lightweight
+description: "Cross-node signal propagation - publishes high-impact learnings to hub for other spokes"
+
+trigger:
+  events:
+    - post_decision
+    - post_observation
+    - on_demand
+  conditions:
+    - "decision/observation created with impact >= 8 OR"
+    - "user explicitly requests signal publication"
+
+scope:
+  reads:
+    - "WAI-Lugs.jsonl (recent high-impact Lugs)"
+    - "WAI-State.json (hub_path, cross_node_signals config)"
+    - "hub/intake/ (check for duplicates)"
+  writes:
+    - "hub/intake/{signal-id}.lug.json (new signal file)"
+    - "observations.jsonl (signal publication record)"
+
+prerequisites:
+  - "hub_path configured in WAI-State.json"
+  - "cross_node_signals: true in WAI-Manifest.yaml"
+  - "hub/intake/ directory exists"
+
+behavior:
+  on_trigger: |
+    1. Check if cross-node signals enabled:
+       - Read WAI-Manifest.yaml: cross_node_signals field
+       - If false: Skip signal creation (spoke opted out)
+
+    2. Evaluate signal worthiness:
+       - Impact >= 8? (high-impact threshold)
+       - Pattern applicable beyond this spoke?
+       - Architectural decision or significant learning?
+       - If no: Skip signal creation
+
+    3. Extract signal content:
+       - Read Lug that triggered signal
+       - Extract: title, body, tags, PEV, impact
+       - Add metadata: source_spoke, timestamp, destination: "hub"
+
+    4. Check for duplicates:
+       - Scan hub/intake/ for similar signals (same title/tags)
+       - If duplicate found: Skip (avoid signal spam)
+
+    5. Create signal file:
+       - Generate signal ID: "signal-{topic}-{date}"
+       - Write to hub/intake/{signal-id}.lug.json
+       - Set: type: "signal", status: "published", cross_node: true
+
+    6. Record publication:
+       - Log to observations.jsonl: "Signal published: {signal-id}"
+       - Update hub/health.yaml: increment intake_pending count
+
+  signal_criteria: |
+    Publish signals when ALL of these apply:
+    - Impact >= 8 (high-impact decision/observation)
+    - Applicable beyond current spoke (pattern/architecture/lesson)
+    - Not spoke-specific implementation detail
+    - Not temporary workaround or hack
+
+    Good signal examples:
+    - "JWT refresh strategy reduces auth overhead 40%" (pattern)
+    - "Discovered race condition in concurrent writes" (bug lesson)
+    - "Co-located tests reduce maintenance burden" (architecture)
+    - "Caching layer architecture for read-heavy APIs" (pattern)
+
+    Bad signal examples (don't publish):
+    - "Fixed typo in variable name" (low impact)
+    - "Updated spoke-specific config file" (not applicable elsewhere)
+    - "Temporary workaround for deployment issue" (not a pattern)
+
+  on_failure: |
+    - hub_path not configured: WARN, suggest configuring in WAI-State.json
+    - hub/intake/ not accessible: WARN, suggest running hub init
+    - cross_node_signals disabled: SKIP (expected, not an error)
+    - Duplicate signal detected: SKIP (avoid spam)
+
+output:
+  success:
+    type: "signal_published"
+    data:
+      signal_id: "signal-auth-pattern-2026-02-12"
+      file_path: "hub/intake/signal-auth-pattern-2026-02-12.lug.json"
+      impact: 9
+      message: "Signal published to hub for cross-node discovery"
+  skipped:
+    type: "signal_skipped"
+    data:
+      reason: "impact_below_threshold | duplicate | cross_node_disabled"
+      message: "Signal not published (see reason)"
+
+use_cases:
+  - scenario: "Agent makes architectural decision (impact: 9) about JWT refresh"
+    what_happens: "wai-signal-capture creates signal file in hub/intake/"
+    why_it_matters: "Other spokes discover pattern, avoid reinventing solution"
+    user_trigger: "Automatic on post_decision event (impact >= 8)"
+    expected_output: |
+      Signal published: signal-jwt-refresh-2026-02-12
+      Written to: hub/intake/signal-jwt-refresh-2026-02-12.lug.json
+
+      Other spokes will discover this signal on their next session_start.
+
+  - scenario: "Agent discovers race condition bug (impact: 8), creates observation Lug"
+    what_happens: "wai-signal-capture publishes bug lesson as signal"
+    why_it_matters: "Other spokes learn from this bug, can check their own code"
+    user_trigger: "Automatic on post_observation (impact >= 8)"
+
+  - scenario: "Low-impact decision (impact: 5) - routine refactoring"
+    what_happens: "wai-signal-capture evaluates, skips signal creation (below threshold)"
+    why_it_matters: "Hub intake doesn't fill with low-value signals"
+    user_trigger: "Automatic evaluation on post_decision"
+
+  - scenario: "Spoke has cross_node_signals: false in manifest"
+    what_happens: "wai-signal-capture skips all signal creation (opted out)"
+    why_it_matters: "Spokes can opt out of cross-node participation (privacy)"
+    user_trigger: "Automatic check on trigger"
+
+  - scenario: "Similar signal already exists in hub/intake/"
+    what_happens: "wai-signal-capture detects duplicate, skips creation"
+    why_it_matters: "Prevents signal spam, keeps hub intake clean"
+    user_trigger: "Automatic duplicate check"
+
+  - scenario: "hub_path not configured in WAI-State.json"
+    what_happens: "wai-signal-capture warns, skips signal creation"
+    why_it_matters: "Graceful degradation - spoke works without hub connection"
+    user_trigger: "Automatic hub check on trigger"
+
+  - scenario: "User explicitly requests signal publication for specific Lug"
+    what_happens: "wai-signal-capture creates signal even if impact < 8 (manual override)"
+    why_it_matters: "User judgment overrides automatic threshold"
+    user_trigger: "/publish-signal {lug_id} command (future enhancement)"
+
+tests:
+  - name: "Creates signal for high-impact decision"
+    setup: "Decision Lug with impact: 9"
+    action: "Trigger wai-signal-capture"
+    expected: "Signal file created in hub/intake/"
+
+  - name: "Skips signal for low-impact decision"
+    setup: "Decision Lug with impact: 5"
+    action: "Trigger wai-signal-capture"
+    expected: "Signal skipped, no file created"
+
+  - name: "Detects and skips duplicate signals"
+    setup: "Similar signal already in hub/intake/"
+    action: "Trigger wai-signal-capture with similar Lug"
+    expected: "Duplicate detected, signal skipped"
+
+  - name: "Respects cross_node_signals: false"
+    setup: "WAI-Manifest.yaml with cross_node_signals: false"
+    action: "Trigger wai-signal-capture"
+    expected: "Signal creation skipped (opted out)"
+
+  - name: "Handles missing hub gracefully"
+    setup: "hub_path invalid or hub/intake/ missing"
+    action: "Trigger wai-signal-capture"
+    expected: "Warning issued, signal skipped, no crash"
+
+notes: |
+  Lightweight model is sufficient - file writing and duplicate checking are deterministic.
+
+  Signal file structure:
+  - Filename: {signal-id}.lug.json (JSON for easy parsing)
+  - Content: Standard Lug format with type: "signal"
+  - Metadata: source_spoke, destination: "hub", cross_node: true
+
+  Duplicate detection (simple heuristic):
+  - Same title (exact match or high similarity)
+  - Same tags (>50% overlap)
+  - Within 7 days (recent duplicate)
+  - If all match: Skip signal creation
+
+  Integration with Hub BRIEF:
+  - Enforces "Always set destination: hub for impact >= 8"
+  - Enforces "Always include cross_node: true for shared patterns"
+  - Enforces "Never create signals for low-impact (< 8)"
+
+  Hub health tracking:
+  - hub/health.yaml updated: intake_pending count
+  - Oldest pending signal timestamp tracked
+  - Cleanup triggered if intake_pending > 50
+
+  Privacy consideration:
+  - Spokes can opt out: cross_node_signals: false
+  - Signals don't contain sensitive data (architecture/patterns only)
+  - Source spoke identified for attribution/follow-up
+
+  Future enhancements:
+  - Signal categories (architecture, bug, pattern, optimization)
+  - Signal priority (critical, important, informational)
+  - Target audience (all spokes, specific spoke types)
+  - Automatic signal expiration (archive after 90 days)

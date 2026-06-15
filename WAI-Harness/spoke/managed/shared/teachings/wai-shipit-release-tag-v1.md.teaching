@@ -1,0 +1,273 @@
+# Teaching: Update wai-shipit.md — Production release intent + release tag
+
+**Type:** Template upgrade
+**Target:** All spokes
+**Version:** 1.0
+**Created:** 2026-03-16
+**safe_to_auto_adopt:** false
+
+---
+
+## What This Teaching Does
+
+Replaces the spoke's `WAI-Spoke/commands/wai-shipit.md` with the current version, which adds:
+
+- **Step 0 — Production Release Intent** — asks whether this is a production release or a progress save. Determines whether Step 9b runs.
+- **Step 1 — Framework sync now covers spoke templates** — `templates/spoke/commands/` is auto-synced alongside `.claude/commands/` (eliminates 3-file manual sync workaround).
+- **Step 9b — Apply Release Tag (conditional)** — applies and pushes `v{version}` git tag only when production release intent = yes.
+
+**This is NOT:** A replacement for any WAI-Spoke data files. Only `WAI-Spoke/commands/wai-shipit.md` changes.
+
+---
+
+## Why This Exists
+
+The previous wai-shipit.md had no way to distinguish a progress save from a production release. Tags were never applied, making it impossible to mark stable commits for users. Step 1 also only synced `.claude/commands/` — `templates/spoke/commands/` drifted silently after every edit.
+
+---
+
+## Version Check Before Applying
+
+Read `WAI-Spoke/commands/wai-shipit.md`. If it already contains the text:
+
+```
+Production Release Intent
+```
+
+— this teaching has already been applied. Move to `processed/` and stop.
+
+---
+
+## Transformation: What Changes
+
+Replace `WAI-Spoke/commands/wai-shipit.md` with the following content verbatim:
+
+---
+
+```
+# WAI Shipit
+
+**Production Readiness Verification Protocol**
+
+Verify this version is ready to ship to users.
+
+---
+
+## Execution Context
+
+- **Nodes:** spoke, hub, framework
+- **Exposure:** spoke.chat:local, spoke.chat:external
+- **Paths Required:** spoke_path; framework_path + hub_path (for auto-teach)
+- **Lug Storage:** `ty: "shipit"` records in WAI-Lugs.jsonl
+
+---
+
+## When to Use
+
+- Before releasing to users/production
+- Before publishing a package
+- Before merging to main branch
+- After completing a feature set
+- When user explicitly requests quality verification
+
+## Prerequisites
+
+- Code changes complete (not mid-implementation)
+- Tests exist for the codebase
+- WAI-Spoke/ directory exists
+- Git repository initialized
+
+## Follow-ons
+
+- Push to remote (always — closeout handles this automatically)
+- Deploy to production (if applicable)
+- Announce release (if public)
+
+---
+
+## Shipit Procedure
+
+### 0. Production Release Intent
+
+**First: clarify what this shipit is for.**
+
+> Is this a production release? (y/n)
+
+- **Yes (release):** All steps run. After closeout, a git tag `v{version}` is applied and pushed. This marks the commit as stable — anyone cloning or targeting tags gets a known-good state.
+- **No (progress save):** All steps run identically. No tag is applied. Commit is pushed but not marked as a release.
+
+Record the answer. It determines whether Step 9b runs.
+
+---
+
+### 1. Sync `.claude/commands/` (FRAMEWORK ONLY)
+
+**If running from the framework repo: keep IDE skills and spoke templates in sync with canonical templates.**
+
+```bash
+yes | cp templates/commands/wai*.md .claude/commands/
+for f in templates/spoke/commands/wai*.md; do \cp templates/commands/$(basename "$f") "$f" 2>/dev/null || true; done
+```
+
+This prevents the three-copy problem: `templates/commands/` is canonical; `.claude/commands/` is what Claude Code reads; `templates/spoke/commands/` is the spoke template. All must match.
+
+**Skip this step** if not running from the framework repo.
+
+---
+
+### 2. File Hygiene & Maintenance
+
+**AI tends to create sprawl. Clean it up before validation.**
+
+**Scan for orphaned/temp files:**
+```bash
+find . -name "temp_*.py" -o -name "test_*.py.bak" -o -name "*.tmp"
+find . -name "debug_*" -o -name "scratch_*" -o -name "old_*"
+find . -name "*.orig" -o -name "*_backup*" -o -name "copy_of_*"
+```
+
+**Relocate or delete:**
+
+| File Type | Action |
+|-----------|--------|
+| Temp/debug files | Delete |
+| Useful reference | Move to `WAI-Spoke/reference/` |
+| Teaching material | Move to `WAI-Spoke/seed/ingest/` |
+| Outdated duplicates | Delete |
+| Unknown purpose | Ask user |
+
+**Report findings before proceeding.**
+
+**If issues found:** Stop and resolve before continuing.
+
+---
+
+### 3. Breaking Change Detection
+
+Identify API/schema/CLI changes. Document with migration paths. Confirm user acknowledges before proceeding.
+
+---
+
+### 4. Dependency Audit
+
+Check for security vulnerabilities and outdated packages. Stop if critical vulnerabilities found.
+
+---
+
+### 5. Quality Gates
+
+- Tests: 100% pass
+- Coverage: meets threshold
+- Linting: clean
+
+**If any gate fails:** Stop. Fix before proceeding.
+
+---
+
+### 6. Benchmark Execution
+
+Run if available. Flag significant regressions.
+
+---
+
+### 7. Documentation Updates
+
+Update README, CHANGELOG as needed for session changes.
+
+---
+
+### 8. Pre-Ship Summary
+
+Present full report. Get user confirmation before closeout.
+
+---
+
+### 9. Execute Closeout
+
+Run full `/wai-closeout` protocol after all checks pass.
+
+---
+
+### 9b. Apply Release Tag (Production Release Only)
+
+**Skip this step if production release = no.**
+
+After the closeout commit is confirmed, read the version from `WAI-State.json` → `wheel.version` (updated by closeout):
+
+```bash
+git tag v{version}
+git push origin v{version}
+```
+
+**If tag already exists:** Stop. Report the conflict — do not force-overwrite.
+
+---
+
+### 10. Teach All Spokes (Auto)
+
+**After successful closeout, distribute updates to all spokes.**
+
+Runs automatically when running from framework or hub node with an active hub connection.
+
+---
+
+## Success Criteria
+
+- [ ] File hygiene complete
+- [ ] Breaking changes documented
+- [ ] Dependencies audited
+- [ ] All tests pass
+- [ ] Linting clean
+- [ ] Documentation updated
+- [ ] User confirmed ready to ship
+- [ ] Closeout executed successfully
+- [ ] Release tag applied and pushed: `v{version}` (production release only)
+
+---
+
+## Output Format
+
+```
+## Shipit Complete
+
+### Pre-Flight
+- File hygiene: ✓
+- Tests: ✓ [X/X passing]
+- Documentation: ✓
+
+### Closeout
+- Version: [X.Y.Z]
+- Commit: [hash]
+- Release tag: v[X.Y.Z] pushed ✓  *(or "n/a — progress save")*
+
+## Status: SHIPPED ✓
+```
+
+---
+
+*Shipit = Verify quality, then save. Ready for users.*
+```
+
+---
+
+## Output: What You Should Have After
+
+- `WAI-Spoke/commands/wai-shipit.md` has Step 0 (production release intent)
+- Step 1 syncs both `.claude/commands/` and `templates/spoke/commands/`
+- Step 9b is conditional on production release intent
+- Agent asks "is this a production release?" before running shipit
+
+---
+
+## Verification Checklist
+
+- [ ] `WAI-Spoke/commands/wai-shipit.md` contains "Production Release Intent"
+- [ ] `WAI-Spoke/commands/wai-shipit.md` contains "Apply Release Tag"
+- [ ] `WAI-Spoke/commands/wai-shipit.md` Step 1 mentions `templates/spoke/commands/`
+- [ ] Agent can explain the difference between release and progress save behavior
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

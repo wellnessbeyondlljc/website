@@ -1,0 +1,544 @@
+{
+  "id": "spec-v4-migration-home-map-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-08T23:05:00Z",
+  "updated_at": "2026-06-09T02:30:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 10,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "v4 migration home map \u2014 every data category's home in WAI-Harness/, four-bucket classification, no-orphan invariant, framework-role dissolution",
+  "title": "v4 Migration Home Map & Framework-Role Dissolution",
+  "situation": "v4 restructures WAI-Spoke/ into WAI-Harness/{spoke,hub}/ with a managed/(Basher-distributed, read-only) vs local/(spoke-owned) split, advisor co-location, and a dedicated ozi/ root. A two-part audit (S46) inventoried ~3,800 files across ~55 data categories and audited every responsibility the 'framework' concept owned. Removing 'framework' (v4: 'there is no framework \u2014 only the harness') redistributes its authority but orphans no role outright. The migration must give EVERY data category an explicit home \u2014 no silent orphans \u2014 and reshape routing/ownership policy accordingly. Without a canonical map, migration is guesswork and data is silently lost (the exact failure WAI exists to prevent).",
+  "why": "Two failure modes this spec closes: (1) data orphaned \u2014 a category with no declared home is silently dropped or dumped in the wrong place, invisible until a future agent reads stale paths; (2) policy drift \u2014 framework's dissolved responsibilities (routing, curation, distribution, infra) land nowhere and the curator/distribution model quietly breaks. The home map is the single source of truth the migration engine reads; the no-orphan invariant is a hard gate (dry-run fails if any live category is unclaimed). This reinforces P1 (nothing survives without explicit save), P2 (verify), and the curator model.",
+  "audience": [
+    "v4 migration engine (tools/v4_migrate.py) \u2014 reads this map as its authoritative source; refuses to run if any live category is unmapped",
+    "Basher \u2014 owns managed/ distribution; this map declares which categories are managed",
+    "Trainer (hub) \u2014 inherits framework's curation role; this map records that dissolution",
+    "Hub \u2014 inherits framework's infrastructure automation (base cuts, teaching delivery)",
+    "Ozi \u2014 owns spoke/ozi/; this map declares Ozi-special consolidation"
+  ],
+  "canonical_master": {
+    "location": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/ (CONFIRMED by user S47)",
+    "rule": "MyWheel/WAI-Harness/ is the SINGLE distribution master. ALL harness changes (spoke-side or hub-side) must be applied to MyWheel first; Basher distributes from here to every spoke (own-copy, pull on spin-up, Basher upgrades when a newer master exists). A harness change that lands anywhere but MyWheel is not canonical and will be overwritten on next pull.",
+    "spoke/": "the canonical SPOKE harness blueprint \u2014 what every spoke pulls its own copy of",
+    "hub/": "the canonical HUB harness AND the running hub node (old wheelwright/hub/ decommissioned into here; the hub is singular so master = instance)",
+    "spoke_self_dev": "MyWheel/WAI-Harness/spoke/local/ is also where the harness develops itself (the v4 epic/specs/lugs migrate here) \u2014 it dogfoods its own structure"
+  },
+  "folder_model": {
+    "MyWheel/WAI-Harness/spoke/managed/": "Basher-distributed harness code; agent-READ-ONLY; replaced on update",
+    "MyWheel/WAI-Harness/spoke/local/": "spoke-owned data + extensions + harness self-dev; never overwritten by updates",
+    "MyWheel/WAI-Harness/spoke/ozi/": "Ozi's consolidated state + identity (live agent at spoke root)",
+    "MyWheel/WAI-Harness/spoke/advisors/<name>/": "each advisor co-located with the data it owns; each has patterns/",
+    "MyWheel/WAI-Harness/hub/": "canonical hub harness + running hub node; same managed/local split",
+    "per_spoke_copy": "each real spoke (website, track, basher, minder...) holds its OWN copy of WAI-Harness/spoke/ pulled from the master; managed/ is replaced on upgrade, local/ is the spoke's own data"
+  },
+  "decommission": {
+    "framework_repo": "wheelwright/framework/ becomes irrelevant \u2014 its harness-authoring role moves to MyWheel/WAI-Harness/spoke/; its harness-dev data (v4 epic, specs, lugs) migrates to MyWheel/WAI-Harness/spoke/local/; operational cruft goes Flag/Drop; folder trashed on green certification + sign-off",
+    "old_hub_repo": "wheelwright/hub/ decommissioned into MyWheel/WAI-Harness/hub/ (registry, advisors, WAI-Hub data migrate); folder trashed on green certification + sign-off",
+    "rule": "no legacy folders dragged forward \u2014 clean cut once MyWheel is certified green",
+    "destruction_human_gate": "CRITICAL (external review B5): a hallucinated-green certification must NOT auto-trigger irreversible decommissioning. Project-level teardown (removing framework/ or old hub/) is a HARD, non-bypassable human gate \u2014 an explicit user CLI acknowledgement (mode: human via Wilbur), never cleared by autonomous certification alone. The engine may STAGE assets to trash_bin on green, but actual project deprecation waits for the signed user ack. Staging is reversible; deprecation is gated."
+  },
+  "four_bucket_rules": {
+    "Preserve": "valid data, moved unchanged (path reshape only). Engine copies; verify by file count + checksum.",
+    "Transform": "reshape required + automated verification (e.g. index regeneration, schema bump). Engine transforms; verify by re-derivation or schema validation.",
+    "Flag": "needs human review before placement (ambiguous ownership, possible duplicate). Engine stages to WAI-Harness/spoke/.flagged/ and lists for sign-off; NOT placed automatically.",
+    "Drop": "provably dead data. Engine NEVER deletes \u2014 moves to ~/projects/trash_bin/ preserving relative path (per WSL standing rule), requires explicit --confirm-drop sign-off. Legacy WAI-Spoke/ source drops only on green certification."
+  },
+  "no_orphan_invariant": "Every live data category present under WAI-Spoke/ at migration time MUST be claimed by exactly one row in home_map below (or explicitly listed in drop_candidates/flag_candidates). The migration engine enumerates the live tree, diffs against this map, and FAILS the dry-run if any category is unclaimed. Coverage is asserted, not assumed.",
+  "adoption_scenarios": {
+    "upgrade": "an existing v3 WheelWright spoke \u2192 v4. Has WAI-Spoke/ data to reshape via the home map.",
+    "bootstrap": "a fresh greenfield spoke from the MyWheel blueprint (cold-start, empty local/).",
+    "adopt": "apply WheelWright to an existing NON-WheelWright project. The value-prop scenario: survey the repo, expose gaps against the harness capability bar, and emit an ALIGNMENT ROADMAP (initiatives + lugs), not just a report. Seeds from the wai-harness-adopt skill.",
+    "rule": "Every scenario that has existing code/assets (adopt AND upgrade \u2014 and bootstrap if the repo is non-empty) BEGINS with the Historian lay-of-the-land survey (below). Never assume the ground is level \u2014 a v3 spoke is surveyed like any brownfield project."
+  },
+  "historian_lay_of_the_land": {
+    "principle": "ALWAYS survey before migrating or aligning \u2014 even a v3 spoke. Don't assume prior alignment; uncover the actual state, then build the plan to bring it together.",
+    "owner": "Historian (spoke advisor) \u2014 extends its retrospective-analysis role with a project/asset survey capability",
+    "what_it_reviews": [
+      "codebase: structure, modules, execution flows (via GitNexus where available), test presence + coverage, dead code",
+      "assets: docs, configs, schemas, existing lugs/teachings/state, what is tracked vs untracked",
+      "gaps against the harness capability bar (CapabilitiesGraph mandated/recommended), verification coverage, undocumented decisions, drift",
+      "for a v3 spoke specifically: stale ghosts, resolved-but-open epics, spec-health drift, untested impl lugs, deprecated paths still in use"
+    ],
+    "output": "a survey report (lay-of-the-land) \u2192 feeds (1) the gap list, (2) the four-bucket classification for migration, (3) the alignment roadmap (initiatives + lugs prioritized to close gaps). The migration plan is gap-aware, not a blind file move.",
+    "always_rule": "the engine refuses to --execute upgrade/adopt until a current Historian survey exists for the target (survey is a precondition, recorded + observable).",
+    "completeness_audit": "the survey can miss things or misclassify (review MED: no completeness guarantee). Two guards: (1) the survey reports its OWN coverage \u2014 what it scanned vs what it could not (unscanned dirs, unparseable files) as explicit null/unknown entries, never silent omission; (2) a secondary check (a second detector pass OR a cross-reference against the file manifest + GitNexus index) confirms the survey enumerated the full tree before its output feeds coverage-review/gap-analysis. Survey output carries a coverage_pct + an unscanned[] list; downstream steps see the gaps in the survey itself, not a false 'complete'."
+  },
+  "warmup_sequence": {
+    "principle": "Adoption/upgrade follows a strictly ORDERED warmup. You cannot assess coverage until you know what the codebase IS \u2014 so the Historian survey runs FIRST and every later step consumes its map. Steps do not reorder.",
+    "steps": [
+      "1. Historian lay-of-the-land survey \u2014 review codebase + assets, produce the survey report (the map). ALWAYS first, even for a v3 spoke. BOOTSTRAP-SAFE (external review A2 deadlock fix): on greenfield/adopt the full Historian advisor is not deployed until step 6, so step 1 runs a lightweight, zero-dependency standalone bootstrap script (historian_core.py \u2014 basic filesystem/asset scan) that produces the baseline map and unblocks steps 2-5 BEFORE full advisor deployment. The full Historian later enriches it.",
+      "2. Test/verification coverage review \u2014 assess what is verified AGAINST the map from step 1 (untested modules, missing e2e, null rate). Cannot run before step 1; it needs the map to know what 'covered' should mean.",
+      "3. Gap analysis \u2014 survey (step 1) + coverage (step 2) + CapabilitiesGraph bar \u2192 the consolidated gap list.",
+      "4. Alignment roadmap \u2014 gaps (step 3) \u2192 prioritized initiatives + lugs (authored to the object-quality standard, spec-object-quality-v4-v1).",
+      "5. Migration plan / bootstrap \u2014 four-bucket classification (upgrade) or blueprint layout (bootstrap/adopt), gap-aware from steps 1-4.",
+      "6. Bootstrap advisors + run certification scouts.",
+      "7. Report certification status to hub registry."
+    ],
+    "ordering_gate": "step 2 (coverage review) HALTS if step 1 (survey) has not produced a current report; step 3 HALTS without both 1 and 2. The sequence is enforced, not advisory."
+  },
+  "home_map": [
+    {
+      "category": "lugs/ (bytype/, incoming/, outgoing/, reference/)",
+      "home": "spoke/local/lugs/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~1252",
+      "note": "preserve bytype structure; indexes regenerate"
+    },
+    {
+      "category": "sessions/ (active + archive)",
+      "home": "spoke/local/sessions/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~821",
+      "note": "spoke-owned; reshape to timeline structure optional"
+    },
+    {
+      "category": "WAI-State.json",
+      "home": "spoke/ozi/WAI-State.json",
+      "layer": "ozi",
+      "bucket": "Preserve",
+      "volume": "1",
+      "note": "Ozi live identity; must survive migration"
+    },
+    {
+      "category": "wakeup-brief.json, ozi-brief.json, advisors/ozi/*, runtime/ozi-sessions/",
+      "home": "spoke/ozi/",
+      "layer": "ozi",
+      "bucket": "Transform",
+      "volume": "~6",
+      "note": "consolidate all Ozi state under ozi/; regenerated artifacts"
+    },
+    {
+      "category": "advisors/<name>/ (non-ozi)",
+      "home": "spoke/advisors/<name>/",
+      "layer": "advisor",
+      "bucket": "Preserve",
+      "volume": "~212",
+      "note": "co-locate; add patterns/ per advisor"
+    },
+    {
+      "category": "advisors/lifecycle.jsonl, registry.json, schedule-index.json, departments.json, coverage-model.yaml",
+      "home": "spoke/managed/advisors-meta/",
+      "layer": "managed",
+      "bucket": "Transform",
+      "volume": "~5",
+      "note": "fleet metadata; Basher-distributed"
+    },
+    {
+      "category": "WAI-*Index.jsonl (Lug/Bolt/Spec/Pattern/Challenges/Changelog)",
+      "home": "spoke/managed/indexes/",
+      "layer": "managed",
+      "bucket": "Transform",
+      "volume": "~7",
+      "note": "regenerated; managed"
+    },
+    {
+      "category": "patterns/ (gate-log, flow-definitions, candidates)",
+      "home": "spoke/managed/patterns/ + advisors/<name>/patterns/",
+      "layer": "managed+advisor",
+      "bucket": "Transform",
+      "volume": "varies",
+      "note": "per spec-storage-layer-v1 + gate topology; flow-defs managed, events per-owner"
+    },
+    {
+      "category": "bolts/ (bytype/...)",
+      "home": "spoke/local/bolts/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~12",
+      "note": "work session recordings"
+    },
+    {
+      "category": "initiatives/ (bytype/, index)",
+      "home": "spoke/local/initiatives/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~3+",
+      "note": "PathGraph future arm"
+    },
+    {
+      "category": "teachings/ + generate-teaching/",
+      "home": "spoke/local/teachings/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~19",
+      "note": "spoke-owned; drafts route to hub for Trainer curation"
+    },
+    {
+      "category": "runtime/ (chain-log, provider_usage, session-guard, staging buffers)",
+      "home": "spoke/local/runtime/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~18",
+      "note": "session runtime + audit trail"
+    },
+    {
+      "category": ".autosave/",
+      "home": "spoke/local/runtime/.autosave/",
+      "layer": "local",
+      "bucket": "Drop",
+      "volume": "~3",
+      "note": "ephemeral turn buffers; safe to drop on migration"
+    },
+    {
+      "category": "db/ (activity.py, sync.py, migrations/, retry_queue)",
+      "home": "spoke/local/db/ + harness.db (storage layer)",
+      "layer": "local",
+      "bucket": "Transform",
+      "volume": "~29",
+      "note": "reconcile with spec-storage-layer-v1 SQLite+vec"
+    },
+    {
+      "category": "historian/cache.db",
+      "home": "spoke/advisors/historian/cache.db",
+      "layer": "advisor",
+      "bucket": "Flag",
+      "volume": "1 (1.2MB)",
+      "note": "verify freshness; regenerable from logs?"
+    },
+    {
+      "category": "health/ (impact-ranking, themes)",
+      "home": "spoke/managed/health/",
+      "layer": "managed",
+      "bucket": "Transform",
+      "volume": "~2",
+      "note": "harness metrics"
+    },
+    {
+      "category": "scouts/",
+      "home": "spoke/managed/scouts/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~75",
+      "note": "scout job defs; Basher-distributed"
+    },
+    {
+      "category": "skills/ + WAI-Skills.jsonl",
+      "home": "spoke/managed/skills/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~25",
+      "note": "Basher-distributed; canonical in templates/commands/"
+    },
+    {
+      "category": "reference/",
+      "home": "spoke/managed/reference/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~102",
+      "note": "canonical reference material"
+    },
+    {
+      "category": "seed/",
+      "home": "spoke/local/seed/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~324",
+      "note": "onboarding seed data"
+    },
+    {
+      "category": "savepoints/",
+      "home": "spoke/local/savepoints/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~17",
+      "note": "recovery"
+    },
+    {
+      "category": "cartographer/, telemetry/, model-usage/, kpi/, compliance/",
+      "home": "spoke/local/<as-named>/",
+      "layer": "local",
+      "bucket": "Flag",
+      "volume": "~90",
+      "note": "verify active vs stale; telemetry+model-usage likely Drop after review"
+    },
+    {
+      "category": "pathgraph/, PathGraph.json",
+      "home": "spoke/local/pathgraph/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~6",
+      "note": "PathGraph (PG)"
+    },
+    {
+      "category": "tastegraph(s)/, ToolGraph.json",
+      "home": "spoke/local/graphs/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "~9",
+      "note": "TG + ToolGraph"
+    },
+    {
+      "category": "corpus-tests/",
+      "home": "spoke/managed/corpus-tests/",
+      "layer": "managed",
+      "bucket": "Flag",
+      "volume": "~11",
+      "note": "confirm managed vs local"
+    },
+    {
+      "category": "signals/",
+      "home": "spoke/local/signals/",
+      "layer": "local",
+      "bucket": "Flag",
+      "volume": "~1+",
+      "note": "signals deprecated; migrate then sunset"
+    },
+    {
+      "category": "archive/, WAI-Lugs-archived.jsonl",
+      "home": "~/projects/trash_bin/ OR spoke/local/archive/",
+      "layer": "local",
+      "bucket": "Flag",
+      "volume": "~17",
+      "note": "genealogy review then Drop"
+    },
+    {
+      "category": "ROOT tools/*.py",
+      "home": "spoke/managed/tools/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~75",
+      "note": "harness orchestration code; Basher-distributed; HUB-canonical"
+    },
+    {
+      "category": "ROOT schemas/",
+      "home": "spoke/managed/schemas/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~4",
+      "note": "canonical schemas"
+    },
+    {
+      "category": "ROOT templates/commands/ (skills), templates/spoke/, templates/harness-base/",
+      "home": "spoke/managed/templates/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~270",
+      "note": "Basher-distributed canonical source"
+    },
+    {
+      "category": "ROOT .claude/ (hooks, agents, commands, settings)",
+      "home": "spoke/managed/.claude/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~100+",
+      "note": "Basher-owned tool config"
+    },
+    {
+      "category": "ROOT audit .md (ARCHITECTURE-REVIEW, HUB-CONTENT-AUDIT, PUBLIC-PRIVATE-CUTOVER, REPO-MOVE-MAP, REPO-VALUE-AUDIT, SECURITY-AUDIT, TRACK-CHAIN-*)",
+      "home": "~/projects/trash_bin/wheelwright/framework/",
+      "layer": "n/a",
+      "bucket": "Drop",
+      "volume": "~9",
+      "note": "stale audit artifacts; move to trash after sign-off"
+    },
+    {
+      "category": "ROOT canonical docs (CLAUDE.md, AGENTS.md, CHANGELOG.md, WAI-Guide.md, capability-registry-canonical.md, WAI-Lug-Schema-Spec.md)",
+      "home": "spoke/managed/docs/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~6",
+      "note": "keep canonical"
+    },
+    {
+      "category": "ROOT env/config (.env.template, .spoke-metadata.yaml, basher.json, .env.template.basher.json)",
+      "home": "spoke/managed/config/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "~5",
+      "note": "harness config; never write secret values"
+    },
+    {
+      "category": "duplicate hooks (_hooks/ vs hooks/)",
+      "home": "spoke/managed/.claude/hooks/ (single)",
+      "layer": "managed",
+      "bucket": "Flag",
+      "volume": "2",
+      "note": "dedupe; confirm canonical copy"
+    },
+    {
+      "category": "WAI-Challenges.jsonl, WAI-Changelog.jsonl, WAI-File-Index.json",
+      "home": "spoke/managed/indexes/",
+      "layer": "managed",
+      "bucket": "Transform",
+      "volume": "3",
+      "note": "ledger/index files; regenerated (survey-informed S45)"
+    },
+    {
+      "category": "WAI-State-extended.json",
+      "home": "spoke/ozi/",
+      "layer": "ozi",
+      "bucket": "Preserve",
+      "volume": "1",
+      "note": "Ozi state extension; co-locate with WAI-State.json"
+    },
+    {
+      "category": "WAI-State.json.template",
+      "home": "spoke/managed/templates/",
+      "layer": "managed",
+      "bucket": "Flag",
+      "volume": "1",
+      "note": "state template; confirm canonical vs duplicate"
+    },
+    {
+      "category": "managed/ (harness.db, migrations)",
+      "home": "spoke/local/db/",
+      "layer": "local",
+      "bucket": "Transform",
+      "volume": "varies",
+      "note": "v4 storage-layer DB + migrations; reconcile with spec-storage-layer-v1 (new S45)"
+    },
+    {
+      "category": "dev-config.json, spoke-profile.json",
+      "home": "spoke/managed/config/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "2",
+      "note": "spoke config + identity profile"
+    },
+    {
+      "category": "taste.spoke.yaml, tastegraph.json",
+      "home": "spoke/local/graphs/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "2",
+      "note": "TasteGraph data; co-locate with tastegraph(s)/"
+    },
+    {
+      "category": "KnowMe.md, forge-context.md, wai-context.md, tastegraph-guide.md",
+      "home": "spoke/managed/docs/",
+      "layer": "managed",
+      "bucket": "Preserve",
+      "volume": "4",
+      "note": "context/guide docs"
+    },
+    {
+      "category": "adopted-vectors.json",
+      "home": "spoke/local/runtime/",
+      "layer": "local",
+      "bucket": "Preserve",
+      "volume": "1",
+      "note": "teaching adoption tracking"
+    },
+    {
+      "category": "ceremony-audit-v1.md",
+      "home": "spoke/local/archive/",
+      "layer": "local",
+      "bucket": "Flag",
+      "volume": "1",
+      "note": "audit artifact; review then archive/drop"
+    },
+    {
+      "category": "wai_track_ledger.md",
+      "home": "~/projects/trash_bin/ OR spoke/local/archive/",
+      "layer": "local",
+      "bucket": "Flag",
+      "volume": "1",
+      "note": "historical dead-zone reconstruction artifact, NOT the live track (CLAUDE.md); flag then drop"
+    }
+  ],
+  "framework_role_dissolution": {
+    "principle": "v4 has no 'framework' authority and no 'framework' repo. The harness master is MyWheel/WAI-Harness/. Framework's responsibilities redistribute; authorship is democratized (any spoke proposes) but canonicalization centralizes (Trainer curates, MyWheel hosts, Basher distributes).",
+    "redistribution": [
+      {
+        "responsibility": "Convergence curation (canonicalize broadly-useful contributions)",
+        "v4_owner": "Trainer (hub advisor)",
+        "status": "re-homed (spec-trainer-advisor-v1)"
+      },
+      {
+        "responsibility": "Harness CODE (tools/, schemas/, templates/, .claude/)",
+        "v4_owner": "managed/ layer \u2014 HUB-canonical, BASHER-distributed",
+        "status": "becomes managed/; every spoke runs identical copy"
+      },
+      {
+        "responsibility": "Infrastructure automation (teaching base-cuts, nightly consolidation: teaching_delivery_cut.py, base_cut_draft.py)",
+        "v4_owner": "HUB",
+        "status": "move to hub infra; runs nightly at hub, not per-spoke"
+      },
+      {
+        "responsibility": "Protocol/skill/schema authorship",
+        "v4_owner": "any spoke (proposes) \u2192 Trainer canonicalizes \u2192 HUB distributes",
+        "status": "authorship democratized; authority centralized at hub"
+      },
+      {
+        "responsibility": "Lug routing semantics, dispatch scoring (lug_utils, spoke_expediter, ozi_autopilot)",
+        "v4_owner": "managed/ code run by each spoke's Ozi",
+        "status": "shared orchestration; no central owner needed"
+      },
+      {
+        "responsibility": "Hook spec design",
+        "v4_owner": "any spoke proposes \u2192 BASHER applies/distributes",
+        "status": "unchanged split"
+      }
+    ]
+  },
+  "routed_to_deprecation": {
+    "deprecated": "routed_to: FRAMEWORK",
+    "replacement": {
+      "HUB": "infrastructure, base-kit cuts, fleet-wide harness upgrades, nightly consolidation",
+      "TRAINER": "curation / teaching-canonicalization / broadly-useful pattern review (bubble-up evolution proposals)",
+      "BASHER": "tool-config / .claude / hook-spec application + distribution"
+    },
+    "default_for_ambiguous": "HUB (triages to Trainer or Basher)",
+    "teaching_required": "deprecation-requires-teaching-v1 \u2014 a deprecation teaching MUST accompany the routed_to:FRAMEWORK retirement (no silent retirement). Legacy lugs carrying routed_to:FRAMEWORK are treated as legacy-mode by Trainer (functional, not rejected) and rerouted per this map."
+  },
+  "constraints": [
+    "No-orphan invariant is a HARD GATE: dry-run fails if any live category is unmapped",
+    "Migration is ADDITIVE: build WAI-Harness/ alongside WAI-Spoke/; legacy source is never deleted until green certification + sign-off",
+    "Flag and Drop buckets require explicit human sign-off; engine never auto-deletes",
+    "Drop = move to ~/projects/trash_bin/ preserving relative path (WSL standing rule), never rm",
+    "managed/ is agent-read-only post-migration; only Basher writes it",
+    "Ozi state consolidates under spoke/ozi/ \u2014 not a generic advisor folder",
+    "routed_to:FRAMEWORK retirement requires an accompanying deprecation teaching (no silent retirement)",
+    "Secret values / .env contents are never written into any migrated file"
+  ],
+  "tests": [
+    "No-orphan: enumerate live WAI-Spoke/ categories, diff against home_map \u2192 zero unmapped (dry-run asserts this; injecting a synthetic unmapped folder makes the dry-run FAIL)",
+    "Bucket routing: a Preserve category copies unchanged (checksum match); a Transform category re-derives and schema-validates; a Flag category stages to .flagged/ and is NOT auto-placed; a Drop category moves to trash_bin only with --confirm-drop",
+    "Additive: after dry-run AND after execute, WAI-Spoke/ source still exists intact (nothing deleted pre-certification)",
+    "Ozi consolidation: WAI-State.json + ozi-brief.json + advisors/ozi/* all land under spoke/ozi/",
+    "managed read-only: a write attempt to spoke/managed/ by a non-Basher actor is flagged",
+    "routed_to: a lug with routed_to:FRAMEWORK is detected as legacy and rerouted to HUB/TRAINER/BASHER per the map; deprecation teaching exists",
+    "Coverage report: dry-run emits a per-category report (claimed/bucket/target/volume) summing to the full live tree"
+  ],
+  "impl_lugs": [
+    "impl-v4-harness-skeleton-v1",
+    "impl-v4-migration-engine-v1"
+  ],
+  "health": {
+    "test_coverage": "none \u2014 spec only",
+    "last_impl_lug_completed": "impl-v4-migration-engine-v1 + home-map-completion (S45)",
+    "spec_drift_risk": "low \u2014 initial spec",
+    "open_questions": [
+      "historian/cache.db + telemetry/ + model-usage/: confirm regenerable/stale before Drop",
+      "corpus-tests/ + advisors/advisor_manager.py/evolution_engine.py: managed (harness) or local (spoke) \u2014 confirm during dry-run Flag review",
+      "Does the framework repo physically rename to a harness-source spoke, or keep its name with the authority dissolved? (proposed: keep name, dissolve authority)"
+    ]
+  },
+  "related_specs": [
+    "spec-storage-layer-v1",
+    "spec-trainer-advisor-v1",
+    "spec-cross-spoke-sovereignty-v1"
+  ],
+  "perceive": "Read this spec + the S46 audit in architecture_harness_v4.md. Enumerate the live WAI-Spoke/ tree + repo root. Confirm impl-v4-harness-skeleton-v1 status (skeleton must exist before engine runs).",
+  "execute": "Implemented via impl-v4-harness-skeleton-v1 (build WAI-Harness/ skeleton + manifest) then impl-v4-migration-engine-v1 (tools/v4_migrate.py reading this map). Author the deprecation-requires-teaching for routed_to:FRAMEWORK. Deliver hub-directed items (infra absorption, routed_to HUB/TRAINER) and Basher-directed items (managed/ distribution) as lugs to their incoming/.",
+  "verify": "Run all tests[]. Dry-run produces a complete coverage report with zero orphans; additive property holds; Flag/Drop require sign-off.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet",
+  "home_map_completions": [
+    {
+      "at": "2026-06-09 S45",
+      "added_rows": 10,
+      "covers": 17,
+      "method": "historian_core survey (100% coverage) + judgment",
+      "note": "closes lug-v4-home-map-completion-v1; engine dry-run now zero-orphan"
+    }
+  ]
+}

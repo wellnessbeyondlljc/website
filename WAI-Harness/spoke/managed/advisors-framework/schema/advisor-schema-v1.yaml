@@ -1,0 +1,505 @@
+# advisor-schema-v1.yaml
+# Canonical advisor object schema — Wheelwright Framework
+# Version: 1.0.0
+#
+# PURPOSE
+# -------
+# This file is the authoritative reference template for all advisor definitions
+# in the WAI advisor system. Every advisor MUST conform to this schema before
+# being registered in registry.json or activated by AdvisorManager.
+#
+# HOW TO USE
+# ----------
+# Copy this file to WAI-Spoke/advisors/{advisor-id}/charter.md (YAML block),
+# fill in every required field, and remove these top-level comments.
+# Fields marked OPTIONAL may be omitted; all others are required.
+
+advisor:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # IDENTITY
+  # ─────────────────────────────────────────────────────────────────────────
+
+  id: historian
+  # Stable machine identifier for this advisor. Kebab-case. Never changes
+  # after the advisor is first registered. Used as folder name and as the
+  # key in registry.json. REQUIRED.
+
+  name: Historian
+  # Human-readable display name. Title-case. May differ from id.
+  # Shown in wakeup briefings and escalation messages. REQUIRED.
+
+  version: 1.0.0
+  # Semver. Bump rules (same as crew-convention.md):
+  #   patch — wording / clarification / threshold tweak
+  #   minor — new field added, new pattern added
+  #   major — field removed/renamed, status transition, mission change
+  # REQUIRED.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # STATUS LIFECYCLE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  status: piloting
+  # Current lifecycle stage. Allowed values:
+  #   new       — defined but not yet activated on any spoke
+  #   piloting  — active on a spoke under a pilot contract (see pilot_contract)
+  #   promoted  — pilot succeeded; advisor runs as standard without contract gate
+  #   refined   — mid-pilot iteration; pilot_iteration incremented; stays piloting
+  #   removed   — retired from active use; definition preserved for audit
+  #
+  # Transitions:
+  #   new --> piloting   (requires: pilot_contract block fully populated)
+  #   piloting --> promoted  (requires: KPI targets met per decision_criteria)
+  #   piloting --> refined   (requires: evaluation; pilot_iteration++)
+  #   piloting --> removed   (requires: decision_criteria.remove_if met)
+  #   promoted --> removed   (any time, by evaluator decision)
+  #
+  # CONSTRAINT: Only one advisor per spoke may hold status=piloting at any time.
+  # REQUIRED.
+
+  status_history:
+    # Append-only log of every status change. Never edit past entries.
+    # Each entry records who changed the status and when. REQUIRED.
+    - status: new
+      at: "2026-01-15T00:00:00Z"
+      # ISO-8601 UTC timestamp. REQUIRED on each entry.
+      by: framework
+      # Actor that triggered the transition. Free string (e.g. "framework",
+      # "mario", "AdvisorManager", "pilot-evaluation-2026-02"). REQUIRED.
+
+    - status: piloting
+      at: "2026-02-01T08:00:00Z"
+      by: mario
+      pilot_contract_ref: pilot-historian-2026-02
+      # OPTIONAL on this entry — a short identifier referencing the pilot run.
+      # Useful for audit when multiple pilot iterations exist.
+
+  pilot_iteration: 1
+  # Integer. Starts at 1 when status first becomes piloting. Increments by 1
+  # each time the advisor reaches status=refined and re-enters piloting.
+  # Stays at the current value for promoted advisors.
+  # Use this to distinguish which pilot contract version is active.
+  # REQUIRED when status is piloting or refined; OPTIONAL otherwise.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SCOPE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  node_scope: spoke
+  # Where this advisor runs. Allowed values:
+  #   spoke  — runs inside a single spoke instance (most advisors)
+  #   hub    — runs inside the hub coordinator process
+  #   both   — runs in both (rare; requires hub team sign-off)
+  # REQUIRED.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # MISSION
+  # ─────────────────────────────────────────────────────────────────────────
+
+  mission: |
+    One paragraph. Explains why this advisor exists and what value it produces.
+    Written from the user's perspective: what does the system do better because
+    this advisor is running? Be specific — vague missions make pilot evaluation
+    impossible. This text is surfaced verbatim in wakeup briefings.
+  # REQUIRED. Must be a single coherent paragraph, not a bullet list.
+
+  principles:
+    # The advisor's operating commitments — how it behaves when uncertain,
+    # how it weighs false positives vs false negatives, how it escalates.
+    # At least 2 entries required. Short declarative sentences work best.
+    # These are surfaced when the advisor proposes a finding, so the user
+    # can judge whether the finding is in-charter.
+    - "I observe; I do not act without surfacing."
+    - "I prefer false-quiet over false-noise."
+  # REQUIRED. Minimum 2 items.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # INPUTS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  inputs_required:
+    # Describes what data this advisor must read to function. Used by
+    # AdvisorManager to validate that the data environment is ready before
+    # activating the advisor. REQUIRED block.
+
+    data_stores:
+      # List of data sources and their tables/collections. Each entry is a
+      # dict with one key (the store name) mapping to a list of entities.
+      # "optional" means the advisor degrades gracefully without it.
+      - postgres: [lugs, tracks, sessions]
+      - gitnexus: optional
+    # REQUIRED. At least one non-optional data store.
+
+    fields_consumed:
+      # Specific fields the advisor reads from the above stores. Used for
+      # impact analysis — if a field is renamed or removed, any advisor
+      # listing it here must be reviewed. REQUIRED.
+      - sessions.scenario_fingerprint
+      - tracks.text_embedding
+    # REQUIRED. At least one entry.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ACCESS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  access_required:
+    # Declares the MCP tools and permission scopes this advisor needs.
+    # AdvisorManager validates these at activation time. REQUIRED block.
+
+    mcps:
+      # List of MCP tool identifiers this advisor invokes. Use the canonical
+      # MCP tool name (e.g. "wai_index", "gitnexus", "postgres_query").
+      - wai_index
+      - gitnexus
+    # REQUIRED. Empty list ([]) is valid for advisors that use no MCPs.
+
+    permissions:
+      # List of permission scopes beyond default. Use the canonical permission
+      # token from the permissions registry. "read_fleet_optional" means the
+      # advisor will try fleet-wide reads but degrades if denied.
+      - read_fleet_optional
+    # OPTIONAL. Omit if no extra permissions are needed.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PATTERNS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  patterns:
+    # Detection patterns this advisor runs. Each pattern is one unit of
+    # sensing logic: a named condition, when it fires, and what threshold
+    # triggers a finding surface. REQUIRED. At least one entry.
+    - name: similar_situation_present
+      # Stable machine name. Kebab-case. Used in finding logs and KPIs.
+      # REQUIRED.
+
+      query_template: <named query reference>
+      # Reference to a named query in the advisor's context/ folder or the
+      # shared query registry. Do not inline SQL — use named templates.
+      # REQUIRED.
+
+      fires_on:
+        # Events that trigger this pattern evaluation. Allowed values:
+        #   wakeup               — runs at session start
+        #   mid_session_on_demand — user invokes the advisor manually
+        #   post_lug_create      — fires when a new lug is created
+        #   post_commit          — fires after every git commit
+        #   scheduled            — runs on a cron-like cadence (see schedule_cron)
+        - wakeup
+        - mid_session_on_demand
+      # REQUIRED. At least one value.
+
+      threshold:
+        # When the pattern's computed score/count crosses this threshold,
+        # the advisor surfaces a finding (or logs it if shadow: true).
+        type: similarity
+        # Threshold type. Allowed values:
+        #   similarity — cosine or embedding similarity score (0.0–1.0)
+        #   count      — raw integer count
+        #   ratio      — proportion (0.0–1.0)
+        #   boolean    — fires if the query returns any result
+        value: 0.82
+        # The threshold value. Interpretation depends on type. REQUIRED.
+      # REQUIRED block.
+
+      evolution_risk: low
+      # Risk that this pattern's behavior will drift as the underlying data
+      # evolves. Used by the self-review cycle to prioritize recalibration.
+      # Allowed values:
+      #   low    — query is stable; threshold unlikely to need recalibration
+      #   medium — some data dependency; monitor monthly
+      #   high   — embedding/ML-dependent or fast-changing data; monitor weekly
+      # REQUIRED.
+
+      shadow: false
+      # When true: the pattern evaluates and logs what it would surface, but
+      # does NOT produce a visible finding for the user. Use shadow mode to
+      # validate a new pattern's precision/recall before going live.
+      # Logs are written to the advisor's findings-log.jsonl with
+      # surfaced: false and shadow: true so they can be reviewed offline.
+      # Flip to false only after shadow log analysis confirms acceptable
+      # false-positive rate.
+      # Allowed values: true | false
+      # REQUIRED (explicit false is required — omission is not equivalent).
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # OUTPUTS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  outputs:
+    # Actions the advisor may take when a pattern fires (and shadow: false).
+    # Allowed values:
+    #   surface_at_wakeup       — inject a finding block into the wakeup brief
+    #   emit_finding_lug        — create a lug of type=finding routed to the user
+    #   propose_teaching_candidate — flag a recurring pattern as teaching material
+    #   escalate_to_lead        — route to the lead advisor via lug
+    # List only the outputs this advisor is permitted to emit.
+    # Adding an output that wasn't declared here requires a version bump.
+    # REQUIRED. At least one entry.
+    - surface_at_wakeup
+    - emit_finding_lug
+    - propose_teaching_candidate
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ESCALATION
+  # ─────────────────────────────────────────────────────────────────────────
+
+  escalation:
+    # Defines who handles escalation when the advisor cannot resolve a finding
+    # on its own (e.g. ambiguous signal, high-impact decision required).
+    # REQUIRED.
+
+    lead: hub_coordinator
+    # The advisor or role that receives escalated findings. Use the canonical
+    # slug from the advisor registry (e.g. "hub_coordinator", "ozi", "mario").
+    # REQUIRED.
+
+    request_method: lug_routed_to_lead
+    # How the escalation is delivered. Allowed values:
+    #   lug_routed_to_lead  — create a lug with routed_to: <lead>
+    #   surface_at_wakeup   — add to wakeup brief as "needs human decision"
+    #   direct_mcp_call     — invoke lead advisor's MCP tool directly
+    # REQUIRED.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PILOT CONTRACT
+  # ─────────────────────────────────────────────────────────────────────────
+  # REQUIRED when status is piloting or refined.
+  # OPTIONAL (but encouraged) for promoted advisors as historical record.
+  #
+  # Purpose: The pilot contract forces the team to commit—before activation—
+  # to a falsifiable hypothesis, specific KPIs, and explicit decision rules.
+  # This prevents "pilot forever" drift and unprincipled evaluation where the
+  # evaluator cherry-picks metrics after seeing outcomes.
+
+  pilot_contract:
+
+    hypothesis: |
+      A specific, falsifiable statement of the value this advisor will produce.
+      Example: "The Historian advisor will identify at least one prior similar
+      session in >= 20% of wakeup events within 60 days of activation, and at
+      least 40% of surfaced findings will result in user action (acted_on)."
+    # State one testable outcome. If you cannot write a falsifiable hypothesis,
+    # the advisor is not ready for piloting. REQUIRED.
+
+    kpis:
+      # One or more measurable indicators. Each KPI must have:
+      #   name             — machine-stable identifier for this metric
+      #   definition       — precise English definition; no ambiguity
+      #   baseline_method  — how you will measure the pre-pilot state
+      #   target           — the specific improvement required to promote
+      # REQUIRED. At least one KPI.
+      - name: redundant_work_session_count
+        definition: "Sessions where >50% of work duplicated prior shipped work,
+          as measured by cosine similarity of track embeddings against completed
+          session vectors."
+        baseline_method: "Measure for 2 weeks before pilot activation using
+          shadow mode. Record average redundant session count per rolling 30 days."
+        target: "Reduction of 15% over rolling 30-day window post-activation
+          compared to baseline."
+
+    data_required_for_evaluation:
+      # Minimum data that must exist before the evaluation is valid.
+      # Prevents premature evaluation on thin data. REQUIRED.
+      minimum_observations: 30
+      # Minimum number of pattern firings (shadow or live) recorded.
+
+      minimum_time_window: "30 days"
+      # Minimum wall-clock time since pilot activation.
+
+      minimum_advisor_fires: 20
+      # Minimum number of times the advisor actually surfaced a finding
+      # (i.e. shadow: false firings). Ensures signal volume is adequate.
+
+    evaluation_trigger: |
+      Whichever comes LAST: minimum_observations met OR minimum_time_window
+      elapsed. Both conditions must hold before evaluation is valid.
+      The evaluator checks these conditions at the start of any evaluation run.
+    # Plain English description of when evaluation is triggered. REQUIRED.
+
+    decision_criteria:
+      # Explicit rules that determine the outcome of evaluation. Written before
+      # the pilot starts so the evaluator cannot rationalize post-hoc.
+      # REQUIRED. All three sub-keys are required.
+
+      promote_if: "KPI target met AND user-acted-on rate > 40% across all
+        surfaced findings during the evaluation window."
+      # Condition for graduating to status=promoted. REQUIRED.
+
+      refine_if: "Partial KPI movement (>5% improvement but below target) OR
+        signal of correct intent with wrong threshold (precision > 60% but
+        recall too low)."
+      # Condition for incrementing pilot_iteration and re-entering piloting
+      # with an updated contract. REQUIRED.
+
+      remove_if: "No KPI movement after two full pilot iterations OR
+        user-dismissed rate > 70% across surfaced findings."
+      # Condition for retiring the advisor (status=removed). REQUIRED.
+
+    evaluator: |
+      The lead advisor (hub_coordinator) or the designated human maintainer
+      (mario) runs the evaluation at trigger. The evaluator must document
+      the evaluation outcome in a finding lug before changing status.
+    # Who is authorized to run the evaluation and change the status. REQUIRED.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # LIFECYCLE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  lifecycle:
+    # Controls the advisor's ongoing self-monitoring behavior. REQUIRED.
+
+    self_review_cadence: weekly
+    # How often the advisor reviews its own accuracy and pattern health.
+    # Allowed values: daily | weekly | monthly | on_demand
+    # REQUIRED.
+
+    self_review_inputs:
+      # Data sources the advisor uses during self-review. REQUIRED.
+      - own findings + user response (acted_on | dismissed | ignored)
+      - own surfacing accuracy
+      # "user response" is sourced from findings-log.jsonl feedback fields.
+    # REQUIRED. At least one entry.
+
+    hypothesis_threshold:
+      # When self-review detects a recurring anomaly, this controls when the
+      # advisor promotes it to a teaching candidate or escalation lug.
+      recurrence: 3
+      # Number of self-review cycles the anomaly must appear before escalating.
+      confidence_min: medium
+      # Minimum confidence level required to escalate. Allowed values:
+      #   low | medium | high
+    # REQUIRED block.
+
+    rollback_path: "Revert to previous version; preserved in advisor_versions"
+    # Plain English description of how to roll back if the advisor produces
+    # harmful or low-quality output after a version bump. Should reference
+    # where the prior version is stored. REQUIRED.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SUB-ADVISORS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  sub_advisors:
+    # List of advisor IDs that this advisor delegates specialized sub-tasks to.
+    # Sub-advisors must be independently registered and conform to this schema.
+    # This field documents composition, not dependency — the parent advisor
+    # still owns the finding; sub-advisors are implementation details.
+    # OPTIONAL. Omit the block entirely if no sub-advisors exist.
+    - id: <sub-advisor-id>
+      # The id field of the sub-advisor. Must match an entry in registry.json.
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHEDULE NEGOTIATION BLOCKS
+# ═════════════════════════════════════════════════════════════════════════════
+# These blocks appear in {advisor}/schedule.yaml, not in the advisor definition
+# YAML. Documented here as the authoritative field reference.
+#
+# time_request — written by the ADVISOR during self-review or after each run.
+#   Signals to Ozi what budget is needed for the next run cycle.
+#
+# time_grant — written by OZI after budget negotiation.
+#   Authoritative allocation for the next run. Ozi replaces this block each cycle.
+
+schedule_negotiation_blocks:
+
+  time_request:
+    current_allocation_seconds: integer
+    # Seconds that Ozi granted last cycle. Advisor uses this as baseline.
+    # REQUIRED.
+
+    requested_allocation_seconds: integer
+    # Seconds the advisor is requesting for the next run. Must be justified.
+    # REQUIRED.
+
+    justification: string
+    # Plain-language reason the advisor needs this allocation.
+    # Required if requested > current. Shown in Wilbur KPI surface.
+    # REQUIRED.
+
+    findings_last_run: integer or null
+    # Count of actionable findings produced in the most recent expedition.
+    # null if no run has occurred yet.
+    # OPTIONAL.
+
+    draft_scouts_pending: integer
+    # Number of draft scouts that have not yet been tested in a live run.
+    # High values justify allocation increases to promote scouts to ready.
+    # OPTIONAL (default 0).
+
+    scouts_unreached_last_run: list of scout_ids
+    # Scout IDs that were queued but did not fit within the last time box.
+    # Ozi uses this list to justify granting more time.
+    # OPTIONAL (default []).
+
+    urgency: enum [low, medium, high]
+    # low    — routine run, no urgency
+    # medium — known gap or overdue cycle
+    # high   — P1 dimension below coverage threshold; escalates budget priority
+    # REQUIRED.
+
+  time_grant:
+    granted_seconds: integer
+    # Ozi-approved allocation for the next run. Advisor must not exceed this.
+    # REQUIRED when grant is issued; null when no grant has been made yet.
+
+    granted_at: ISO-8601 timestamp
+    # When Ozi wrote this grant. Used to detect stale grants (> 1 week old).
+    # REQUIRED.
+
+    granted_by: string
+    # Always 'ozi'. Audit field.
+    # REQUIRED.
+
+    reason: string
+    # Why the granted amount differs from the requested amount.
+    # Use 'approved as requested' when they match.
+    # REQUIRED.
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ADVISOR PROPOSAL LUG FIELDS
+# ═════════════════════════════════════════════════════════════════════════════
+# These optional fields appear on task/implementation lugs that Ozi generates
+# when proposing a new advisor hire. Present when raised_by = 'ozi-coverage-assessment'.
+
+advisor_proposal_lug_fields:
+
+  raised_by: string
+  # Agent that raised this proposal. Value: 'ozi-coverage-assessment'.
+  # REQUIRED on proposal lugs.
+
+  raised_at_commit: string
+  # Short git SHA at the moment Ozi ran the coverage assessment.
+  # Used to reconstruct context if proposal ages.
+  # REQUIRED on proposal lugs.
+
+  raised_at_commit_count: integer
+  # Total commit count when the proposal was raised.
+  # Combined with snooze_until_commit_count to compute snooze expiry.
+  # REQUIRED on proposal lugs.
+
+  assessment_phase: enum [coverage, confidence, growth]
+  # coverage  — gap detected in advisor coverage taxonomy
+  # confidence — existing advisor has too many low-confidence scouts
+  # growth     — spoke complexity has grown beyond current advisor set
+  # REQUIRED on proposal lugs.
+
+  gap_domain: string
+  # The uncovered domain that triggered this proposal (e.g. 'security', 'api-coverage').
+  # REQUIRED on proposal lugs.
+
+  proposed_advisor_id: string
+  # Suggested kebab-case id for the new advisor.
+  # REQUIRED on proposal lugs.
+
+  snooze_until_commit_count: integer or null
+  # If set, Ozi ignores this proposal until the spoke reaches this commit count.
+  # null = not snoozed (proposal is active).
+  # Example: raised_at_commit_count + 10 defers for approximately 10 commits.
+  # OPTIONAL (default null).
+
+  snooze_reason: string or null
+  # User-provided reason for the snooze. Shown in Wilbur proposal surface.
+  # OPTIONAL (default null).

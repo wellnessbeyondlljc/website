@@ -1,0 +1,108 @@
+{
+  "id": "spec-score-backlog-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "feature",
+    "id": "score-backlog",
+    "label": "ROI Scoring and Backlog Prioritization"
+  },
+  "title": "ROI Scoring and Backlog Prioritization -- automated dispatch ordering",
+  "what": "The ROI scorer computes a priority score for each open lug by calculating roi = impact / effort. Lugs are sorted by urgency tier first (1=URGENT dispatched before tier 2), then by roi descending within each tier. The sorted queue is what Ozi reads for dispatch ordering.",
+  "why": "Without ROI scoring, Ozi would dispatch in arbitrary or filesystem order. Scoring ensures the highest-value work executes first, and urgent items preempt lower-urgency items regardless of roi.",
+  "audience": [
+    "admin",
+    "agent"
+  ],
+  "use_cases": [
+    {
+      "title": "Prioritizing a queue of open lugs",
+      "trigger": "Ozi pre-run queue evaluation",
+      "outcome": "Lugs sorted: all urgency=1 first, then urgency=2 by roi, etc. Ozi dispatches top N within session budget",
+      "persona": "agent"
+    },
+    {
+      "title": "Vibe affinity tiebreaking",
+      "trigger": "Two lugs with identical urgency and roi",
+      "outcome": "va (vibe_affinity) field used as tiebreaker: build/fix/think/grind/ship",
+      "persona": "agent"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Urgency tier before ROI",
+      "description": "urgency=1 (URGENT) dispatches before any urgency=2 item, even if urgency=2 has higher ROI. Tiers are absolute priority buckets."
+    },
+    {
+      "name": "Effort calibration matters",
+      "description": "effort=1 vs effort=5 on an impact=8 lug changes roi from 8.0 to 1.6. Miscalibrated effort scores distort the entire queue."
+    }
+  ],
+  "how": {
+    "trigger": "Called by Ozi at start of nightly run, or manually via score_backlog.py / lathe_score.py",
+    "steps_summary": [
+      "1. Scan bytype/*/open/ for all open lugs",
+      "2. For each lug: compute roi = impact / effort (default impact=5, effort=3 if missing)",
+      "3. Sort: primary = urgency ascending (1 first), secondary = roi descending",
+      "4. Apply va tiebreak for identical urgency+roi",
+      "5. Output ordered list to Ozi dispatch queue"
+    ],
+    "constraints": [
+      "impact defaults to 5, effort defaults to 3 if absent - always set them explicitly",
+      "urgency defaults to 3 (NORMAL) if omitted",
+      "Never set effort=0 (division by zero)"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Ozi nightly pre-dispatch",
+      "Manual backlog review"
+    ],
+    "not_when": [],
+    "frequency": "Each Ozi run"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/lugs/bytype/*/open/*.json - all open lugs"
+    ],
+    "outputs": [
+      "Sorted dispatch queue"
+    ],
+    "state_changes": []
+  },
+  "constraints": [
+    "ROI score is advisory - human can override dispatch order"
+  ],
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "Which script is canonical: score_backlog.py or lathe_score.py?"
+    ]
+  },
+  "subject_id": "score-backlog",
+  "body": "The ROI scorer is the prioritization engine that converts an unordered set of open lugs into a dispatch-ordered queue. The scoring formula is: roi = impact / effort. Impact defaults to 5 and effort defaults to 3 when absent from the lug — these defaults are intentionally moderate to avoid artificially inflating or deflating unscored items. Urgency tier is the primary sort key: urgency=1 (URGENT) items dispatch before any urgency=2 items, urgency=2 before urgency=3, and so on — ROI is irrelevant across tier boundaries. Within a tier, items sort by roi descending. When two items share identical urgency and ROI, the va (vibe_affinity) field breaks the tie: build > ship > fix > grind > think, matching the most common user workflow preference. The scorer is invoked at the start of every Ozi nightly run via score_backlog.py or lathe_score.py; it is also available for manual backlog review. Inputs are all JSON files in bytype/*/open/. Outputs are an ordered list delivered to Ozi for dispatch sequencing. Items with effort=0 cause division-by-zero and are treated as effort=1 with an error annotation. Items with manual_gate=true in execute_when are excluded from the scored queue entirely — they appear only in the 'gated' section of the display. Items with unresolved blocked_by references are scored but marked as 'blocked' and skipped at dispatch time even if they would otherwise rank first. The scored output also marks items whose quality_score (from Ozi quality check) falls at or below 3 as 'needs_refinement' — they are displayed separately from the ready queue at wakeup.",
+  "done_when": [
+    "Given two open lugs with urgency=1 and urgency=2, the urgency=1 lug appears first in the scored queue regardless of which has higher ROI",
+    "A lug with missing impact and effort fields scores at roi=5/3=1.67 (defaults applied) and appears in the queue without error",
+    "A lug with execute_when.manual_gate=true is excluded from the ready queue and appears only in the gated section",
+    "Two lugs with identical urgency and ROI are ordered by va field: a lug with va=build ranks above a lug with va=think",
+    "The scorer output correctly separates ready items (quality_score >3, no blockers) from needs_refinement items (quality_score <=3)"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-ozi-queue-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

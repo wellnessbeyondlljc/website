@@ -1,0 +1,187 @@
+{
+  "registry": "advisor-system-v2",
+  "version": "2.1.0",
+  "established_at": "2026-06-03T01:40:00Z",
+  "note": "Canonical roster for the v2 advisor system. Spoke advisors run on-demand; hub advisors run on schedule. Communicate via structured lug-messages. HUB ROSTER reconciled 2026-06-11 to the actually-built advisor definitions in WAI-Harness/hub/managed/advisors/ (status 'exists') plus the 2 Wheel-Council roles still tools-only (status 'blueprint'). Wheel Council: octo(lead), gardener(expert), cartographer(director), spinner(hands), quartermaster(intel).",
+  "comms_model": "lug-message",
+  "spoke_advisors": [
+    {
+      "id": "ozi",
+      "tier": "spoke",
+      "role": "Backlog scorer + work-queue orchestrator",
+      "cadence": "on-demand",
+      "status": "exists"
+    },
+    {
+      "id": "marge",
+      "tier": "spoke",
+      "role": "Lug quality reviewer (PEV validator)",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "archie",
+      "tier": "spoke",
+      "role": "Architecture and pattern advisor",
+      "cadence": "on-demand",
+      "status": "exists"
+    },
+    {
+      "id": "flo",
+      "tier": "spoke",
+      "role": "Flow advisor \u2014 session pacing, context budget",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "will",
+      "tier": "spoke",
+      "role": "Scope and stewardship guard",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "jordy",
+      "tier": "spoke",
+      "role": "Journey advisor \u2014 progress tracking, momentum",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "thad",
+      "tier": "spoke",
+      "role": "Teaching advisor \u2014 adoption and propagation",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "mark",
+      "tier": "spoke",
+      "role": "Metrics and scoring advisor",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    },
+    {
+      "id": "clara",
+      "tier": "spoke",
+      "role": "Context health and compaction advisor",
+      "cadence": "on-demand",
+      "status": "blueprint"
+    }
+  ],
+  "hub_advisors": [
+    {
+      "id": "octo",
+      "tier": "hub",
+      "role": "Hub orchestrator \u2014 leads the Wheel Council",
+      "cadence": "scheduled",
+      "status": "exists",
+      "council": "lead"
+    },
+    {
+      "id": "gardener",
+      "tier": "hub",
+      "role": "Expert \u2014 lifecycle/cadence, nightly runs, pruning, health",
+      "cadence": "scheduled",
+      "status": "exists",
+      "council": "expert"
+    },
+    {
+      "id": "cartographer",
+      "tier": "hub",
+      "role": "Director \u2014 quiet observer; maps territory at session close, sets direction (fulfills the council 'cartologist' role)",
+      "cadence": "scheduled",
+      "status": "exists",
+      "council": "director"
+    },
+    {
+      "id": "assessor",
+      "tier": "hub",
+      "role": "Model intelligence layer \u2014 packages model/provider intel for the fleet",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "navigator",
+      "tier": "hub",
+      "role": "Intelligence broker \u2014 model selection/routing (provider adapters)",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "historian",
+      "tier": "hub",
+      "role": "Memory + quality-assessment layer \u2014 track review, model-quality scoring",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "trainer",
+      "tier": "hub",
+      "role": "Curator/Coach \u2014 upgrade coaching, blueprint adoption guidance",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "architect",
+      "tier": "hub",
+      "role": "Architecture + dependency mapping across the fleet",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "expediter",
+      "tier": "hub",
+      "role": "Ready-queue builder \u2014 categorize + route work (hub-side)",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "investigator",
+      "tier": "hub",
+      "role": "Forensic/root-cause investigation",
+      "cadence": "event",
+      "status": "exists"
+    },
+    {
+      "id": "librarian",
+      "tier": "hub",
+      "role": "Knowledge + reference curation",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "prioritizer",
+      "tier": "hub",
+      "role": "Cross-wheel prioritization",
+      "cadence": "scheduled",
+      "status": "exists"
+    },
+    {
+      "id": "cc-advisor",
+      "tier": "hub",
+      "role": "Claude Code tooling/config advisor",
+      "cadence": "event",
+      "status": "exists"
+    },
+    {
+      "id": "spinner",
+      "tier": "hub",
+      "role": "Hands \u2014 implementation executor",
+      "cadence": "scheduled",
+      "status": "blueprint",
+      "council": "hands",
+      "note": "tools present (spinner_score.py); full advisor def not yet built"
+    },
+    {
+      "id": "quartermaster",
+      "tier": "hub",
+      "role": "Intel \u2014 tracks resources, dependencies",
+      "cadence": "scheduled",
+      "status": "blueprint",
+      "council": "intel",
+      "note": "tools present (quartermaster_scan.py); full advisor def not yet built"
+    }
+  ],
+  "reconciled_at": "2026-06-11T00:00:00Z"
+}

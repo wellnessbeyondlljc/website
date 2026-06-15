@@ -1,0 +1,55 @@
+# Teaching: Pipeline Verification Test
+
+**Type:** Protocol note
+**Target:** Framework spoke
+**Version:** 1.0
+**Created:** 2026-03-14
+**safe_to_auto_adopt:** false
+
+---
+
+## What This Teaching Does
+
+Adds a note to `WAI-Spoke/commands/wai.md` that the teach/learn pipeline was verified on 2026-03-14. This is a minimal test teaching to verify that:
+
+1. Framework wakeup (Step 3a) detects new hub teachings
+2. `/wai-learn` runs the verification ceremony
+3. Approved teachings are adopted and moved to `processed/`
+
+**This is NOT:** A real protocol change. This teaching is purely for pipeline testing.
+
+---
+
+## Input: What You Have Now
+
+- `WAI-Spoke/commands/wai.md` — will have a comment appended
+
+**Version check before applying:**
+
+If `WAI-Spoke/commands/wai.md` already contains "pipeline-verified-2026-03-14" — this teaching was already applied. Move to processed and stop.
+
+---
+
+## Transformation: What Changes
+
+Append the following comment block to the end of `WAI-Spoke/commands/wai.md`:
+
+```
+<!-- pipeline-verified-2026-03-14: teach/learn round-trip confirmed -->
+```
+
+---
+
+## Embedded Lug
+
+After completing, check if `teaching-pipeline-verify-v1` exists in `WAI-Lugs.jsonl`. If not, append:
+
+```json
+{"i":"teaching-pipeline-verify-v1","t":"[TEST] Teach/learn pipeline verified 2026-03-14","ty":"signal","s":"c","ca":"2026-03-14T10:30:00Z","gb":"teaching-file","impact":6,"content":{"what":"Minimal teaching applied to verify hub→framework delivery and wai-learn adoption pipeline."},"_behavior_directive":{"what_this_is":"Test record — pipeline verification.","what_this_is_NOT":"A real protocol change."}}
+```
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/` after successful processing.

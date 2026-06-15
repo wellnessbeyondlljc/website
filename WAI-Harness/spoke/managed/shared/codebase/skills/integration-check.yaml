@@ -1,0 +1,172 @@
+name: integration-check
+role: guardian
+model: lightweight
+description: "IDE environment verification - ensures Wheelwright is detectable and functional"
+
+trigger:
+  events:
+    - session_start
+    - on_demand
+  conditions:
+    - "new session begins OR"
+    - "user invokes /check-integration"
+
+scope:
+  reads:
+    - "WAI-Spoke/ directory"
+    - "WAI-State.json"
+    - "WAI-Manifest.yaml"
+    - "framework module (python -m wai --version)"
+  writes:
+    - "integration status to session log"
+    - "observations.jsonl (if failures detected)"
+
+prerequisites:
+  - "filesystem access"
+  - "ability to run shell commands"
+
+behavior:
+  on_trigger: |
+    1. Verify Wheelwright directories exist:
+       - WAI-Spoke/ present?
+       - WAI-Spoke/WAI-State.json present?
+       - WAI-Spoke/WAI-Manifest.yaml present?
+
+    2. Verify framework is importable:
+       - Try: python -m wai --version
+       - Check exit code and output
+
+    3. Verify session hooks are functional:
+       - Check if wai.session_hook module loadable
+       - Test get_session_start_briefing() callable
+
+    4. Verify git integration:
+       - .git/ directory exists?
+       - git command available?
+       - git status runnable?
+
+    5. Verify machine profile:
+       - hub/machines/{hostname}.lug.json exists?
+       - Machine classification readable?
+
+    6. Calculate integration score (0-100):
+       - Core files (40 pts): WAI-Spoke, manifests, state
+       - Framework module (30 pts): importable, version correct
+       - Git integration (15 pts): repo initialized, git available
+       - Machine profile (15 pts): profile exists, classification set
+
+  on_findings: |
+    Critical failures (score < 60):
+      - BLOCK session start
+      - Show missing components
+      - Suggest: "Run wai init or framework setup"
+
+    Warnings (score 60-85):
+      - Allow session but warn
+      - List: Missing optional components
+      - Suggest: Fixes for warnings
+
+    Healthy (score > 85):
+      - "✓ Wheelwright integration healthy"
+      - Proceed normally
+
+output:
+  success:
+    type: "integration_healthy"
+    data:
+      score: 100
+      components:
+        spoke: "✓"
+        framework: "✓ v2.0.0"
+        git: "✓"
+        machine: "✓ workstation (HIGH-PERFORMANCE)"
+  failure:
+    type: "integration_issues"
+    data:
+      score: 45
+      missing: ["WAI-Spoke/WAI-State.json", "framework module"]
+      action: "Run: python -m wai init"
+
+use_cases:
+  - scenario: "Fresh project, Wheelwright not initialized"
+    what_happens: "integration-check detects missing WAI-Spoke/, blocks session"
+    why_it_matters: "Agent needs Wheelwright context to function properly"
+    user_trigger: "Automatic on session_start"
+    origin: "Wakeup spec: integration check before briefing"
+
+  - scenario: "Wheelwright initialized, but framework module not installed"
+    what_happens: "integration-check detects import failure, suggests pip install"
+    why_it_matters: "Sessions need framework commands (wai-status, etc.)"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Git repository not initialized (.git/ missing)"
+    what_happens: "integration-check warns, suggests 'git init', but allows session"
+    why_it_matters: "Wheelwright works better with git, but not required"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Machine profile missing (hub/machines/{hostname}.lug.json)"
+    what_happens: "integration-check creates default profile with basic detection"
+    why_it_matters: "Machine-aware features need profile for optimization"
+    reference: "AI-AGENT-MACHINE-PROTOCOL.md"
+
+  - scenario: "Everything healthy, framework v2.0.0 installed"
+    what_happens: "integration-check reports score: 100, all components ✓"
+    why_it_matters: "Quick validation that environment is ready"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Framework version mismatch (spoke expects v2.1, installed v2.0)"
+    what_happens: "integration-check warns, suggests framework-updater or upgrade"
+    why_it_matters: "Version mismatches can cause compatibility issues"
+    reference: "hub-watcher Skill for version tracking"
+
+tests:
+  - name: "Detects missing WAI-Spoke directory"
+    setup: "Delete WAI-Spoke/"
+    action: "Run integration-check"
+    expected: "Critical failure, score < 60, session blocked"
+
+  - name: "Detects framework import failure"
+    setup: "Uninstall framework module"
+    action: "Run integration-check"
+    expected: "Failure detected, pip install suggested"
+
+  - name: "Creates missing machine profile"
+    setup: "Delete hub/machines/{hostname}.lug.json"
+    action: "Run integration-check"
+    expected: "Profile created with default classification"
+
+  - name: "Reports healthy environment"
+    setup: "All components present and functional"
+    action: "Run integration-check"
+    expected: "Score: 100, all checks pass"
+
+  - name: "Warns on git missing but continues"
+    setup: "No .git/ directory"
+    action: "Run integration-check"
+    expected: "Warning issued, score 85-95, session allowed"
+
+notes: |
+  Lightweight model is sufficient - file checks and shell command execution.
+
+  Runs BEFORE session briefing in wakeup sequence:
+  1. integration-check (verify environment)
+  2. get_session_start_briefing() (if integration ok)
+  3. Load WAI context
+  4. Begin session
+
+  This Skill implements the "IDE visibility" requirement:
+  - Claude Code must detect Wheelwright installation
+  - Wheelwright must detect project spoke
+  - Machine profile must exist for optimization
+
+  Critical vs warning failures:
+  - Critical: WAI-Spoke missing, framework unimportable (block session)
+  - Warning: git missing, machine profile missing (allow session, warn user)
+
+  Auto-remediation:
+  - Missing machine profile: Create with basic detection
+  - Other failures: Suggest commands, don't auto-fix
+
+  Related to closeout_validator:
+  - integration-check: Session START validation
+  - closeout_validator: Session END validation

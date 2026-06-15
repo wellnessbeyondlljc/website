@@ -1,0 +1,104 @@
+{
+  "id": "spec-hygiene-advisor-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T01:35:00Z",
+  "updated_at": "2026-06-09T01:35:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 8,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260607-1604.mariov96",
+  "subject": "Hygiene advisor (cruft-hygiene / Hank) — the remediation arm: relocates/subsumes misplaced files, clears dead code + duplicates, enforces correct WAI adoption; acts per the home map via proper channels",
+  "title": "Hygiene Advisor — Codebase Cleanup & Adoption-Correctness Remediation",
+  "situation": "v4 detects misplacement and cruft in several places — Historian's lay-of-the-land survey finds it, Asset Reviewer flags malformed/derelict artifacts, self-healing AC22 intercepts misplaced WRITES at write-time, harness_deadcode_scan finds dead code — but NOTHING actively ACTS on existing misplacement and cruft. Detection without a remediation arm means the mess is surfaced and then sits. A spoke adopting WheelWright (or upgrading) needs an advisor that actually relocates files to their home-map homes, subsumes/merges duplicates, clears dead code, and brings the tree into correct WAI adoption — improving codebase quality as a side effect.",
+  "why": "Misplaced files cause silent failures (look-locally-fail-skip), managed/local violations break distribution, dead code and duplicates rot the tree and confuse agents. A dedicated remediation arm closes the detect→act gap: Historian/Asset-Reviewer/self-healing DETECT, Hygiene REMEDIATES — the same detection-vs-action split as Gardener/Trainer. It serves the value prop directly: 'applying WheelWright improves the quality of the codebase', not just its process. Without it, adoption-correctness is aspirational; with it, the tree is actively maintained to the home map.",
+  "identity": {
+    "advisor": "hygiene (crew role: cruft-hygiene; human name: Hank)",
+    "scope": "spoke advisor — acts on its OWN spoke's tree; cross-spoke remediation travels as a registered change-lug (never direct)",
+    "pairs_with": "Historian (Historian surveys/detects; Hygiene remediates/acts)",
+    "consumes": ["Historian survey findings", "Asset Reviewer derelict/malformed flags", "self-healing AC22 write-time interceptions", "harness_deadcode_scan output", "the home map (spec-v4-migration-home-map-v1) as the placement policy"]
+  },
+  "responsibilities": [
+    "Relocate misplaced files to their home-map home (e.g. a lug written to the wrong bytype folder, a doc dropped at repo root, an advisor file outside its advisor folder)",
+    "Subsume/merge duplicates (e.g. two session-start.sh copies, duplicated docs) into the canonical one — recording what was merged",
+    "Clear dead code + derelict references (consuming harness_deadcode_scan + Asset Reviewer), with sign-off for deletions",
+    "Enforce correct WAI adoption: managed/local split respected, Ozi state under ozi/, advisor data co-located, no stray files in wrong layers",
+    "Produce an adoption-correctness score per sweep (files in correct home / total) feeding certification"
+  ],
+  "boundaries": [
+    "Acts PER THE HOME MAP (policy) — Hygiene does not invent placement; it enforces spec-v4-migration-home-map-v1",
+    "Via proper channels only: relocations/merges are recorded (change registry where cross-cutting); DELETIONS move to ~/projects/trash_bin/ preserving relative path (never rm) and require sign-off",
+    "Cannot touch managed/ — Basher owns managed/ distribution; a managed-layer anomaly is FLAGGED to Basher, not moved by Hygiene",
+    "Cross-spoke remediation → a registered change-lug to the target spoke's incoming; the native agent incorporates (empower-but-control, spec-harness-development-control-v1)",
+    "Detection stays Historian's/Asset-Reviewer's — Hygiene does not duplicate survey/validation; it consumes their output and ACTS",
+    "Every action is reversible (trash_bin, not rm) + logged + gate-certified (observable in gate-log)"
+  ],
+  "analysis_trigger": "runs (1) as a warmup step during adoption/upgrade (after Historian survey), (2) on minor version bump, (3) periodically when accumulated misplacement/cruft signal crosses a floor (per epic AC15 advisor analysis_trigger — data-sufficiency, not fixed cadence); trigger evaluation recorded in scan_state (observable)",
+  "schema": {
+    "advisor_folder": "WAI-Harness/spoke/advisors/hygiene/",
+    "advisor_json": {
+      "id": "hygiene",
+      "name": "Hank — Cruft Hygiene & Adoption Remediation",
+      "role": "Remediation",
+      "reports_to": "ozi",
+      "owned_files": ["charter.md", "SOP.md", "scan_state.json", "reports/{date}.json", "actions.jsonl", "patterns/"]
+    },
+    "action_record": {
+      "action_id": "string",
+      "kind": "relocate | subsume | delete | flag-to-basher | flag-cross-spoke",
+      "source_path": "string (complete, relative-from-root)",
+      "target_path": "string | trash_bin path | null",
+      "reason": "string — why it didn't belong / what it duplicated",
+      "policy_ref": "home-map row or rule that authorizes this",
+      "reversible_via": "trash_bin path or git",
+      "sign_off": "required | not-required (deletions require)",
+      "registered": "change-registry id if cross-cutting | null",
+      "gate_event": "gate-log reference (observable)",
+      "acted_at": "ISO-8601"
+    },
+    "adoption_correctness_score": "files_in_correct_home / total_classifiable_files — reported per sweep; feeds spoke certification"
+  },
+  "constraints": [
+    "Placement decisions come from the home map only — never ad hoc",
+    "Never rm — deletions go to trash_bin preserving relative path; deletions require sign-off",
+    "Never touch managed/ — flag to Basher instead",
+    "Cross-spoke remediation never writes the other tree directly — registered change-lug, native incorporation",
+    "Hygiene consumes detection (Historian/Asset Reviewer/self-healing) — it does not re-detect",
+    "Every action reversible + logged + gate-certified; no silent moves"
+  ],
+  "tests": [
+    "Relocate: a lug placed in the wrong bytype folder → Hygiene moves it to its home-map home, records an action with policy_ref; original location no longer has it, target does",
+    "Subsume: two duplicate session-start.sh → Hygiene merges to the canonical one, records what was subsumed; the duplicate is in trash_bin (reversible)",
+    "Dead code: harness_deadcode_scan flags an orphan → Hygiene proposes deletion; without sign-off it does NOT delete; with sign-off it moves to trash_bin (never rm)",
+    "Managed boundary: an anomaly under managed/ → Hygiene FLAGS to Basher, does NOT move it",
+    "Cross-spoke: a misplaced file owned by another spoke → Hygiene emits a registered change-lug to that spoke's incoming, does NOT edit it directly",
+    "Adoption-correctness score: a tree with 8/10 files correctly homed reports 0.8; after a relocate sweep it rises",
+    "Observability: every Hygiene action appears in gate-log + actions.jsonl and is reversible from trash_bin/git",
+    "Boundary vs Historian: Hygiene does not run a survey — it consumes the Historian survey + Asset Reviewer flags as its work-list"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none — spec only",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low — initial spec",
+    "open_questions": [
+      "Should Hygiene OWN the execution of self-healing AC22 remediations (detect=AC22 write-guard, act=Hygiene)? (proposed: yes — AC22 detects/intercepts, Hygiene executes the relocation)",
+      "Auto-relocate threshold: which kinds auto-act vs propose-for-sign-off? (proposed: relocate within local/ auto; subsume/delete propose; managed flag-only)",
+      "Reconcile with crew migration: hygiene advisor = crew cruft-hygiene/Hank — single identity"
+    ]
+  },
+  "related_specs": [
+    "spec-v4-migration-home-map-v1",
+    "spec-harness-development-control-v1",
+    "spec-verification-quality-v1",
+    "spec-trainer-advisor-v1"
+  ],
+  "perceive": "Read this spec + spec-v4-migration-home-map-v1 (home map = placement policy) + epic AC22 (self-healing) + AC15 (advisor analysis_trigger). Read the existing harness_deadcode_scan.py + any Asset Reviewer definition. Confirm hygiene = crew cruft-hygiene/Hank.",
+  "execute": "1. Create advisors/hygiene/ (charter, SOP, scan_state, actions.jsonl, patterns/, advisor.json). 2. Implement the work-list intake (consume Historian survey + Asset Reviewer flags + deadcode scan + AC22 interceptions). 3. Implement relocate/subsume/delete actions per the home map — reversible (trash_bin), logged, gate-certified; managed→flag-to-Basher; cross-spoke→registered change-lug. 4. Implement adoption_correctness_score. 5. Wire analysis_trigger (warmup step + version bump + data-sufficiency). 6. Register hygiene in the advisor registry reporting to Ozi.",
+  "verify": "Run all tests[]. Confirm relocate/subsume act per home map and are reversible; deletions require sign-off + trash_bin (never rm); managed anomalies flag to Basher; cross-spoke uses registered change-lug; adoption-correctness score computes; every action observable in gate-log.",
+  "execution_mode": "subagent",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

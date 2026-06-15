@@ -1,0 +1,16 @@
+refresh_interval_days: 14
+keep_snapshots: 3
+
+feeds:
+  - id: wai-framework-updates
+    type: shared
+    topic: wai-framework-updates
+    description: "WAI framework updates affecting lug schema or quality standards"
+    required: false
+
+  - id: synthesis
+    type: ai_synthesis
+    depends_on: [wai-framework-updates]
+    model: claude-haiku-4-5
+    description: "Advisory brief on lug quality standards and scoring"
+    required: false

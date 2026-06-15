@@ -1,0 +1,105 @@
+# Teaching: skill-wai-lug-advisor-v3
+
+**Family:** skill-wai-lug-advisor
+**Version:** v3 (patch on v2 — priority scale standardization)
+**Type:** skill
+**safe_to_auto_adopt:** true
+**Source:** templates/commands/wai-lug-advisor.md (Priority Flags section)
+**Session:** session-20260323-0806
+
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| v2 applied | `grep -q "Canonical Storage" templates/commands/wai-lug-advisor.md && echo PASS \|\| echo FAIL` | Priority section context |
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** skill-wai-lug-advisor-v2
+**Required before:** none
+**Parallel safe:** yes — touches only Priority Flags section
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Provides
+
+Replaces the ad-hoc priority value set in wai-lug-advisor.md with a canonical 4-level scale and separates workflow qualifiers from priority values.
+
+**Before (broken):** Lugs used `"high"`, `"critical"`, `"medium"`, `"low"`, `"session_focus"`, `"before_next_epic"`, and verbose P-labels like `"P1 (base P1, plan carefully)"`.
+
+**After (canonical):**
+- `"P1"` = High — urgent, blocking, or critical path
+- `"P2"` = Medium — important, scheduled work
+- `"P3"` = Low — backlog, non-blocking
+- `"P4"` = Trivial — nice-to-have, no deadline
+
+**Workflow qualifiers** (`session_focus`, `before_next_epic`) are NOT priority values. They describe scheduling context and belong in a `workflow_flag` field.
+
+---
+
+## Migration
+
+**Reading existing lugs:** dual-read compatible. Old values remain valid:
+- `"high"` or `"critical"` → treat as P1
+- `"medium"` → treat as P2
+- `"low"` → treat as P3
+
+**Writing new lugs:** MUST use P1–P4. Verbose labels are banned.
+
+**No bulk rewrite required** — only new lugs need the canonical scale.
+
+---
+
+## Apply Instructions
+
+Replace the Priority Flags section in `templates/commands/wai-lug-advisor.md`:
+
+**Find:**
+```
+## Priority Flags
+
+- `priority: "before_next_epic"` — Must complete before starting any new epic
+- `priority: "session_focus"` — Current session's primary epic
+- `priority: "high"` / `"medium"` / `"low"` — Standard priority
+```
+
+**Replace with:**
+```markdown
+## Priority Flags
+
+Standard scale (use these for all new lugs):
+
+| Value | Meaning |
+|-------|---------|
+| `"P1"` | High — urgent, blocking, or critical path |
+| `"P2"` | Medium — important, scheduled work |
+| `"P3"` | Low — backlog, non-blocking |
+| `"P4"` | Trivial — nice-to-have, no deadline |
+
+**Migration:** Existing lugs with `"high"` or `"critical"` = P1; `"medium"` = P2; `"low"` = P3. No bulk rewrite required — old values remain readable. New lugs MUST use P1–P4.
+
+**Workflow qualifiers** (scheduling context, not priority — store in `workflow_flag`, not `priority`):
+
+| Value | Meaning |
+|-------|---------|
+| `"before_next_epic"` | Must clear before any new epic starts |
+| `"session_focus"` | Primary focus of the current session |
+
+If found in `priority` on an existing lug, treat as P1-equivalent.
+```
+
+**Verify:**
+```bash
+grep -q "P1.*urgent\|P2.*medium\|P3.*low\|P4.*trivial" templates/commands/wai-lug-advisor.md && echo PASS || echo FAIL
+```
+
+---
+
+## Supersedes
+
+`skill-wai-lug-advisor-v2.md.teaching` — addendum only, does not invalidate v2 content. Both patches apply in order: v2 first, then v3.

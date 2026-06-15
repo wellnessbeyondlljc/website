@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Bolt Schema",
+  "description": "A bolt is the torque-certification fastened through a CLOSED pattern: it certifies that every item in the pattern (each a lug) was verified non-hallucinated. It is the realized join of WHO (session) did WHAT (lugs) toward WHICH initiative (WHEN), proven. Emitted at savepoint OR closeout when a pattern closes. certified = every item passed; partial = closed early with items still unverified (records what remains so the next worker resumes from proof). Bolts are durable, immutable, never consumed; a session's bolts = its activity log, an initiative's = its journey, the chain of provenance = the versioned DNA.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "bolt-{session_id}-{pattern_id}; legacy form bolt-{session_id}-{initiative_id|freeform} still valid",
+      "pattern": "^bolt-.+-.+$"
+    },
+    "pattern_id": {
+      "type": ["string", "null"],
+      "description": "The pattern (contract) this bolt certifies; null only for legacy/freeform bolts"
+    },
+    "pattern_version": {
+      "type": ["string", "null"],
+      "description": "semver of the pattern at certification"
+    },
+    "certification_status": {
+      "type": "string",
+      "enum": ["certified", "partial"],
+      "description": "certified = every pattern item passed; partial = pattern closed early with unverified/remaining items"
+    },
+    "items": {
+      "type": "array",
+      "description": "Per-item certification record — the non-hallucination proof for each lug in the pattern",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lug_id": {"type": "string"},
+          "mode": {"type": "string", "enum": ["mechanical", "attested", "human"]},
+          "verified_by": {"type": ["string", "null"], "description": "assertion id / verifier agent id / human"},
+          "verified_at": {"type": ["string", "null"], "format": "date-time"},
+          "result": {"type": "string", "enum": ["pass", "fail", "pending"]}
+        },
+        "required": ["lug_id", "mode", "result"]
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Carried forward from the certified pattern — the DNA lineage node",
+      "properties": {
+        "input_lugs": {"type": "array", "items": {"type": "string"}},
+        "input_teachings": {"type": "array", "items": {"type": "string"}},
+        "input_patterns": {"type": "array", "items": {"type": "string"}},
+        "derived_from": {"type": ["string", "null"]},
+        "state_hash": {"type": ["string", "null"]}
+      }
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["work", "freeform", "ceremony", "adoption", "gate-certification"],
+      "description": "work = a pattern certification (pattern_id set); freeform = session with no pattern/initiative (legacy); ceremony = certifies a closeout/savepoint ceremony's steps actually ran + passed (pattern_id null, items[] are step records); adoption = certifies a base-harness install/migrate completed + verified (pattern_id null, items[] are component checks); gate-certification = certifies a Pattern-Gate disposition (approved/halted/escalate) on a flow (pattern_id null, items[] are gate checks, ties certification|halt|escalation events to the bolt substrate — AC13)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["recorded", "superseded"],
+      "description": "Bolts are born final (recorded). superseded only when corrected by a later bolt."
+    },
+    "session_id": {
+      "type": "string",
+      "description": "The session (WHO) that produced this bolt"
+    },
+    "initiative_id": {
+      "type": ["string", "null"],
+      "description": "The initiative (WHEN/grouping) this advanced; null only when kind=freeform"
+    },
+    "lug_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Lugs (WHAT) completed or advanced this session under this initiative; may be empty"
+    },
+    "what_was_done": {
+      "type": "string",
+      "description": "Backward-looking achievement summary (reuses the session work_done summary)"
+    },
+    "git_sha": {
+      "type": "string",
+      "description": "HEAD at emit (8-char ok) — permanent evidence"
+    },
+    "git_branch": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC; immutable"
+    },
+    "sequence": {
+      "type": "object",
+      "description": "Ordering info — the navigable treasure map",
+      "properties": {
+        "session_number": {
+          "type": ["integer", "null"],
+          "description": "The spoke session counter at emit"
+        },
+        "prior_bolt_id": {
+          "type": ["string", "null"],
+          "description": "Previous bolt for THIS initiative (linked list within initiative) — walk to read the initiative's journey"
+        },
+        "sibling_bolt_ids": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Other bolts emitted by THIS session (the multi-initiative case)"
+        }
+      },
+      "required": ["prior_bolt_id", "sibling_bolt_ids"]
+    },
+    "themes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Health dimensions advanced (denormalized from completed lugs)"
+    },
+    "celebration": {
+      "type": "boolean",
+      "description": "true if this bolt culminated its initiative (Ozi celebrated)"
+    },
+    "session_track_ref": {
+      "type": "string",
+      "description": "Path to sessions/{session_id}/track.jsonl for fine-grained drill-down"
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "Set only when correcting a prior bolt"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": ["id", "kind", "status", "session_id", "pattern_id", "certification_status", "items", "git_sha", "created_at"]
+}

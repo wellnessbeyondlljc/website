@@ -1,0 +1,137 @@
+{
+  "id": "spec-goal-chain-v1",
+  "type": "spec",
+  "status": "completed",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:00:00Z",
+  "updated_at": "2026-05-30T17:00:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 9,
+  "subject": "Goal Chain lug type \u2014 distributed session coordination and claiming primitive",
+  "title": "Goal Chain Lug Type + Claim Registry",
+  "what": "Defines the chain lug type \u2014 a portable, resumable work-coordination unit that sits between an epic (strategic) and an implementation lug (atomic). A chain groups related goals into an execution sequence, allows an agent to claim it before planning (preventing races between concurrent sessions), and scopes the session plan to what the current model + token budget can complete. Uncompleted children are deferred cleanly to the next session. A claim registry (Supabase wai_claims table) enables multi-Ozi distributed claiming with TTL-based expiry; expired claims create investigation lugs as failure-learning signals rather than silent resets.",
+  "why": "Without goal chains, two sessions can plan the same work independently (wasted tokens) or leave goals in an ambiguous partially-started state. The chain primitive makes multi-session and multi-agent coordination safe: claim before plan, plan within budget, execute, defer overflow, release cleanly. TTL expiry converts abandoned claims into learning signals. The Work Goals vs Spoke Goals distinction prevents strategic goals from being re-scoped implicitly inside a single session's context.",
+  "audience": [
+    "AP (Autopilot) \u2014 claims chains during session startup",
+    "Ozi \u2014 coordinates nightly chain dispatch",
+    "Navigator \u2014 queries available chains when building portfolio slice",
+    "Any agent that dispatches or resumes multi-session work"
+  ],
+  "use_cases": [
+    "Multi-session epic: AP claims spec-goal-chain-v1 for the morning wave, plans what fits in 100k tokens, defers overflow to next session cleanly",
+    "Multi-Ozi coordination: two Ozi instances see the same work queue; only the one that claims a chain proceeds \u2014 PK collision rejects the second",
+    "Resumable overnight run: Ozi claims a chain at 11pm, hits token limit, defers remaining children; next morning Ozi sees deferred_children and continues",
+    "Conflict prevention: file_scope in session_plan locks the files this session will touch \u2014 another session that would touch the same files sees the lock and waits"
+  ],
+  "patterns": [
+    "claim-before-plan: agent MUST claim chain before creating any implementation plan; unclaimed chains are available to any session",
+    "TTL expiry = learning signal: expired claims create an investigation lug with failure context, not a silent claim reset",
+    "session_plan scoping: planned_children = what fits in this session given model + budget; deferred_children = overflow for next session",
+    "Work Goals vs Spoke Goals: Work Goals are chain-level outcomes that persist across sessions; Spoke Goals are what this session will accomplish from the Work Goal \u2014 never collapse the two"
+  ],
+  "schema": {
+    "chain_lug_fields": {
+      "id": "string \u2014 slug format matching chain name e.g. chain-herald-impl-wave1-v1",
+      "type": "chain",
+      "status": "open | claimed | in_progress | deferred | completed",
+      "chain_id": "string \u2014 same as id, for query clarity in claim registry joins",
+      "goal": "string \u2014 the Work Goal this chain accomplishes (one sentence)",
+      "execution_mode": "sequential | parallel",
+      "children": [
+        "lug_id \u2014 ordered list of child lug IDs"
+      ],
+      "completed_children": [
+        "lug_id \u2014 children successfully completed in prior sessions"
+      ],
+      "claimed_by": "session_id | null",
+      "claimed_at": "ISO-8601 | null",
+      "ttl_hours": "int \u2014 default 6; claim expires at claimed_at + ttl_hours",
+      "session_plan": {
+        "model": "string \u2014 model_id this session will use e.g. claude-haiku-4-5",
+        "budget_tokens": "int \u2014 token ceiling for this claim",
+        "planned_children": [
+          "lug_id \u2014 children this session will attempt"
+        ],
+        "deferred_children": [
+          "lug_id \u2014 children deferred to next session"
+        ],
+        "file_scope": [
+          "path \u2014 files this session will touch; conflict lock"
+        ]
+      }
+    },
+    "claims_table": {
+      "storage": "Supabase table: wai_claims",
+      "fallback": "WAI-Spoke/runtime/claims-local.json (single-Ozi spoke with no Supabase)",
+      "columns": {
+        "chain_id": "text PRIMARY KEY",
+        "session_id": "text NOT NULL",
+        "wheel_id": "text NOT NULL",
+        "claimed_at": "timestamptz NOT NULL",
+        "ttl_hours": "int NOT NULL DEFAULT 6",
+        "expires_at": "timestamptz GENERATED ALWAYS AS (claimed_at + ttl_hours * interval '1 hour') STORED",
+        "file_scope": "jsonb DEFAULT '[]'"
+      },
+      "indexes": [
+        "expires_at \u2014 TTL sweep query",
+        "wheel_id \u2014 per-spoke chain queries"
+      ]
+    },
+    "investigation_lug_on_ttl_expiry": {
+      "type": "task",
+      "title": "Investigate abandoned claim: {chain_id}",
+      "perceive": "Read the expired claim record. Check session track for the claiming session. Identify failure mode.",
+      "execute": "Diagnose why the claim expired without completion. Update chain lug deferred_children to reflect actual state.",
+      "verify": "Chain lug status reset to open or deferred. Expired claim removed from claims table.",
+      "context": {
+        "expired_claim": "full claim record snapshot at expiry time",
+        "chain_id": "string",
+        "wheel_id": "string",
+        "session_id": "string of failed session"
+      }
+    }
+  },
+  "constraints": [
+    "An agent MUST write its claim to the claims table BEFORE beginning implementation planning \u2014 planning without claiming is a protocol violation",
+    "Only one active claim per chain_id (PRIMARY KEY enforces this in Supabase; file lock enforces in local fallback)",
+    "A claim older than expires_at is abandoned \u2014 next agent may claim AFTER writing an investigation lug with the expired claim context",
+    "file_scope conflicts must be detected at claim time: if session_plan.file_scope overlaps with any active claim's file_scope, the session must wait or choose a different chain",
+    "completed_children[] is updated atomically at each child's closeout \u2014 never batch-update at end of session only",
+    "Work Goals live at the chain level and must not be re-scoped or narrowed inside a session's context without updating the chain lug"
+  ],
+  "tests": [
+    "Claim race: two Ozi instances simultaneously attempt to claim the same chain_id \u2014 only one succeeds; PK violation rejects the second",
+    "TTL expiry: create a claim with ttl_hours=0; run TTL sweep; verify investigation lug created with correct expired claim context; chain status reset to open",
+    "Deferred resume: chain has deferred_children=[X, Y]; next session claims it; X and Y appear in planned_children",
+    "file_scope conflict detection: chain A claims files [a.py, b.py]; chain B plans against a.py \u2014 conflict detected at claim time",
+    "Completed chain transition: move all children to completed_children[]; verify chain status transitions to completed",
+    "Work Goals vs Spoke Goals: session_plan.planned_children is a subset of children[] \u2014 verify parent goal not mutated when scope is narrowed"
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "manual",
+    "last_impl_lug_completed": "impl-chain-ttl-sweep-v1",
+    "spec_drift_risk": "medium",
+    "open_questions": [
+      "wai_claims Supabase table not yet created",
+      "chain lug type not in validator",
+      "TTL sweep not implemented"
+    ],
+    "completed_at": "2026-06-01T00:00:00Z",
+    "completed_by": "claude-sonnet-4-6"
+  },
+  "related_specs": [
+    "spec-goal-queue-v1",
+    "spec-intra-agent-comms-v1",
+    "spec-sentinel-advisor-v1",
+    "spec-harness-self-maintaining-wheel-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec fully. Check WAI-Spoke/WAI-State.json _work_queue for any existing chain items. Check if Supabase wai_claims table exists. Read spec-goal-queue-v1 if present for queue integration. Read spec-intra-agent-comms-v1 if present for coordination patterns.",
+  "execute": "1. Add 'chain' to valid lug types in lug schema validator. 2. Create Supabase wai_claims table per schema above. 3. Add claim() function to session startup tooling: write claim record before planning begins. 4. Add release() to session closeout: update completed_children[], write deferred_children, delete claim record. 5. Add TTL sweep to Gardener nightly: find expired claims, write investigation lugs, reset chain status. 6. Document Work Goals vs Spoke Goals in WAI-Guide.md with examples.",
+  "verify": "1. Create a test chain lug and claim it \u2014 verify row appears in wai_claims. 2. Second claim attempt \u2014 verify rejection. 3. Set ttl_hours=0, run TTL sweep \u2014 verify investigation lug created, chain reset to open. 4. Complete a child lug at closeout \u2014 verify it moves to completed_children[]. 5. Work Goals vs Spoke Goals section present in WAI-Guide.md with concrete example.",
+  "execution_mode": "tender",
+  "execution_substrate": null,
+  "outcome": "Spec audited. Supabase wai_claims table and chain lug type not yet implemented. Subagent noted 3 impl lugs needed but did not create them (files not found on disk \u2014 corrected by session-20260601-0005). Implementation requires: chain lug validator, claim() module, TTL sweep. Blocked on Supabase credentials + lug type registration."
+}

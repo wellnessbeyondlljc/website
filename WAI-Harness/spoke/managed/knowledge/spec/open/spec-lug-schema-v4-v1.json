@@ -1,0 +1,187 @@
+{
+  "id": "spec-lug-schema-v4-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-06-09T14:45:00Z",
+  "updated_at": "2026-06-09T14:46:45.997177+00:00",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260609-0713.mariov96",
+  "subject": "Lug schema v4 \u2014 the canonical v4 lug object model: v3 baseline + mandatory context fields + the rev optimistic-concurrency field the change registry already assumes + bolt/check/test verification linkage; schema_version=4 stamping and the pre-v4 migration path",
+  "title": "Lug Schema v4 \u2014 Object Model with rev (Optimistic Concurrency) + Bolt/Check/Test Linkage (Stream D, AC10/11/12/47)",
+  "situation": "The v3 lug schema (templates/commands/wai-lug-schema.md) defines the fields a lug carries today: identity (id/type/status/title), scoring (impact/effort/urgency/model_fit), routing (routed_to), the PEV trio (perceive/execute/verify), and the contract fields (held_by/held_at/lease_ttl_hours/verify_mode/provenance). Three v4 mechanisms ALREADY ASSUME schema fields the v3 schema does not define: (1) the change registry's check_rev() (tools/change_registry.py, built S44, impl-change-registry-core-v1) reads a monotonic integer `rev` off the lug and rejects a write prepared against a stale rev \u2014 but no schema declares `rev`, so the function operates against an undefined field; (2) the verification spine (spec-verification-quality-v1) requires every lug carry a runnable verification_test with AC\u2194test traceability and a version-stamped result history \u2014 the v3 schema has only a free-text verify[] array; (3) the bolt substrate (AC13, design \u00a72 object model) links Session\u2192Bolt\u2192Pattern\u2192Check, and a lug's verification must attach to a check (result 1|0|null) and thereby to a bolt \u2014 but the v3 lug has no bolt_ref or check linkage. The object-quality-v4 standard (spec-object-quality-v4-v1) names the new mandatory CONTEXT fields (situation, decision_rationale, alternatives_considered, deferral_context, context_snapshot, triggering_session) as a QUALITY bar, but does not define them as a typed SCHEMA. The result: three subsystems lean on fields that exist only by convention, and there is no single authoritative v4 lug shape to validate against.",
+  "why": "object-quality-v4 is the CONTENT-COMPLETENESS axis (is the lug rich enough? \u2014 the cold-reader gate); this spec is the STRUCTURAL axis (what fields exist, of what type, with what invariants, and how they link to bolts/checks/tests). The two are complementary the way spec-storage-layer-v1 (the tables) complements spec-verification-quality-v1 (what the tables mean). This spec is needed NOW because code already depends on it: change_registry.check_rev() is dead-reckoning against an undeclared `rev` field, and without a schema there is no validator to guarantee `rev` is present, monotonic, and integer \u2014 which means the optimistic-concurrency guard (AC47: last-write-wins BANNED) can be silently defeated by a lug that simply omits rev (check_rev returns ok:False 'missing rev' and a careless writer may treat that as a soft warning). Defining the schema turns the convention into a hard, validatable contract: a v4 lug WITHOUT rev fails validation at creation; a verification_test is a structured object not a prose hope; a closed lug's check result attaches to a real bolt so certification_score (spec-verification-quality-v1) is computable. It also pins schema_version=4 so the migration engine (spec-v4-migration-home-map-v1) can tell a v4 lug from a v3 one and prompt migration rather than silently mis-reading.",
+  "audience": [
+    "lug authoring tooling (creation template) \u2014 stamps schema_version=4, rev=1, context_snapshot, triggering_session at creation; refuses to write a lug missing a mandatory v4 field",
+    "lug-reviewer subagent \u2014 validates the v4 schema (field presence/types) AND the object-quality-v4 cold-reader gate before draft\u2192open (the dual structural+content gate)",
+    "change_registry.check_rev / advance_status \u2014 reads + increments `rev` on every lug write; this spec is the contract that field obeys",
+    "verification spine (Jordy/qa + pattern-gate) \u2014 reads verification_test + test_result_history; computes coverage % and certification_score per lug",
+    "bolt substrate (bolt index) \u2014 a lug's check links to a bolt via bolt_ref; the bolt's status reflects all its checks",
+    "migration engine (v4_migrate.py) \u2014 reads schema_version to classify v3 vs v4 lugs; the four-bucket migration transforms v3\u2192v4",
+    "Ozi / Expediter \u2014 read scoring + status + rev to order and dispatch; a stale-rev dispatch is rejected for reconcile"
+  ],
+  "core_principle": "A v4 lug is a versioned, concurrency-safe, self-verifying work object. It carries its full context (object-quality-v4), a monotonic write revision (optimistic concurrency), and a runnable verification_test whose result attaches to a bolt-check \u2014 so the same object states what to do, proves it was done, records who may write it next without clobbering, and certifies its own correctness.",
+  "schema_version": {
+    "field": "schema_version",
+    "type": "integer",
+    "v4_value": 4,
+    "rule": "Every v4 lug carries schema_version=4. The migration engine and lug-reviewer branch on this: schema_version<4 (or absent) \u2192 a v3 lug, gets a migration PROMPT not a hard reject (object-quality-v4 open_question resolution); schema_version=4 \u2192 the full v4 structural + content gate applies. A lug claiming schema_version=4 but missing a mandatory v4 field FAILS validation."
+  },
+  "schema": {
+    "v3_baseline_carried_forward": {
+      "id": "string \u2014 stable id (named slug or sha256(title)[:12]); unchanged from v3",
+      "type": "string CHECK(type IN ('task','bug','feature','epic','implementation','spec','chain','session-summary')) \u2014 signal RETIRED (CLAUDE.md: signals deprecated)",
+      "status": "string CHECK(status IN ('draft','open','in_progress','completed','blocked')) \u2014 draft added in v4 as the pre-promotion state the dual gate clears",
+      "title": "string \u2014 5+ word descriptive title (unchanged)",
+      "created_at": "ISO-8601",
+      "updated_at": "ISO-8601 \u2014 set on every write (paired with rev increment)",
+      "gb": "string \u2014 goal-bundle / epic id this lug belongs to (e.g. 'harness-v4-self-certifying')",
+      "fw_ver": "string \u2014 framework version at authoring",
+      "impact": "integer 1-10",
+      "effort": "integer | string(S|M|L) \u2014 effort score (unchanged)",
+      "urgency": "integer 1-5 (default 3)",
+      "routed_to": "string CHECK(routed_to IN ('LOCAL','FRAMEWORK') OR matches 'SPOKE/{id}') \u2014 SIGNAL retired",
+      "model_fit": "string CHECK(model_fit IN ('haiku','sonnet','opus'))",
+      "va": "string|null \u2014 value axis (build|refine|...) unchanged",
+      "perceive": "array<string> \u2014 what to read before starting (unchanged; the P of PEV)",
+      "execute": "array<string> \u2014 concrete numbered steps (unchanged; the E of PEV)",
+      "verify": "array<string> \u2014 how to confirm done; in v4 this is the SPEC the verification_test is materialized FROM, not the test itself",
+      "held_by": "string|null \u2014 session_id holding the lease (contract field, unchanged)",
+      "held_at": "ISO-8601|null \u2014 lease claim time (unchanged)",
+      "lease_ttl_hours": "number \u2014 lease duration, default 4 (unchanged)",
+      "verify_mode": "string CHECK(verify_mode IN ('mechanical','attested','human')) \u2014 how verify[] is certified (unchanged; drives the test tier)",
+      "provenance": "object {source_lugs:[], source_teachings:[]} \u2014 inputs that led to this lug (unchanged)"
+    },
+    "v4_mandatory_context_fields": {
+      "_note": "These fields are NAMED by spec-object-quality-v4-v1 as the quality bar; THIS spec defines their type + presence as a hard schema invariant. The content quality (specificity, no banned tokens, cold-reader pass) is gated by object-quality-v4; the structural presence is gated here.",
+      "situation": "string \u2014 the observable condition that warranted this lug (NOT just the advisor that surfaced it); REQUIRED, non-empty",
+      "decision_rationale": "string \u2014 why THIS approach over alternatives, in full; REQUIRED on impact>=6 lugs",
+      "alternatives_considered": "array<string> \u2014 what was evaluated and why rejected, captured at decision time; REQUIRED on impact>=6 lugs",
+      "deferral_context": "string|null \u2014 if deferred: the state at deferral + what must change to make it relevant; REQUIRED when status indicates deferral",
+      "context_snapshot": "object {active_epics:[], active_initiatives:[]} \u2014 AUTO-STAMPED at creation by the creation template",
+      "triggering_session": "string \u2014 session id that prompted creation; AUTO-STAMPED at creation",
+      "relevant_context": "array<string> \u2014 one sentence per related epic/initiative explaining WHY it is relevant (not a bare list)"
+    },
+    "v4_optimistic_concurrency": {
+      "rev": {
+        "field": "rev",
+        "type": "integer",
+        "initial": 1,
+        "rule": "Monotonically incremented by exactly 1 on EVERY write that mutates the lug (paired with updated_at). REQUIRED on every v4 lug \u2014 a v4 lug missing rev FAILS validation (this is the field change_registry.check_rev() already reads; an absent rev makes check_rev return ok:False 'missing rev \u2014 last-write-wins banned', so the schema MUST guarantee presence to make the guard meaningful).",
+        "concurrency_contract": "A writer reads the lug at rev=N, prepares its mutation, and submits write_against_rev=N. check_rev(current_rev, N): if current_rev > N the write is REJECTED + surfaced for reconcile (a concurrent session already advanced the lug); if current_rev == N the write applies and rev becomes N+1. Last-write-wins is BANNED (AC47) \u2014 divergence is surfaced, never silently overwritten. This is the same-spoke concurrency guard; cross-spoke writes are hub-serialized (spec-harness-development-control-v1).",
+        "reconcile": "A rejected stale-rev write does not discard the writer's intent: it surfaces a reconcile item (Attention surface) carrying both revisions so the writer re-reads at the current rev and re-applies. Ties to AC21 file-update reconciliation + concurrent-session-identity-v1."
+      }
+    },
+    "v4_verification_linkage": {
+      "_note": "Defines how a lug links to the bolt/check/test substrate (design \u00a72, AC13/AC12/AC27). The verification spine (spec-verification-quality-v1) owns the test SEMANTICS; this defines the lug-side FIELDS.",
+      "verification_test": {
+        "type": "array<object>",
+        "rule": "Every acceptance criterion maps to >=1 entry (AC\u2194test traceability, AC27). REQUIRED non-empty before draft\u2192open \u2014 a lug with no verification_test FAILS promotion (test-at-birth hard gate). Each entry materializes the corresponding verify[] step into a runnable test.",
+        "entry_schema": {
+          "test_id": "string \u2014 stable id for this test",
+          "covers_ac": "string \u2014 the acceptance criterion id/text this test exercises (the traceability link)",
+          "mode": "string CHECK(mode IN ('mechanical','attested','human','attested_experiential')) \u2014 the tier (spec-verification-quality-v1 q1)",
+          "assertion": "string \u2014 for mechanical: the runnable command/check + expected result; for attested: what the named verifier must confirm; for human: what Mario signs",
+          "verified_by": "string|null \u2014 the actor (script name, subagent id, or 'mario') that produced the latest result",
+          "result": "integer|null CHECK(result IN (1,0,null)) \u2014 1=tight/bolt-verified, 0=loose/failed, null=not yet run; a null result is a typed test-null gap",
+          "observed": "string|null \u2014 what was actually observed at the latest run",
+          "check_ref": "string|null \u2014 the check id in harness.db checks table this test result is recorded as (spec-storage-layer-v1)"
+        }
+      },
+      "test_result_history": {
+        "type": "array<object>",
+        "rule": "Append-only version-stamped history of test runs (AC12 'lug carries test execution history'). Re-run on minor version change (spec-verification-quality-v1 q2).",
+        "entry_schema": {
+          "test_id": "string",
+          "result": "integer CHECK(result IN (1,0)) \u2014 null is not historized; only actual runs",
+          "run_at": "ISO-8601",
+          "lug_version_at_run": "string \u2014 the lug version when this run happened (staleness detection)",
+          "verified_by": "string"
+        }
+      },
+      "bolt_ref": {
+        "field": "bolt_ref",
+        "type": "string|null",
+        "rule": "The bolt id (harness.db bolts table) that certifies this lug's work. Set when the lug's pattern is gated and its checks are recorded. A lug whose verification_test has any result=0 (loose) keeps its bolt in status=needs_review (design \u00a72 bolt hierarchy). null until the lug is dispatched through a gated pattern."
+      },
+      "certification_score": {
+        "field": "certification_score",
+        "type": "number|null",
+        "rule": "Derived, not authored: passes/(passes+fails+nulls) across this lug's verification_test entries (spec-verification-quality-v1). Recomputed on each test run; surfaced in the wakeup Quality/Certification section. null when no tests have run."
+      }
+    }
+  },
+  "lifecycle": {
+    "draft": "Created with all v4 mandatory context fields + rev=1 + schema_version=4. May have null test results. NOT dispatchable.",
+    "draft_to_open": "The DUAL GATE: (1) structural \u2014 this spec's validator confirms all mandatory v4 fields present + correctly typed (rev present+integer, verification_test non-empty, context fields present); (2) content \u2014 object-quality-v4 cold-reader gate (specificity, no banned tokens, self-contained); (3) test-at-birth \u2014 every AC has a verification_test entry (result may still be null but the test must EXIST and be runnable). All three must pass; failing any keeps the lug in draft.",
+    "open_to_in_progress": "A session claims the lease (held_by/held_at); rev increments on the status write.",
+    "in_progress_to_completed": "verification_test entries run \u2192 results recorded \u2192 check_ref + bolt_ref set \u2192 certification_score computed. A completed lug with any result=0 keeps bolt needs_review and is surfaced, not hidden (no 'probably done').",
+    "every_write": "increments rev by 1, sets updated_at, and (if it changes a flow-relevant decision) emits a decision event (spec-observability-oversight-v1 AC40)."
+  },
+  "migration_from_v3": {
+    "rule": "A v3 lug (schema_version absent or <4) is NOT hard-rejected. The migration engine (spec-v4-migration-home-map-v1) transforms it: stamp schema_version=4, rev=1, derive context_snapshot/triggering_session from git blame + the originating session where recoverable (else mark unknown, do not confabulate \u2014 object-quality-v4 forbids confabulated alternatives_considered), materialize verify[] into verification_test entries with result=null, and prompt the author/reviewer to fill the mandatory context fields. Until migrated, a v3 lug is read in compatibility mode (its rev is treated as 0 so any v4 write must reconcile-up).",
+    "bucket": "Migration follows the four-bucket model (AC19): a v3 lug with a recoverable AC\u2194verify mapping is PRESERVE+TRANSFORM; one with no verify[] at all is FLAG (needs human-authored test before it can open as v4)."
+  },
+  "constraints": [
+    "schema_version=4 is REQUIRED on every v4 lug; a lug claiming v4 but missing any mandatory v4 field fails validation",
+    "rev is REQUIRED, integer, initialized to 1, incremented by exactly 1 on every mutating write; an absent rev defeats the change-registry concurrency guard and is a hard validation failure",
+    "last-write-wins is BANNED \u2014 a stale-rev write is rejected + surfaced for reconcile, never silently applied (AC47)",
+    "verification_test is REQUIRED non-empty before draft\u2192open; every AC maps to >=1 entry (AC27 test-at-birth)",
+    "a verification_test entry with result=null is permitted in draft but is a typed test-null gap once the lug opens (must be run, not left null silently)",
+    "context_snapshot + triggering_session are AUTO-STAMPED at creation (not author-typed) so they cannot be forgotten or confabulated",
+    "certification_score is DERIVED (passes/(passes+fails+nulls)); it is never hand-authored",
+    "bolt_ref/check_ref link to real rows in harness.db (spec-storage-layer-v1); a dangling ref fails validation",
+    "the content-quality gate (object-quality-v4) and this structural gate are SEPARATE checks both required for promotion \u2014 neither subsumes the other",
+    "this schema is dogfooded: every v4 lug authored for the harness-v4 epic carries schema_version=4 + rev + verification_test (the specs authored this phase are spec-type and follow the spec shape; impl lugs follow this lug shape)"
+  ],
+  "tests": [
+    "Validation pass: a lug with schema_version=4, rev=1, all mandatory context fields, and a non-empty verification_test covering every AC PASSES the structural validator",
+    "Missing-rev fail: a schema_version=4 lug with no rev field FAILS validation with a clear 'rev required (concurrency guard)' reason",
+    "Missing-context fail: a v4 lug with no situation (or situation naming only an advisor) FAILS \u2014 structural check catches absence, object-quality-v4 catches advisor-only content",
+    "Optimistic concurrency: read lug at rev=3, another session advances it to rev=4, the first session's write_against_rev=3 is REJECTED by check_rev with a reconcile reason; a write_against_rev=4 succeeds and rev becomes 5",
+    "Test-at-birth gate: a content-complete v4 lug with verification_test=[] FAILS draft\u2192open (both axes required, dual gate)",
+    "AC traceability: a lug with 3 ACs but only 2 verification_test entries (one AC uncovered) FAILS the lug-reviewer gate",
+    "Null-result gap: an OPEN lug with a verification_test entry result=null surfaces as a test-null gap in the Quality section; certification_score reflects the null in its denominator",
+    "Bolt linkage: a completed lug with one check result=0 keeps its bolt_ref bolt at status=needs_review and is surfaced (not reported done)",
+    "certification_score derivation: a lug with 2 passes, 1 fail, 1 null \u2192 certification_score = 2/4 = 0.5 (derived, not authored)",
+    "v3 migration: a v3 lug (no schema_version) is read in compatibility mode (rev treated as 0); v4_migrate transforms it \u2192 schema_version=4, rev=1, verify[] materialized into verification_test entries with result=null, context fields prompted (not confabulated)",
+    "schema_version branch: schema_version=3 lug gets a migration prompt, not a hard reject; schema_version=4 lug gets the full v4 gate"
+  ],
+  "impl_lugs": [
+    "impl-lug-schema-v4-validator-v1"
+  ],
+  "health": {
+    "test_coverage": "mechanical \u2014 tools/validate_lug_v4.py + tools/lug_utils.py bump_rev/prepare_lug_write; tests/test_lug_schema_v4.py (12 cases incl. check_rev cross-check); full suite green",
+    "last_impl_lug_completed": "2026-06-09T14:46:45.997177+00:00",
+    "spec_drift_risk": "medium \u2014 change_registry.check_rev() (built S44) ALREADY consumes the `rev` field this spec defines; the spec is documenting an existing code assumption, so the schema MUST match check_rev's contract (integer, monotonic, missing=banned) exactly. Drift risk if check_rev changes without updating this spec.",
+    "resolved_decisions": [
+      "lug-schema-v4 is the STRUCTURAL axis; object-quality-v4 is the CONTENT axis \u2014 separate, complementary, both gate promotion (S45)",
+      "rev is a monotonic integer initialized to 1, incremented by 1 per write, matching tools/change_registry.py check_rev() which is already live (S45)",
+      "verification_test is a structured array (test_id/covers_ac/mode/result/check_ref), not free-text; verify[] becomes the SPEC the test is materialized from (S45)",
+      "schema_version=4 stamping; pre-v4 lugs get a migration prompt not a hard reject (carried from object-quality-v4 open_question) (S45)",
+      "context_snapshot + triggering_session are auto-stamped at creation, not author-typed (S45)"
+    ],
+    "open_questions": [
+      "rev storage: a field on the JSON lug AND a column in harness.db pg_entries \u2014 which is authoritative for check_rev? (proposed: the JSON file is the source of truth, DB mirrors; check_rev reads the file rev on same-spoke writes)",
+      "effort field type: v3 allows both integer and S/M/L string \u2014 does v4 normalize to one? (proposed: accept both, normalize to integer in the DB mirror, defer hard normalization to a migration)",
+      "certification_score recompute trigger: on every test run vs on closeout vs on read? (proposed: on every test run, cached on the lug, recomputed on read if stale)"
+    ]
+  },
+  "related_specs": [
+    "spec-object-quality-v4-v1",
+    "spec-verification-quality-v1",
+    "spec-storage-layer-v1",
+    "spec-v4-migration-home-map-v1",
+    "spec-harness-development-control-v1",
+    "spec-observability-oversight-v1"
+  ],
+  "perceive": "Read this spec fully. Read tools/change_registry.py check_rev() + advance_status() (lines ~117-141) \u2014 the LIVE consumer of the `rev` field; this spec must match its contract exactly. Read templates/commands/wai-lug-schema.md + wai-lug-schema-slim.md (the v3 baseline being extended). Read spec-object-quality-v4-v1 (the content axis \u2014 do not duplicate its gate, reference it). Read spec-verification-quality-v1 q1_test_generation (the test SEMANTICS this spec links to structurally). Read spec-storage-layer-v1 checks/bolts/pg_entries tables (the DB rows bolt_ref/check_ref point at).",
+  "execute": "1. Write tools/validate_lug_v4.py \u2014 the structural validator: schema_version=4 present, rev present+integer, all mandatory context fields present+typed, verification_test non-empty with every AC covered, bolt_ref/check_ref resolve (or null). 2. Extend the lug creation template to stamp schema_version=4, rev=1, context_snapshot (active epics/initiatives), triggering_session at creation; refuse to write a lug missing a mandatory v4 field. 3. Wire validate_lug_v4 into lug-reviewer as the STRUCTURAL half of the dual gate (object-quality-v4 cold-reader is the CONTENT half). 4. Add the rev-increment+updated_at write helper to lug_utils.py; route all lug writes through it so check_rev stays meaningful. 5. Add v3\u2192v4 migration transform to v4_migrate.py (stamp schema_version/rev, materialize verify[]\u2192verification_test result=null, prompt context fields, four-bucket classify). 6. Add certification_score derivation to the verification spine read path. 7. Deliver impl lugs for each step to own incoming/. 8. Publish a teaching announcing schema_version=4 + the v3\u2192v4 migration path (no silent retirement of the v3 shape).",
+  "verify": "1. python3 tools/validate_lug_v4.py on a known-good v4 lug PASSES; on a rev-less lug FAILS with the concurrency reason; on a verification_test=[] lug FAILS the test-at-birth gate. 2. check_rev round-trip: a stale-rev write is rejected, an up-to-date one increments rev. 3. Creation template stamps schema_version/rev/context_snapshot/triggering_session. 4. certification_score = passes/(passes+fails+nulls) computed correctly on a mixed-result lug. 5. v3 lug migrates to v4 with verify[] materialized and context fields prompted (not confabulated). 6. All tests[] pass.",
+  "execution_mode": "impl",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet"
+}

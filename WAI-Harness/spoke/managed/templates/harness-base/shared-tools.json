@@ -1,0 +1,20 @@
+{
+  "_purpose": "Curated list of SHARED, framework-owned harness tools that the base template distributes to every spoke. Framework (the convergence curator) decides what belongs here.",
+  "_IMPORTANT_tools_location": "These files install into the SPOKE'S OWN repo-local 'tools/' directory (e.g. <spoke-root>/tools/lug_utils.py). This is NOT '~/tools/'. '~/tools/' is Basher's HOME toolbox (external CLIs like gastown/gitnexus) and is off-limits here. The repo-local 'tools/' folder is the spoke's own, version-controlled in the spoke repo. (See CLAUDE.md anti-pattern: '~/tools/ is Basher's; the repo-local tools/ is the repo's own.')",
+  "schema_version": "1.0",
+  "source_root": "framework/tools/  (the running ozi_autopilot.py's own directory — canonical regardless of which spoke runs consolidation)",
+  "install_dir": "<spoke-root>/tools/  (repo-local, NOT ~/tools/)",
+  "tools": [
+    {
+      "file": "lug_utils.py",
+      "why": "Shared lug helpers + resolve_attribution() (canonical who/when/where attribution string). Stdlib-only; imported by the other shared tools.",
+      "stdlib_only": true
+    },
+    {
+      "file": "write_change_receipt.py",
+      "why": "Emit complete change-lugs (the curator-model contribution protocol). Imports resolve_attribution from lug_utils.",
+      "depends_on": ["lug_utils.py"]
+    }
+  ],
+  "_expansion_note": "Start minimal (the contribute/attribution base). The curator adds tools here as they become genuinely shared harness infrastructure — each must be import-clean for a spoke (prefer stdlib-only or list depends_on within this set)."
+}

@@ -1,0 +1,148 @@
+{
+  "base_version": "3.0.0",
+  "components": [
+    {
+      "id": "claude-md",
+      "path": "CLAUDE.md",
+      "kind": "file",
+      "required": true,
+      "check": "test -f CLAUDE.md",
+      "note": "project harness instructions (survives compaction)"
+    },
+    {
+      "id": "wai-state",
+      "path": "WAI-Spoke/WAI-State.json",
+      "kind": "file",
+      "required": true,
+      "check": "python3 -c \"import json;json.load(open('WAI-Spoke/WAI-State.json'))\"",
+      "note": "project state + session history + _harness ledger"
+    },
+    {
+      "id": "sessions",
+      "path": "WAI-Spoke/sessions/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d WAI-Spoke/sessions"
+    },
+    {
+      "id": "lugs",
+      "path": "WAI-Spoke/lugs/bytype/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d WAI-Spoke/lugs/bytype",
+      "note": "work-item store (P11: lugs survive sessions)"
+    },
+    {
+      "id": "bolts",
+      "path": "WAI-Spoke/bolts/bytype/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d WAI-Spoke/bolts/bytype",
+      "note": "verification receipts: work/freeform/ceremony/adoption"
+    },
+    {
+      "id": "teachings-cache",
+      "path": "WAI-Spoke/seed/ingest/processed/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d WAI-Spoke/seed/ingest/processed"
+    },
+    {
+      "id": "hooks",
+      "path": ".claude/hooks/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d .claude/hooks",
+      "note": "session-start, user-prompt-submit, pre-compact, pre-tool-guard, stop-test-runner"
+    },
+    {
+      "id": "settings",
+      "path": ".claude/settings.json",
+      "kind": "file",
+      "required": true,
+      "check": "python3 -c \"import json;json.load(open('.claude/settings.json'))\"",
+      "note": "hook wiring + permissions (absolute /home/ paths only)"
+    },
+    {
+      "id": "skills",
+      "path": ".claude/commands/",
+      "kind": "dir",
+      "required": true,
+      "check": "test -d .claude/commands",
+      "note": "core skills synced from templates/commands/"
+    },
+    {
+      "id": "harness-ledger",
+      "path": "WAI-Spoke/WAI-State.json#_harness",
+      "kind": "field",
+      "required": true,
+      "check": "python3 -c \"import json,sys; s=json.load(open('WAI-Spoke/WAI-State.json')); sys.exit(0 if s.get('_harness',{}).get('base_version')=='3.0.0' else 1)\"",
+      "note": "adoption marker: base_version + patches_adopted[]"
+    },
+    {
+      "id": "verify-engine",
+      "path": "tools/verify_engine.py",
+      "kind": "file",
+      "required": true,
+      "check": "test -f tools/verify_engine.py",
+      "note": "emits work/ceremony/adoption bolts (shipped in base payload)"
+    },
+    {
+      "id": "bolt-schema",
+      "path": "schemas/bolt.schema.json",
+      "kind": "file",
+      "required": true,
+      "check": "python3 -c \"import json;json.load(open('schemas/bolt.schema.json'))\""
+    },
+    {
+      "id": "pattern-schema",
+      "path": "schemas/pattern.schema.json",
+      "kind": "file",
+      "required": true,
+      "check": "python3 -c \"import json;json.load(open('schemas/pattern.schema.json'))\""
+    },
+    {
+      "id": "spoke-health-check",
+      "path": "tools/spoke_health_check.py",
+      "kind": "file",
+      "required": false,
+      "check": "test -f tools/spoke_health_check.py",
+      "note": "health/remediation tool (base payload)"
+    },
+    {
+      "id": "wai-validate",
+      "path": "tools/wai_validate.py",
+      "kind": "file",
+      "required": false,
+      "check": "test -f tools/wai_validate.py",
+      "note": "health/remediation tool (base payload)"
+    },
+    {
+      "id": "pre-commit-health",
+      "path": "tools/pre_commit_health.py",
+      "kind": "file",
+      "required": false,
+      "check": "test -f tools/pre_commit_health.py",
+      "note": "health/remediation tool (base payload)"
+    }
+  ],
+  "adoption_order": [
+    "01-orient.md",
+    "02-detect.md",
+    "03-bootstrap.md|04-migrate.md",
+    "05-hygiene.md",
+    "06-verify.md",
+    "patches"
+  ],
+  "emit_adoption_bolt": "python3 tools/verify_engine.py emit-adoption --session-id {SID} --base-version 3.0.0 --checks @{checks.json}",
+  "self_contained": true,
+  "install_payload": {
+    "from": "payload/",
+    "note": "Base ships its own tool + schemas + v3 skills; no framework repo needed.",
+    "map": {
+      "payload/tools/": "tools/",
+      "payload/schemas/": "schemas/",
+      "payload/commands/": ".claude/commands/"
+    }
+  }
+}

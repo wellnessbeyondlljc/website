@@ -1,0 +1,137 @@
+{
+  "id": "lug-capabilities-registry-spec-v1",
+  "type": "spec",
+  "status": "open",
+  "routed_to": "FRAMEWORK",
+  "created_at": "2026-06-02T01:00:00+00:00",
+  "originated_in": "track-prompt-lab/session-20260601-1455",
+  "title": "Spoke Capabilities Registry \u2014 hub-base + local override, self-documenting, runner-executed",
+  "one_liner": "Formalize a per-spoke capabilities registry (a self-documenting functional manual of runnable commands with validity windows, run triggers, and tracking) that mirrors the hub-to-spoke pattern: hub holds a base set, each spoke extends or overrides by id. A working prototype runs in track-prompt-lab + hub; the framework should design the canonical version and publish a teaching that tells spokes how to adopt or adapt.",
+  "why_this_matters": "There is no per-spoke record of what scripts a spoke can run, how long they stay valid, when they auto-run, or where they are documented. That knowledge is scattered across basher.json (environment/restore only), advisors/registry.json (advisor scheduling only), and tribal memory. The first concrete need was centralizing the WAI Track prompt so spokes stop drifting; that generalized into a reusable capabilities mechanism. Framework ownership matters because this is fleet-wide infrastructure: the framework is the blueprint, and a prototype built in one spoke must be canonicalized centrally so all spokes adopt one consistent shape.",
+  "impact": 7,
+  "effort": "M",
+  "model_fit": "SONNET",
+  "prototype_reference": {
+    "summary": "A working reference implementation exists. The framework may keep, reshape, or replace it \u2014 it is a blueprint, not a mandate.",
+    "files_built": {
+      "hub/tools/capability_runner.py": "Generic runner: merges hub-base + spoke-local registries (local wins by id), runs capabilities whose run.trigger matches and run.auto is true, writes a self-documenting effective manifest + append-only run log, auto-creates an idempotent renewal lug when valid_until has passed. Always exits 0 so it can never block spoke entry.",
+      "hub/WAI-Hub/reference/capabilities-base.json": "Universal capability set (seeded with track-prompt-sync).",
+      "WAI-Spoke/capabilities.json": "Per-spoke local registry that extends/overrides base by id (track-prompt-lab seeded with track-prompt-publish [author_only] and dev-server).",
+      "hub/tools/track_prompt_publish.py": "Author spoke publishes its validated track prompt to the hub canonical location (the first capability's executable).",
+      "hub/tools/track_prompt_spoke_sync.py": "Consumer spoke pulls the canonical track prompt from the hub; SHA-compares and is a no-op when current.",
+      "basher/wai-enter.sh": "Canonical entry wrapper now calls capability_runner.py --trigger on-entry in the spoke prep block (skipped on -c continue mode). All spoke wrappers inherit it.",
+      ".claude/commands/wai-track-prompt-publish.md": "Author-only skill that wraps track_prompt_publish.py.",
+      "hub/hub-registry.json": "track-prompt-lab marked track_prompt_role: author so it publishes rather than pulls."
+    },
+    "capability_schema": {
+      "id": "stable kebab-case identifier (merge key)",
+      "name": "human label",
+      "kind": "sync | publish | service | maintenance",
+      "description": "what it does (self-documenting)",
+      "usage": "how to invoke it manually + when it auto-runs (self-documenting)",
+      "command": "shell command with {hub_path} and {spoke_path} substitution tokens",
+      "version": "capability version",
+      "introduced_at": "YYYY-MM-DD",
+      "valid_until": "YYYY-MM-DD \u2014 past this the runner skips and files a renewal lug",
+      "run": {
+        "trigger": "on-entry | on-demand | scheduled | on-event",
+        "auto": "bool \u2014 whether the runner executes it automatically",
+        "run_schedule": "cron-ish, when trigger=scheduled (reuses advisors/registry.json vocabulary)",
+        "run_after": "ordering dependency (reuses advisors/registry.json vocabulary)",
+        "event_triggers": "list, when trigger=on-event"
+      },
+      "activation": "all_spoke_types | author_only | (extensible)",
+      "skip_if": "simple `field == value` / `field != value` predicate evaluated against the spoke's hub-registry entry"
+    },
+    "behaviors_proven": [
+      "hub-base + local merge with local-wins-by-id",
+      "skip_if predicate (track-prompt-sync skipped on author spoke)",
+      "activation gating (author_only)",
+      "valid_until expiry -> idempotent renewal lug with full PEV schema",
+      "self-documenting effective manifest written to WAI-Spoke/runtime/capabilities-effective.json",
+      "append-only run log at WAI-Spoke/runtime/capability-runs.jsonl",
+      "verified end-to-end: published track prompt v0.40 to hub, synced to consumer spoke 'minder' on entry"
+    ]
+  },
+  "framework_mandate": {
+    "decide": [
+      "Canonical location and ownership of the base registry (WAI-Hub/reference/ vs elsewhere) and the per-spoke local file (WAI-Spoke/capabilities.json vs folding into basher.json \u2014 note basher.json is restore-focused and has an in-flight enrich lug).",
+      "The authoritative capability schema and required vs optional fields.",
+      "The skip_if / activation predicate grammar (keep the simple field==value form or formalize a richer one).",
+      "Run-tracking format and whether it should feed the gardener/nightly lifecycle and PathGraph.",
+      "Validity/retirement policy: renewal-lug-on-expiry (prototype) vs a different lifecycle, and default validity windows.",
+      "Whether the runner lives in hub/tools (prototype) or is framework-distributed."
+    ],
+    "constraint": "Must preserve the hub-base + local-override pattern and the self-documenting (description + usage) requirement \u2014 these are the two locked design decisions from the originating session."
+  },
+  "adaptation_contract": {
+    "requirement": "Per the originating intent: the framework may serve this differently than the prototype. If it does, the published teaching MUST tell adopting spokes how to adapt, not merely that a new mechanism exists.",
+    "teaching_must_specify": [
+      "Prototype -> canonical mapping: any file moves, renames, or relocations (e.g. if capabilities.json moves or merges into basher.json).",
+      "Schema migration: field renames, additions, removals, and how to transform an existing prototype capabilities.json into the canonical shape.",
+      "Runner invocation changes: if wai-enter.sh should call something other than hub/tools/capability_runner.py.",
+      "What track-prompt-lab and the hub specifically must change to converge from the prototype to canonical (this spoke and the hub are already running the prototype).",
+      "Idempotency guidance so re-adoption does not duplicate capabilities or renewal lugs."
+    ],
+    "back_reference": "On adoption, spokes (including track-prompt-lab) reconcile their local capabilities.json against the canonical schema using the teaching's migration steps."
+  },
+  "perceive": {
+    "current_state": "Prototype live in track-prompt-lab + hub; no framework-canonical spec or teaching yet. No other spoke has adopted (consumers had no local track prompt before; minder now seeded via the prototype runner).",
+    "files": [
+      "/home/mario/projects/wheelwright/hub/tools/capability_runner.py",
+      "/home/mario/projects/wheelwright/hub/tools/track_prompt_publish.py",
+      "/home/mario/projects/wheelwright/hub/tools/track_prompt_spoke_sync.py",
+      "/home/mario/projects/wheelwright/hub/WAI-Hub/reference/capabilities-base.json",
+      "/home/mario/projects/wheelwright/track-prompt-lab/WAI-Spoke/capabilities.json",
+      "/home/mario/projects/basher/wai-enter.sh"
+    ]
+  },
+  "execute": {
+    "steps": [
+      "1. Review the prototype reference implementation and behaviors_proven.",
+      "2. Decide the canonical schema, locations, predicate grammar, tracking format, and retirement policy (see framework_mandate.decide), preserving the two locked constraints.",
+      "3. Write the canonical capabilities-registry spec document (Man Lug System: bytype/spec/, index in WAI-SpecIndex.jsonl).",
+      "4. Define the runner contract and where it is distributed from.",
+      "5. Publish a framework teaching that (a) introduces the mechanism and (b) satisfies the adaptation_contract.teaching_must_specify migration items so spokes can adopt or adapt.",
+      "6. Specify the seed path: how a spoke with no local capabilities.json gets one (the runner already tolerates its absence, so adoption is incremental and non-breaking)."
+    ]
+  },
+  "verify": {
+    "done_when": [
+      "Canonical capabilities-registry spec exists and is indexed in WAI-SpecIndex.jsonl",
+      "A framework teaching is published in the teachings repo",
+      "The teaching includes explicit prototype->canonical migration steps (adaptation_contract satisfied)",
+      "track-prompt-lab and the hub have a documented path to converge from prototype to canonical",
+      "Hub-base + local-override and self-documenting (description + usage) are preserved in the canonical schema"
+    ]
+  },
+  "acceptance_criteria": [
+    "Canonical schema preserves hub-base + local-override merged by id (local wins)",
+    "Every capability carries description + usage (self-documenting manual)",
+    "Validity window with a defined retirement/renewal policy",
+    "Run triggers expressive enough for on-entry, on-demand, scheduled, and on-event, reusing advisors/registry.json scheduling vocabulary where possible",
+    "Published teaching tells adopting spokes how to adapt if the canonical differs from the prototype, with concrete migration steps"
+  ],
+  "target_files": [
+    "WAI-Spoke/lugs/bytype/spec/capabilities-registry-spec-v1.json \u2014 NEW (framework)",
+    "teachings_repo/framework/current/capabilities-registry-v1.teaching \u2014 NEW",
+    "WAI-SpecIndex.jsonl \u2014 APPEND"
+  ],
+  "tags": [
+    "capabilities-registry",
+    "hub-spoke",
+    "self-documenting",
+    "wai-enter",
+    "track-prompt",
+    "scheduling",
+    "lifecycle",
+    "framework",
+    "spec"
+  ],
+  "delivered_from": "track-prompt-lab",
+  "delivered_at": "2026-06-02T01:00:00+00:00",
+  "received_at": "2026-06-02T01:00:00+00:00",
+  "execution_mode": "subagent",
+  "execution_substrate": null,
+  "gt_convoy_hint": "cross-spoke delivery: routed_to=FRAMEWORK"
+}

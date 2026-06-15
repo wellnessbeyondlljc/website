@@ -1,0 +1,160 @@
+---
+id: navigator-phase1-assay-loop-v1
+version: 1.0.0
+fw_version: ">=2.0.176"
+title: "Navigator Phase 1: assay loop + recommendations-current distribution"
+description: >
+  Wires the full Navigator Phase 1 intelligence loop: spoke writes assay_full.json at
+  closeout → delivered to hub:navigator assay-inbox → nightly aggregate builds assay-patterns.json
+  → recommendations publisher produces recommendations-current.json with 7 standard profiles →
+  spoke copies at wakeup. Also covers provider adapter stubs, scan mode skills, spoke cache files.
+safe_to_auto_adopt: true
+breaking_change: false
+target: framework
+prerequisites:
+  - cartographer-closeout-observation-v1 (step 6b must be in closeout before adding 6c)
+batch_sequence:
+  - "1. Hub infrastructure (adapters/, scan skills, assay-inbox/, seeds) — no dependencies"
+  - "2. Hub tools (navigator_assay_aggregate.py, navigator_recommendations_publish.py) — after hub dirs"
+  - "3. run_nightly.py additions (assay aggregate + recommendations publish) — after tools exist"
+  - "4. recommend.md update (assay_patterns load + usage_boost) — after assay-patterns.json seed exists"
+  - "5. Spoke files (catalog-cache.json expanded, recommendations-current.json seed) — independent"
+  - "6. wai.md update (Navigator banner + Step 1b sync block) — after spoke files exist"
+  - "7. wai-closeout.md step 6c (assay write + delivery) — last, depends on all paths above"
+---
+
+## What Changed
+
+Navigator Phase 1 is now fully implemented. This teaching covers all artifacts.
+
+### Hub: Provider Adapter Contract
+
+`hub/WAI-Hub/advisors/navigator/adapters/` contains:
+- `_base.py` — `ProviderAdapter` ABC with 7 abstract methods: `list_models`, `get_pricing_catalog`, `get_account_entitlements`, `get_usage_summary`, `get_limits_status`, `get_deprecations_and_release_changes`, `healthcheck`
+- `anthropic.py`, `openai.py`, `gemini.py`, `together.py`, `z_ai.py` — Phase 1 stubs (all raise `NotImplementedError("Phase 2: ...")`)
+- `__init__.py` — `ADAPTERS` dict mapping 5 provider IDs to classes
+
+Z.ai uses a hybrid approach (doc-sourced + local-config) documented in the adapter docstring.
+
+### Hub: Scan Skills
+
+`hub/WAI-Hub/advisors/navigator/skills/`:
+- `scan-lightweight.md` — Mode A (hourly): healthcheck + model list diff + deprecation scan + per-provider snapshot
+- `scan-entitlements.md` — Mode B (daily): account entitlements + limits + usage summary + per-provider entitlement file
+
+Both skills include executable Python code blocks. Both degrade gracefully when adapters raise `NotImplementedError`.
+
+### Hub: Assay Loop
+
+**`hub/WAI-Hub/advisors/navigator/assay-inbox/`** — one subdir per spoke name (lowercase, spaces→dashes). Spoke delivers `{session_id}_assay_full.json` here at every CLEAN closeout.
+
+**`hub/tools/navigator_assay_aggregate.py`** — reads all delivered assay files, builds `assay-patterns.json`:
+```json
+{
+  "schema_version": "1.0",
+  "patterns": {
+    "claude-sonnet-4-6": {
+      "coding": {"turns": 42, "sub_agent_spawns": 8, "spokes": ["wheelwright-framework"], "sessions": 10}
+    }
+  }
+}
+```
+Sub-agent models get their own pattern entries. Idempotent — rebuilds from scratch each run.
+
+**`hub/tools/navigator_recommendations_publish.py`** — runs scoring engine against 7 standard profiles, writes `recommendations-current.json`:
+```json
+{
+  "schema_version": "1.0",
+  "valid_through": "ISO-8601 (generated_at + 24h)",
+  "profiles": {
+    "coding_high": {
+      "default": {"model_id": "claude-sonnet-4-6", "provider": "anthropic", "score": 0.82, "warnings": []}
+    }
+  }
+}
+```
+Standard profiles: `coding_high`, `coding_low`, `planning_high`, `debugging_medium`, `review_low`, `closeout_low`, `ideation_medium`. Empty catalog produces `catalog_empty: true` per profile — not an error.
+
+**`run_nightly.py` additions** (after Cartographer fleet-chart step):
+```python
+("Navigator assay aggregate", ["python3", str(tools / "navigator_assay_aggregate.py")]),
+("Navigator recommendations publish", ["python3", str(tools / "navigator_recommendations_publish.py")]),
+```
+
+**`recommend.md` additions** — after fleet_chart load:
+```python
+try:
+    assay_patterns = json.load(open(NAV_DIR / "assay-patterns.json"))
+except FileNotFoundError:
+    assay_patterns = {"patterns": {}}
+```
+In `score_model()` after rework_risk:
+```python
+assay_wt = assay_patterns.get("patterns", {}).get(m["id"], {}).get(task_profile["work_type"])
+if assay_wt and assay_wt.get("turns", 0) > 0:
+    usage_boost = min(0.15, assay_wt["turns"] / 100.0)
+    scores["local_success_fit"] = min(1.0, scores["local_success_fit"] + usage_boost)
+```
+
+### Spoke: Navigator Cache + Recommendations Sync
+
+**`WAI-Spoke/advisors/navigator/catalog-cache.json`** — expanded schema:
+```json
+{
+  "cached_at": null, "ttl_hours": 24, "catalog": null, "fleet_chart": null,
+  "recommendations_pulled_at": null, "recommendations_valid_through": null
+}
+```
+
+**`WAI-Spoke/advisors/navigator/recommendations-current.json`** — empty seed (overwritten at wakeup).
+
+**`wai.md` FAST PATH banner** — new line:
+```
+│  {If recommendations valid: Navigator: N profiles current | If stale: ⚠ Navigator: recommendations stale}
+```
+
+**`wai.md` FULL PROTOCOL Step 1b** — Navigator startup block after Load Spoke Taste:
+```python
+# Catalog TTL check (warn) + hub recommendations sync (silent skip if absent)
+# Copies hub recommendations-current.json → WAI-Spoke/advisors/navigator/recommendations-current.json
+# Updates catalog-cache.json recommendations_pulled_at + recommendations_valid_through
+```
+
+### Closeout: Assay Write + Delivery (Step 6c)
+
+After step 6b Cartographer observation, step 6c writes `assay_full.json`:
+
+**Location:** `WAI-Spoke/sessions/{session_id}/assay_full.json` (paired with `track.jsonl`)
+
+**Schema:**
+```json
+{
+  "schema_version": "1.0",
+  "session_id": "...", "spoke": "...", "fw_ver": "...",
+  "session_outcome": "CLEAN | INTERRUPTED",
+  "turns": [
+    {"seq": 1, "ts": "...", "model": "claude-sonnet-4-6", "provider": "anthropic",
+     "work_type": "wakeup|planning|implementation|closeout|...",
+     "tools_invoked": ["Read", "Write"], "lug_ids": [], "sub_agents": []}
+  ],
+  "session_summary": {"total_turns": N, "models_used": {...}, ...}
+}
+```
+
+**Delivery:** `hub/WAI-Hub/advisors/navigator/assay-inbox/{spoke_name}/{session_id}_assay_full.json`
+
+**Failure handling:** All delivery failures are silent-skip. Step 6c never blocks closeout. If hub absent, local copy is retained at `WAI-Spoke/sessions/{session_id}/assay_full.json`.
+
+## Adoption Checklist
+
+- [ ] Create `hub/WAI-Hub/advisors/navigator/adapters/` with all 7 Python files
+- [ ] Create `hub/WAI-Hub/advisors/navigator/catalog/model-entry-schema.json` and `pricing-ledger-schema.json`
+- [ ] Create `hub/WAI-Hub/advisors/navigator/skills/scan-lightweight.md` and `scan-entitlements.md`
+- [ ] Create `hub/WAI-Hub/advisors/navigator/assay-inbox/` with `.gitkeep`
+- [ ] Seed `hub/WAI-Hub/advisors/navigator/assay-patterns.json` and `recommendations-current.json`
+- [ ] Create `hub/tools/navigator_assay_aggregate.py` and `navigator_recommendations_publish.py`
+- [ ] Update `run_nightly.py` post-tend chain (2 new steps after cartographer_aggregate)
+- [ ] Update `recommend.md` (assay_patterns load + usage_boost)
+- [ ] Create `WAI-Spoke/advisors/navigator/catalog-cache.json` (6-field schema) and `recommendations-current.json` seed
+- [ ] Update `wai.md` (Navigator banner line + Step 1b startup block)
+- [ ] Update `wai-closeout.md` (add step 6c assay write + delivery)

@@ -1,0 +1,52 @@
+# Teaching: Teaching Reconciliation Protocol
+
+**Type:** Protocol Update  
+**Source:** wheelwright/framework  
+**Created:** 2026-03-18  
+**safe_to_auto_adopt:** true
+
+---
+
+## What This Teaching Does
+
+Teaching reconciliation protocol: Step 3a wakeup now auto-detects already-implemented teachings via 3-tier verification (filename in signals, teaching name in signals, verification files exist). Auto-copies to processed/ folder without confirmation. Eliminates false-positive 'new teachings' on every wakeup when hub teachings are already implemented locally.
+
+**Impact:** 8/10 - Solves fundamental usability issue affecting all spokes: hub teachings are immutable (can't be moved), so filename-based detection was insufficient. This protocol enables copy-on-reconcile pattern that works with canonical hub structure. Affects all future wakeups across all spokes.
+
+**Related Lug:** 6ed194b4add6
+
+---
+
+## Signal Details
+
+```json
+{
+  "timestamp": "2026-03-18T10:44:09.006577+00:00",
+  "session_id": "session-20260318-closeout",
+  "signal": "Teaching reconciliation protocol: Step 3a wakeup now auto-detects already-implemented teachings via 3-tier verification (filename in signals, teaching name in signals, verification files exist). Auto-copies to processed/ folder without confirmation. Eliminates false-positive 'new teachings' on every wakeup when hub teachings are already implemented locally.",
+  "impact": 8,
+  "rationale": "Solves fundamental usability issue affecting all spokes: hub teachings are immutable (can't be moved), so filename-based detection was insufficient. This protocol enables copy-on-reconcile pattern that works with canonical hub structure. Affects all future wakeups across all spokes.",
+  "by": "Claude Sonnet 4.5",
+  "lug_id": "6ed194b4add6"
+}
+```
+
+---
+
+## Adoption Instructions
+
+This teaching can be auto-adopted safely. It updates the wakeup protocol (Step 3a) to automatically reconcile already-implemented teachings.
+
+**No manual action required** - the signal will be absorbed into your WAI-Signals.jsonl on next wakeup.
+
+---
+
+## Verification
+
+After adoption:
+- Check WAI-Signals.jsonl contains this signal
+- Next wakeup should show accurate "new teachings" count (not false positives)
+
+---
+
+*Distributed automatically from wheelwright/framework via closeout Step 9b*

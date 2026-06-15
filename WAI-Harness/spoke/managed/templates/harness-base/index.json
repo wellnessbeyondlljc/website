@@ -1,0 +1,21 @@
+{
+  "base_version": "3.0.0",
+  "released_at": "2026-06-02T22:10:00Z",
+  "released_by": "framework",
+  "ordered_files": [
+    "00-manifest.json",
+    "01-orient.md",
+    "02-detect.md",
+    "03-bootstrap.md",
+    "04-migrate.md",
+    "05-hygiene.md",
+    "06-verify.md"
+  ],
+  "patch_cap": 10,
+  "description": "Bootstrappable Base Harness Adoption Kit. An agent reads these in order to stand up the harness on a new repo or migrate an existing one to v3.0.0, then verify + emit an adoption bolt. A spoke behind on teachings levels up by running THIS kit once (idempotent), not by adopting N stale teachings.",
+  "adoption_check": "python3 -c \"import json,os; s=json.load(open('WAI-Spoke/WAI-State.json')); assert s.get('_harness',{}).get('base_version')=='3.0.0'\"",
+  "source_of_truth": "framework:templates/harness-base/ \u2014 hub/teachings_repo/spoke/base/ receives a copy via the distribution path (Stream E)",
+  "layout": "flat",
+  "patches_dir": "teachings/",
+  "note": "Only the current base lives here. Cutting a new base replaces this folder wholesale."
+}

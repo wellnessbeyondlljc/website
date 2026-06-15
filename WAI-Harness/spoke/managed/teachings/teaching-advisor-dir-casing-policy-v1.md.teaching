@@ -1,0 +1,213 @@
+# Teaching: Harness v4 Advisor Dir Naming/Case Policy
+
+**Type:** Protocol Enhancement
+**Version:** 1.0.0
+**Created:** 2026-06-14
+**safe_to_auto_adopt:** true
+**applies_to_spoke_types:** all
+**Affects:** ozi_autopilot.py, spoke onboarding, advisor dirs on-disk
+**Supersedes:** nothing
+**weight:** 5
+**fingerprint:** b8e
+
+---
+
+## Prerequisites
+
+**Standalone (no dependencies):**
+None — this teaching is standalone and has no dependencies.
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Provides
+
+Establishes the harness v4 naming/case standard: **advisor ids and on-disk
+advisor dir names are lowercase-canonical** (kebab/snake, matching the file
+names already used). AP now includes an idempotent Pre-Phase 0n migration
+that merges legacy CapitalCase advisor dirs (e.g. `Gardener/`, `Expediter/`)
+into their lowercase equivalents on the first run against a legacy spoke, then
+removes the capital dir so duplication cannot recur.
+
+---
+
+## Why This Matters
+
+When Wheelwright v4 standardized advisor path construction to lowercase, the
+framework spoke (which always had lowercase dirs) never reproduced the
+migration problem. Spokes bootstrapped before v4 (hub, etc.) retained
+CapitalCase dirs. On case-sensitive filesystems (Linux/WSL2 ext4) AP created
+lowercase twins alongside the capital originals — both coexisted, doubling
+storage and causing `git add -A` + commit to oscillate under
+`core.ignorecase=true` until manually stabilized. This teaching closes that
+gap fleet-wide.
+
+---
+
+## What Changed in tools/ozi_autopilot.py
+
+Added `_normalize_advisor_dir_casing()` method to `OziAutopilot` and a
+Pre-Phase 0n call block at the top of `_run()` (before `_assess_state()`).
+
+**Behavior:**
+- Scans `WAI-Spoke/advisors/` for any subdirectory whose name contains
+  uppercase letters.
+- For each such legacy dir, ensures a lowercase sibling dir exists, then
+  copies every file into it using newest-mtime-wins on collision.  Every
+  merge, collision resolution, and skip is logged to stderr.
+- Removes the now-processed CapitalCase dir via `shutil.rmtree`.
+- Emits a normalization summary into `result.phases["phase_0n_normalize"]`.
+- Fully idempotent: if no CapitalCase dirs exist, logs a single "already
+  normalized" line and returns in <1 ms.
+- Respects `--dry-run`: logs what would happen but does not move any files.
+
+---
+
+## Context Doc Patch
+
+```json
+[
+  {
+    "section": "Advisor pipeline",
+    "action": "add",
+    "content": "**Naming/case policy (v4):** Advisor ids and on-disk advisor dir names under `WAI-Spoke/advisors/` are lowercase-canonical (kebab or snake). AP enforces this at startup via an idempotent Pre-Phase 0n migration that merges any legacy CapitalCase dir into its lowercase equivalent and removes the capital dir."
+  }
+]
+```
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — Pull the framework update
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+echo "Framework path: $FRAMEWORK_PATH"
+```
+
+The code change ships in `tools/ozi_autopilot.py`. If using the managed copy
+on your spoke, pull/sync the framework.
+
+### Step 2 — Set core.ignorecase=false on case-sensitive repos
+
+On Linux/WSL2 (ext4) or any case-sensitive filesystem, ensure the spoke git
+repo does not silently merge differently-cased names:
+
+```bash
+git config core.ignorecase false
+git config --get core.ignorecase   # should print: false
+echo "PASS — ignorecase=false" || echo "FAIL"
+```
+
+> **Why:** `core.ignorecase=true` (git's default on Linux when the filesystem
+> *is* case-sensitive) causes `git add -A` to oscillate between capital and
+> lowercase variants during closeout commits when both exist on disk.  Setting
+> it to `false` makes git treat them as distinct paths, which is the correct
+> behavior on a case-sensitive FS.  The AP migration removes the capital dirs
+> so the oscillation cannot recur regardless of this setting, but setting it
+> correctly prevents any *future* casing drift from causing the same symptom.
+
+### Step 3 — Verify AP migration fires on first run
+
+Run AP against a spoke (or the hub spoke if it still has legacy dirs):
+
+```bash
+python3 tools/ozi_autopilot.py --spoke-path . --budget 1 --dry-run 2>&1 | grep "phase 0n"
+```
+
+Expected output (if legacy dirs present):
+```
+[autopilot] phase 0n: normalizing advisor dir casing…
+[autopilot] phase 0n: legacy CapitalCase dir detected: 'Gardener' → merging into 'gardener'
+...
+[autopilot] phase 0n: done (0.0s)
+```
+
+Expected output (if already normalized):
+```
+[autopilot] phase 0n: normalizing advisor dir casing…
+[autopilot] phase 0n: advisor dir casing already normalized — nothing to do
+[autopilot] phase 0n: done (0.0s)
+```
+
+### Step 4 — Confirm new spokes seed lowercase only
+
+Spoke onboarding templates (`WAI-Harness/spoke/managed/templates/spoke/WAI-Spoke/advisors/`)
+already use only lowercase dir names (`expediter/`, `historian/`).  Verify:
+
+```bash
+find "$FRAMEWORK_PATH/WAI-Harness/spoke/managed/templates/spoke/WAI-Spoke/advisors/" -mindepth 1 -maxdepth 1 -type d | while read d; do
+  name=$(basename "$d"); lc=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+  [ "$name" = "$lc" ] && echo "OK: $name" || echo "FAIL — CapitalCase: $name"
+done
+```
+
+### Step 5 — Move teaching to processed
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/seed/ingest/teaching-advisor-dir-casing-policy-v1.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+- AP now always runs a fast pre-Phase 0 scan of `advisors/` on every
+  invocation. On already-normalized spokes this is a no-op taking < 1 ms.
+- On the first AP run against a legacy-CapitalCase spoke, the capital dirs are
+  merged and removed. Subsequent runs are no-ops.
+- The phase summary key `phase_0n_normalize` appears in every AP result for
+  observability.
+- Spoke onboarding must only seed lowercase advisor dir names. The AP
+  migration handles existing legacy dirs; new dirs must be lowercase from
+  creation.
+
+---
+
+## Verification
+
+After applying:
+
+```bash
+# 1. Python syntax check
+python3 -c "import ast; ast.parse(open('${FRAMEWORK_PATH}/WAI-Harness/spoke/managed/tools/ozi_autopilot.py').read())" && echo "PASS — syntax OK" || echo "FAIL — syntax error"
+
+# 2. Method exists
+grep -q "_normalize_advisor_dir_casing" "${FRAMEWORK_PATH}/WAI-Harness/spoke/managed/tools/ozi_autopilot.py" && echo "PASS — method present" || echo "FAIL — method missing"
+
+# 3. Phase 0n call present in _run()
+grep -q "phase_0n_normalize" "${FRAMEWORK_PATH}/WAI-Harness/spoke/managed/tools/ozi_autopilot.py" && echo "PASS — phase 0n wired" || echo "FAIL — phase 0n missing"
+
+# 4. Templates are lowercase-only
+find "${FRAMEWORK_PATH}/WAI-Harness/spoke/managed/templates/spoke/WAI-Spoke/advisors/" -mindepth 1 -maxdepth 1 -type d | while read d; do
+  name=$(basename "$d"); lc=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+  [ "$name" = "$lc" ] || echo "FAIL — CapitalCase template dir: $name"
+done && echo "PASS — all template advisor dirs are lowercase"
+```
+
+---
+
+## Backward Compatibility
+
+- Spokes with already-lowercase advisor dirs are fully unaffected.
+- AP `--dry-run` is respected: no files moved in dry-run mode.
+- Merge is always additive (copy + log); no files are deleted from the source
+  until all copies succeed.
+- The `phases` dict key `phase_0n_normalize` is additive — no existing AP
+  result consumers break.
+
+---
+
+**Teaching Package:** harness-v4-advisor-dir-casing
+**safe_to_auto_adopt:** true
+**Impact:** All spokes with legacy CapitalCase advisor dirs (typically spokes bootstrapped before v4). No impact on already-normalized spokes.

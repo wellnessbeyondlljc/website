@@ -1,0 +1,94 @@
+name: safe-refactor
+role: guardian
+model: lightweight
+description: "Git checkpoint before structural changes - prevents data loss during refactoring"
+
+trigger:
+  events:
+    - pre_refactor
+    - pre_structural_change
+  conditions:
+    - "git status shows uncommitted changes OR"
+    - "agent declares intent to refactor/restructure code"
+
+scope:
+  reads:
+    - ".git/HEAD"
+    - "git status output"
+  writes:
+    - "git commits (if changes detected)"
+
+prerequisites:
+  - "git repository initialized"
+  - "working directory accessible"
+
+behavior:
+  on_trigger: |
+    1. Check git status
+    2. If uncommitted changes exist:
+       a. Stage all changes (git add -A)
+       b. Create checkpoint commit with message:
+          "WAI: Pre-refactor checkpoint - [brief description]"
+       c. Record commit hash in session log
+    3. If working tree clean, proceed
+    4. Return checkpoint status to agent
+
+  on_failure: |
+    - If git not available: BLOCK refactor, warn user
+    - If commit fails: BLOCK refactor, show git error
+    - Never proceed with refactor if checkpoint fails
+
+output:
+  success:
+    type: "checkpoint_created"
+    data:
+      commit_hash: "<sha>"
+      message: "Safe to proceed with refactor"
+  failure:
+    type: "checkpoint_failed"
+    data:
+      reason: "<error message>"
+      action: "BLOCKED - cannot refactor without checkpoint"
+
+use_cases:
+  - scenario: "Agent is about to refactor the auth module"
+    what_happens: "safe-refactor fires, commits current state as checkpoint"
+    why_it_matters: "If refactoring breaks something, one git revert recovers"
+    user_trigger: "Automatic - fires on pre_refactor event"
+
+  - scenario: "Hub folder was destroyed by a rogue agent on 2026-02-10"
+    what_happens: "Would have been prevented - checkpoint exists to revert to"
+    why_it_matters: "This actually happened. This Skill exists because of it."
+    origin: "WAI v2 architectural session, 2026-02-11"
+
+  - scenario: "Agent attempts to restructure registry/ without git checkpoint"
+    what_happens: "safe-refactor blocks the operation until git is clean and committed"
+    why_it_matters: "WAI-Integrity.md mandates checkpoints before destructive operations"
+    reference: "hub/WAI-Integrity.md - pre-refactor rule"
+
+  - scenario: "Working tree is clean, agent wants to rename files"
+    what_happens: "safe-refactor checks git, sees clean tree, allows refactor to proceed"
+    why_it_matters: "No false positives - only checkpoint when needed"
+    user_trigger: "Automatic - no user intervention required"
+
+tests:
+  - name: "Creates checkpoint when uncommitted changes exist"
+    setup: "Modify a file, don't commit"
+    action: "Trigger pre_refactor event"
+    expected: "Commit created, commit hash returned"
+
+  - name: "Allows refactor when tree is clean"
+    setup: "Clean git status"
+    action: "Trigger pre_refactor event"
+    expected: "No commit created, success returned"
+
+  - name: "Blocks refactor if git not available"
+    setup: "No .git directory"
+    action: "Trigger pre_refactor event"
+    expected: "Failure returned, refactor blocked"
+
+notes: |
+  This Skill exists because Hub data was lost on 2026-02-10 with no recovery point.
+  It embodies the principle: "git is your undo button" - always checkpoint before risk.
+
+  Lightweight model is sufficient - this is a deterministic check, no reasoning needed.

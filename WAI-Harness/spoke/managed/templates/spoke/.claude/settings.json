@@ -1,0 +1,93 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/user-prompt-submit.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/pre-tool-guard.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/stop-track-flush.sh"
+          },
+          {
+            "type": "command",
+            "command": "./.claude/hooks/stop-test-runner.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/pre-compact.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(*~/projects/*)",
+      "Bash(*~/.claude/*)",
+      "Bash(git *)",
+      "Bash(python3 *)",
+      "Bash(date *)",
+      "Bash(test *)",
+      "Bash(which *)",
+      "Bash(echo *)",
+      "Bash(pwd)",
+      "Bash(sleep *)",
+      "Bash(kill *)",
+      "Bash(crontab *)",
+      "Write(*)",
+      "Read(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Skill(*)",
+      "Agent(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/projects)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  }
+}

@@ -1,0 +1,342 @@
+name: wai-shipit
+role: worker
+model: standard
+description: "Complete session closeout with git commit and push - orchestrates safe shipment"
+
+trigger:
+  events:
+    - on_demand
+  conditions:
+    - "user invokes /wai-shipit OR"
+    - "session ending with explicit shipit request"
+
+scope:
+  reads:
+    - "session observations.jsonl (for synthesis)"
+    - "WAI-Lugs.jsonl (incomplete work, session summary)"
+    - "git status (working tree state)"
+    - "WAI-State.json (phase tracking)"
+  writes:
+    - "session summary Lug (to WAI-Lugs.jsonl)"
+    - "git commit (with structured message)"
+    - "git push (to remote if configured)"
+    - "observations.jsonl (closeout record)"
+
+prerequisites:
+  - "git repository initialized"
+  - "safe-refactor available (checkpoint if needed)"
+  - "qc-check available (quality gates)"
+  - "session-observer available (synthesis)"
+
+behavior:
+  orchestration_flow: |
+    1. Pre-flight checks:
+       - Verify git repository exists
+       - Check if remote configured
+       - Verify framework version readable
+
+    2. Session synthesis (session-observer):
+       - Read observations from current session
+       - Read Lugs created this session
+       - Read commits made this session (git log since session start)
+       - Identify incomplete work (in-progress Lugs)
+       - Create session summary Lug with compact_action
+
+    3. Quality gates (qc-check):
+       - Run configured tests (pytest, npm test, etc.)
+       - Validate startup (app must launch)
+       - Check coverage threshold (if configured)
+       - Pre-commit warnings:
+         * Secrets potentially committed (.env, *.key, credentials.*)
+         * Large files staged (> 1MB warning, > 10MB block)
+         * Debug statements (console.log, print(), debugger)
+         * TODO/FIXME comments added
+       - BLOCK if critical failures, WARN if non-critical
+
+    4. Checkpoint (safe-refactor - if uncommitted changes):
+       - Check git status
+       - If dirty working tree: safe-refactor creates checkpoint
+       - Proceed with shipit
+
+    5. Stage all files:
+       - Run: git add -A
+       - Report: Files staged count
+
+    6. Generate commit message:
+       - Title: "{Phase/Feature}: {Brief description}"
+       - Body sections:
+         * ## Completed (deliverables from session)
+         * ## Impact (why it matters, what changed)
+         * ## Next (next phase or milestone)
+         * ## Compact Action (3-6 steps for next session)
+       - Footer: "Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+
+    7. Commit:
+       - Run: git commit -m "{structured_message}"
+       - Capture: commit SHA
+       - Record: commit to observations.jsonl
+
+    8. Push (if remote configured):
+       - Check: remote exists and reachable
+       - Check: not behind remote (would need pull first)
+       - Run: git push
+       - Capture: push result
+       - Report: remote URL and branch
+
+    9. Post-shipit summary:
+       - Display commit SHA
+       - Display push status (if pushed)
+       - Display compact action for next session
+       - Display session statistics (Lugs created, observations logged, etc.)
+
+  on_failure: |
+    Quality gates fail:
+      - BLOCK shipit
+      - Display failures (test output, coverage report)
+      - Suggest: Fix failures and re-run /wai-shipit
+
+    Git errors (commit or push):
+      - If commit fails: Show git error, check for conflicts
+      - If push fails: Commit succeeded locally, warn about remote sync
+      - Suggest: Manual git push later or check remote connection
+
+    Secrets detected:
+      - BLOCK shipit
+      - List files potentially containing secrets
+      - Suggest: Remove from staging, add to .gitignore
+
+    Large files (> 10MB):
+      - BLOCK shipit
+      - List large files staged
+      - Suggest: Remove large files, use .gitignore or git-lfs
+
+output:
+  success:
+    type: "shipit_complete"
+    data:
+      commit_sha: "abc1234"
+      commit_message_title: "Phase 5: Shipit Skill implementation"
+      push_status: "pushed to origin/wai-v2-migration"
+      remote_url: "https://github.com/wheelwright-ai/framework"
+      session_summary:
+        commits: 1
+        lugs_created: 3
+        observations_logged: 5
+        compact_action: ["Step 1", "Step 2", "..."]
+  failure:
+    type: "shipit_blocked"
+    data:
+      reason: "quality_gates_failed"
+      details: "3 tests failed in test_auth.py"
+      action: "Fix failures and re-run /wai-shipit"
+
+use_cases:
+  - scenario: "User completes Phase 4 work, ready to commit and push"
+    what_happens: "wai-shipit runs closeout, quality gates, stages files, commits with structured message, pushes to remote"
+    why_it_matters: "Single command for complete session end ceremony - consistent, safe, observable"
+    user_trigger: "/wai-shipit command"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✓ Tests passed (48/48), startup ok, coverage 87%
+      Staging: ✓ 6 files staged
+      Commit: ✓ 07be9f5 "Phase 4: BRIEF cascade"
+      Push: ✓ Pushed to origin/wai-v2-migration
+
+      Session complete! 🎉
+      Next: Phase 5 - Shipit Skill (see compact action below)
+
+      Compact Action:
+      1. Implement wai-shipit Skill
+      2. Add compact_action to Lug schema
+      3. Update session_hook
+      ...
+
+  - scenario: "Tests fail when user runs /wai-shipit"
+    what_happens: "qc-check detects test failures, wai-shipit BLOCKS, shows failures"
+    why_it_matters: "Broken code never reaches remote - quality gates enforced"
+    user_trigger: "/wai-shipit with failing tests"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✗ Tests failed
+
+      Failures:
+        test_auth.py::test_login - AssertionError: Expected 200, got 401
+        test_auth.py::test_logout - AttributeError: 'User' has no attribute 'token'
+        test_db.py::test_connection - ConnectionError: Database unreachable
+
+      BLOCKED: Fix failures and re-run /wai-shipit
+
+  - scenario: "User accidentally staged .env file with secrets"
+    what_happens: "qc-check pre-commit warnings detect .env, wai-shipit BLOCKS"
+    why_it_matters: "Secrets never reach remote - catastrophic exposure prevented"
+    user_trigger: "/wai-shipit with .env staged"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✗ Secrets detected
+
+      Files with potential secrets:
+        .env (environment variables)
+        config/credentials.json (API keys?)
+
+      BLOCKED: Remove secrets from staging
+
+      Suggested actions:
+      1. git restore --staged .env config/credentials.json
+      2. Add to .gitignore
+      3. Re-run /wai-shipit
+
+  - scenario: "User has large binary file staged (20MB)"
+    what_happens: "qc-check detects large file, wai-shipit BLOCKS"
+    why_it_matters: "Large files bloat repo history - prevent before commit"
+    user_trigger: "/wai-shipit with large file staged"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✗ Large files detected
+
+      Files over 10MB limit:
+        assets/video.mp4 (20.5 MB)
+        data/backup.sql (15.2 MB)
+
+      BLOCKED: Remove large files from staging
+
+      Suggested actions:
+      1. git restore --staged assets/video.mp4 data/backup.sql
+      2. Use git-lfs for large files, or
+      3. Store externally (S3, etc.)
+
+  - scenario: "Working tree is dirty, user runs /wai-shipit"
+    what_happens: "safe-refactor detects uncommitted changes, creates checkpoint first"
+    why_it_matters: "Always have recovery point before shipit"
+    user_trigger: "/wai-shipit with uncommitted changes"
+    expected_output: |
+      Running /wai-shipit...
+
+      Checkpoint: ✓ Created pre-shipit checkpoint (commit: def5678)
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✓ All checks passed
+      Staging: ✓ 6 files staged
+      Commit: ✓ 07be9f5 "Phase 4: BRIEF cascade"
+      Push: ✓ Pushed to origin/wai-v2-migration
+
+      Session complete! 🎉
+
+  - scenario: "Remote push fails (network issue or behind remote)"
+    what_happens: "Commit succeeds locally, push fails, user warned"
+    why_it_matters: "Work saved locally even if remote unreachable - no data loss"
+    user_trigger: "/wai-shipit with remote unreachable"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✓ All checks passed
+      Commit: ✓ 07be9f5 "Phase 4: BRIEF cascade"
+      Push: ✗ Failed to push to remote
+
+      Error: Could not reach remote repository
+
+      ⚠️  Commit saved locally (07be9f5)
+
+      Next steps:
+      1. Check network connection
+      2. Run: git push (when network restored)
+      3. Or continue work - push will sync later
+
+  - scenario: "No remote configured, user runs /wai-shipit"
+    what_happens: "Commit succeeds, push skipped with notification"
+    why_it_matters: "Local-only workflows supported - no remote required"
+    user_trigger: "/wai-shipit without remote"
+    expected_output: |
+      Running /wai-shipit...
+
+      Closeout: ✓ Session synthesized
+      Quality Gates: ✓ All checks passed
+      Commit: ✓ 07be9f5 "Phase 4: BRIEF cascade"
+      Push: ⊘ No remote configured (skipped)
+
+      Session complete! 🎉
+      Commit saved locally: 07be9f5
+
+      Note: To push later, configure remote:
+      git remote add origin <url>
+      git push -u origin <branch>
+
+tests:
+  - name: "Successful shipit (happy path)"
+    setup: "Clean tests, no secrets, small files, remote configured"
+    action: "Trigger wai-shipit"
+    expected: "Closeout → QC → Stage → Commit → Push → Success message"
+
+  - name: "Blocks on test failures"
+    setup: "Introduce failing test"
+    action: "Trigger wai-shipit"
+    expected: "QC fails, shipit blocked, test output shown"
+
+  - name: "Blocks on secrets detected"
+    setup: "Stage .env file"
+    action: "Trigger wai-shipit"
+    expected: "QC detects .env, shipit blocked, removal suggested"
+
+  - name: "Blocks on large files"
+    setup: "Stage 20MB file"
+    action: "Trigger wai-shipit"
+    expected: "QC detects size, shipit blocked, alternatives suggested"
+
+  - name: "Creates checkpoint if working tree dirty"
+    setup: "Uncommitted changes exist"
+    action: "Trigger wai-shipit"
+    expected: "safe-refactor creates checkpoint, then shipit proceeds"
+
+  - name: "Handles push failure gracefully"
+    setup: "Remote unreachable"
+    action: "Trigger wai-shipit"
+    expected: "Commit succeeds, push fails, user warned, work saved locally"
+
+  - name: "Generates structured commit message"
+    setup: "Session with phase work completed"
+    action: "Trigger wai-shipit"
+    expected: "Commit message has: Title, Completed, Impact, Next, Compact Action, Co-Author"
+
+notes: |
+  Standard model needed for:
+  - Commit message generation (synthesize session work into structured format)
+  - Compact action creation (distill next steps from session context)
+  - Quality gate interpretation (understand test output, coverage reports)
+
+  Orchestration workflow (7 steps):
+  1. session-observer → Session synthesis
+  2. qc-check → Quality gates (tests, coverage, pre-commit warnings)
+  3. safe-refactor → Checkpoint if needed
+  4. git add -A → Stage all files
+  5. Generate structured commit message
+  6. git commit → Create commit with message
+  7. git push → Push to remote (if configured)
+
+  Pre-commit warnings (new in Phase 5):
+  - Secrets: .env, *.key, credentials.*, *secret*, *password*
+  - Large files: > 1MB warn, > 10MB block
+  - Debug statements: console.log, print(), debugger, breakpoint()
+  - TODOs: TODO, FIXME, XXX, HACK added in staged files
+
+  Replaces manual process:
+  - Before: git status → git add → git commit → git push (error-prone, inconsistent messages)
+  - After: /wai-shipit (automated, consistent, safe, observable)
+
+  Integration with Hub BRIEF:
+  - Enforces "Always run quality gates before commit"
+  - Enforces "Never commit secrets"
+  - Enforces "Always create checkpoint before destructive operations"
+  - Enforces "Always maintain session continuity" (compact action)
+
+  Future enhancements (post-Phase 5):
+  - GitHub PR creation (via gh CLI)
+  - Slack/Discord notification on shipit
+  - Automatic changelog generation
+  - Release tag creation (semantic versioning)

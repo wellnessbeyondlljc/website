@@ -1,0 +1,32 @@
+[
+  {
+    "department_id": "engineering",
+    "title": "Engineering",
+    "mission": "Reliability engineering, codebase structure, and architectural health",
+    "focus": ["reliability", "codebase_structure", "architecture_quality"],
+    "manager_advisor_id": "archie",
+    "advisor_ids": ["archie", "will", "jordy"],
+    "status": "active",
+    "review_cadence": "weekly"
+  },
+  {
+    "department_id": "quality",
+    "title": "Quality",
+    "mission": "Test coverage maintenance and review of existing functionality to ensure adequate test coverage",
+    "focus": ["test_coverage", "functionality_review", "quality_gates"],
+    "manager_advisor_id": "expediter",
+    "advisor_ids": ["expediter", "cc-advisor"],
+    "status": "active",
+    "review_cadence": "biweekly"
+  },
+  {
+    "department_id": "knowledge",
+    "title": "Knowledge",
+    "mission": "Knowledge management, documentation, teaching distribution, and institutional memory",
+    "focus": ["knowledge_management", "documentation", "teaching_distribution"],
+    "manager_advisor_id": "clara",
+    "advisor_ids": ["clara", "luci", "mark", "historian"],
+    "status": "active",
+    "review_cadence": "weekly"
+  }
+]

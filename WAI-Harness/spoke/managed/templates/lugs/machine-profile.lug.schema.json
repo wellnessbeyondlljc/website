@@ -1,0 +1,252 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "WAI Machine Profile Lug",
+    "description": "Hardware specifications and IDE optimization recommendations for a development machine",
+    "type": "object",
+    "required": [
+        "lug_type",
+        "lug_version",
+        "created_at",
+        "machine"
+    ],
+    "properties": {
+        "lug_type": {
+            "type": "string",
+            "const": "machine-profile",
+            "description": "Identifies this as a machine profile lug"
+        },
+        "lug_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "Schema version for machine profile lugs"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when profile was created"
+        },
+        "machine": {
+            "type": "object",
+            "required": [
+                "id",
+                "classification",
+                "specs"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Machine hostname or unique identifier"
+                },
+                "nickname": {
+                    "type": "string",
+                    "description": "Human-friendly machine name (e.g., 'Sparky', 'WorkLaptop')"
+                },
+                "classification": {
+                    "type": "string",
+                    "enum": [
+                        "high-performance",
+                        "standard",
+                        "low-power"
+                    ],
+                    "description": "Performance tier classification"
+                },
+                "specs": {
+                    "type": "object",
+                    "properties": {
+                        "machine_id": {
+                            "type": "string",
+                            "description": "Hostname"
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "platform": {
+                            "type": "object",
+                            "properties": {
+                                "os": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Linux",
+                                        "Darwin",
+                                        "Windows"
+                                    ]
+                                },
+                                "os_version": {
+                                    "type": "string"
+                                },
+                                "architecture": {
+                                    "type": "string",
+                                    "examples": [
+                                        "x86_64",
+                                        "arm64"
+                                    ]
+                                }
+                            }
+                        },
+                        "cpu": {
+                            "type": "object",
+                            "properties": {
+                                "model": {
+                                    "type": "string"
+                                },
+                                "cores": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                },
+                                "threads": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                },
+                                "architecture": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "memory": {
+                            "type": "object",
+                            "properties": {
+                                "total_gb": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "available_gb": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "unit": {
+                                    "type": "string",
+                                    "const": "GB"
+                                }
+                            }
+                        },
+                        "storage": {
+                            "type": "object",
+                            "properties": {
+                                "total_gb": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "available_gb": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "filesystem": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "gpu": {
+                            "type": "object",
+                            "properties": {
+                                "model": {
+                                    "type": "string"
+                                },
+                                "vram_gb": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "available": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "recommended_settings": {
+            "type": "object",
+            "description": "IDE and tooling recommendations based on machine capabilities",
+            "properties": {
+                "vscode": {
+                    "type": "object",
+                    "description": "VS Code settings optimized for this machine",
+                    "additionalProperties": true
+                },
+                "python": {
+                    "type": "object",
+                    "description": "Python tooling recommendations",
+                    "properties": {
+                        "max_workers": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "cache_size_mb": {
+                            "type": "integer",
+                            "minimum": 128
+                        },
+                        "parallel_builds": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "git": {
+                    "type": "object",
+                    "description": "Git configuration recommendations",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "optimization_history": {
+            "type": "object",
+            "description": "Track when and where optimizations were applied",
+            "properties": {
+                "last_check": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Last time optimization check was performed"
+                },
+                "last_applied": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Last time optimizations were applied"
+                },
+                "projects_optimized": {
+                    "type": "array",
+                    "description": "List of project paths that have been optimized",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "total_optimizations": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Total number of times optimizations have been applied"
+                }
+            }
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Additional metadata about this machine",
+            "properties": {
+                "owner": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string",
+                    "examples": [
+                        "Office",
+                        "Remote",
+                        "Home"
+                    ]
+                },
+                "primary_use": {
+                    "type": "string",
+                    "examples": [
+                        "Development",
+                        "Testing",
+                        "CI/CD",
+                        "Personal"
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

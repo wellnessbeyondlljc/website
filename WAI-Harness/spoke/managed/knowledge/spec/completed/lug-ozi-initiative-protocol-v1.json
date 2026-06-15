@@ -1,0 +1,119 @@
+{
+  "id": "lug-ozi-initiative-protocol-v1",
+  "type": "spec",
+  "subject_id": "OziInitiativeProtocol",
+  "status": "completed",
+  "completed_at": "2026-06-01T23:30:00Z",
+  "resolved_at": "2026-06-01T23:30:00Z",
+  "resolution_note": "Pre-bolt-model spec with stale initiative directory paths. Superseded by bolt model implementation. Vision review concept valid; requires fresh spec.",
+  "outcome": "Closed as superseded/stale. The bolt model (epic-initiative-lug-bolt-model-v1, completed 2026-06-02) implemented the initiative data structure and lifecycle. This spec was authored pre-bolt with incorrect directory paths (references lugs/bytype/initiative/ rather than initiatives/bytype/initiative/) and predates the bolt schema. The Ozi vision-doc-review process concept remains valid but needs a fresh spec authored post-bolt, referencing the correct initiative directory, bolt schema, and current Ozi cadence. Open a new spec (spec-ozi-vision-review-v2) when vision doc review becomes a priority.",
+  "routed_to": "FRAMEWORK",
+  "originated_in": "wilbur/session-20260530-1812",
+  "created_at": "2026-05-31T05:57:36Z",
+  "authored_by": "wilbur",
+  "impact": 9,
+  "effort": "M",
+  "model_fit": "SONNET",
+  "title": "Ozi Initiative Protocol -- Vision Review, Flow Completeness Gate, Initiative Lifecycle",
+  "one_liner": "Define how Ozi reviews spoke vision docs, identifies incomplete flows, opens design discussions where direction is unclear, creates initiatives with downstream lugs, and closes with celebration.",
+  "why_this_matters": "Vision docs give Ozi a structured view of what each spoke intended vs what was built. Without a protocol for acting on that view, gaps sit in vision docs indefinitely. The initiative protocol closes the loop: Ozi reads the vision, identifies incomplete end-to-end flows, gets direction where needed, creates a bounded commitment to complete the flow, manages downstream lugs, and marks completion with explicit celebration. This is how the Wheel finishes things, not just starts them.",
+  "design_decisions": {
+    "initiative_vs_epic": "Epics are architectural waves (how the system is built). Initiatives are feature completion commitments (what the user can do with it, end-to-end). An initiative may span zero or multiple epics. Scope is defined by user-facing value, not technical architecture.",
+    "design_discussion_trigger": "Ozi opens a design discussion when a vision doc's Deprecation/Merit Assessment says PIVOT or ASSESS, or when a gap's recommendation is unclear. Ozi does not create an initiative for an unclear direction -- it asks first. Once Mario provides direction, Ozi creates the initiative immediately.",
+    "end_to_end_gate": "An initiative cannot close until ALL flows within its scope are verified -- not just the happy path. Ozi defines the flow scope at initiative creation and checks every branch before declaring completion.",
+    "celebration": "Celebration is an explicit status step before close. It is not a silent status change. Ozi surfaces a celebration note to Mario: what was completed, what it enables, what the Wheel can now do. This is acknowledgment, not fanfare -- one clear statement of what was accomplished.",
+    "downstream_lug_cleanup": "When an initiative closes, Ozi ensures all downstream lugs are resolved: completed (done), deferred with reason, or explicitly closed with a deprecation note. No initiative closes with orphaned open lugs in its scope.",
+    "ozi_review_cadence": "Ozi reviews vision docs: (a) when a new vision doc is written by Wilbur archaeology, (b) when a vision doc is updated after Mario verification, (c) on each nightly Gardener run for spokes with active initiatives.",
+    "initiative_ownership": "Initiatives live at the spoke level: {spoke}/WAI-Spoke/lugs/bytype/initiative/{status}/. Ozi creates them. Mario approves the scope before any downstream lugs are dispatched. Wilbur reads initiative status across spokes for the Wheel activity view."
+  },
+  "schema": {
+    "initiative": {
+      "initiative_id": "string -- initiative-{slug}-v{n}",
+      "title": "string",
+      "spoke": "string -- wheel_id",
+      "vision_doc": "string -- path to the vision doc that triggered this",
+      "flow_scope": "string -- description of the end-to-end flow being completed",
+      "status": "enum: draft | pending_approval | active | verifying | celebrating | closed",
+      "direction": "enum: continue | pivot | new",
+      "design_discussion": {
+        "needed": "bool",
+        "question": "string -- the specific direction question for Mario",
+        "answered_at": "date",
+        "answer": "string"
+      },
+      "downstream_lugs": [
+        {
+          "lug_id": "string",
+          "role": "string -- what this lug contributes to the flow",
+          "status": "enum: open | completed | deferred | closed"
+        }
+      ],
+      "flow_branches": [
+        {
+          "branch_id": "string",
+          "description": "string -- happy path or edge case",
+          "verified": "bool"
+        }
+      ],
+      "celebration_note": "string -- written by Ozi at completion, surfaced to Mario",
+      "created_at": "date-time",
+      "approved_at": "date-time",
+      "completed_at": "date-time"
+    }
+  },
+  "perceive": {
+    "current_state": "No initiative concept exists in WAI. Spoke vision docs are written but no agent has a protocol for acting on incomplete flows. Gaps sit in vision docs without becoming committed work. Ozi has no trigger to read vision docs. No lug type 'initiative' exists.",
+    "files": [
+      "framework/WAI-Spoke/lugs/bytype/ -- no initiative/ subdirectory",
+      "framework/docs/ozi-protocol.md -- no vision review section",
+      "framework/schemas/ -- no initiative schema"
+    ]
+  },
+  "execute": {
+    "steps": [
+      "1. Create initiative lug type: add bytype/initiative/{draft,pending_approval,active,verifying,celebrating,closed}/ directory structure to standard spoke scaffold",
+      "2. Write framework/schemas/initiative.schema.json -- full JSON Schema for initiative files",
+      "3. Write framework/docs/ozi-initiative-protocol.md -- complete protocol: vision review trigger, flow completeness check, design discussion format, initiative creation, downstream lug management, verification gate, celebration, close",
+      "4. Update Ozi agent definition -- add vision review step to nightly Gardener protocol: after teachings + work execution, read new/updated vision docs and open initiatives for incomplete flows",
+      "5. Define design discussion format -- Ozi surfaces one question at a time, waits for answer before creating initiative. Format: structured markdown with context, options, and recommendation",
+      "6. Define celebration format -- one paragraph: what was completed, what it enables, what Mario can now do",
+      "7. Update WAI-SpecIndex.jsonl -- add OziInitiativeProtocol entry",
+      "8. Write a teaching: teaching-ozi-initiative-protocol-v1.md -- adopts the protocol into all spoke Ozi agents"
+    ]
+  },
+  "verify": {
+    "done_when": [
+      "framework/schemas/initiative.schema.json validates a sample initiative JSON",
+      "framework/docs/ozi-initiative-protocol.md covers: trigger, flow check, design discussion, creation, downstream management, verification gate, celebration, close",
+      "Ozi agent definition includes vision review step in nightly protocol",
+      "bytype/initiative/ directory structure added to standard spoke scaffold",
+      "WAI-SpecIndex.jsonl contains OziInitiativeProtocol entry",
+      "Teaching file exists at framework/teachings_repo/framework/current/teaching-ozi-initiative-protocol-v1.md"
+    ]
+  },
+  "acceptance_criteria": [
+    "Initiative status enum includes 'celebrating' as a distinct step before 'closed'",
+    "Design discussion is triggered when vision doc recommendation is PIVOT or ASSESS -- never skipped",
+    "Downstream lug cleanup is a hard gate -- initiative cannot close with open lugs in scope",
+    "Ozi reads vision docs as part of nightly Gardener run, not as a separate manual step",
+    "Celebration note is surfaced to Mario explicitly, not silently written to a log",
+    "Initiative scope is Mario-approved before any downstream lugs are dispatched"
+  ],
+  "target_files": [
+    "framework/schemas/initiative.schema.json -- NEW",
+    "framework/docs/ozi-initiative-protocol.md -- NEW",
+    "framework/WAI-Spoke/skills/ -- MODIFY (add initiative bytype dirs to scaffold template)",
+    "framework/agents/ozi-gardener.md -- MODIFY (add vision review step)",
+    "framework/WAI-SpecIndex.jsonl -- MODIFY (add entry)",
+    "framework/teachings_repo/framework/current/teaching-ozi-initiative-protocol-v1.md -- NEW"
+  ],
+  "tags": [
+    "ozi",
+    "initiative",
+    "vision",
+    "framework",
+    "lifecycle",
+    "wilbur",
+    "wheel-wide"
+  ]
+}

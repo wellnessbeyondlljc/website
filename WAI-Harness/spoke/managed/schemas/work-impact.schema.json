@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Work Impact (work-impact-v1)",
+  "description": "Per-spoke, per-range analytics derived solely from git (numstat + name-status). Classifies each changed path into a work type (scout/lug/advisor/teaching/initiative/framework/session/state/docs/other) and reports CRUD footprint, so a fleet runner / Autopilot dashboard can show where the most valuable time went. Produced by work_impact.py.",
+  "type": "object",
+  "required": ["schema", "spoke_id", "range", "totals", "by_work_type", "perspective"],
+  "properties": {
+    "schema": {"const": "work-impact-v1"},
+    "spoke_id": {"type": "string"},
+    "repo": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "range": {
+      "type": "object",
+      "description": "The git range analyzed",
+      "properties": {
+        "spec": {"type": "string", "description": "git diff spec, e.g. HEAD~40..HEAD"},
+        "commits": {"type": "integer"},
+        "from": {"type": ["string", "null"]},
+        "to": {"type": ["string", "null"]},
+        "since": {"type": ["string", "null"]}
+      }
+    },
+    "totals": {"$ref": "#/$defs/bucket"},
+    "by_work_type": {
+      "type": "object",
+      "description": "One bucket per work type present in the range",
+      "additionalProperties": {"$ref": "#/$defs/bucket"}
+    },
+    "perspective": {
+      "type": "object",
+      "description": "Human-facing 'insightful view': ranked by value_score (churn x type weight), with a headline and churn/output signals",
+      "properties": {
+        "headline": {"type": "string"},
+        "ranked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "work_type": {"type": "string"},
+              "share_pct": {"type": "number"},
+              "value_score": {"type": "number"},
+              "files": {"type": "integer"},
+              "net_lines": {"type": "integer"},
+              "created": {"type": "integer"},
+              "updated": {"type": "integer"},
+              "deleted": {"type": "integer"}
+            }
+          }
+        },
+        "signals": {"type": "array", "items": {"type": "string"}, "description": "Flags like high advisor churn or zero durable output"}
+      }
+    }
+  },
+  "$defs": {
+    "bucket": {
+      "type": "object",
+      "description": "CRUD + line counts. created/updated/deleted come from git name-status (A/M/D); lines from numstat.",
+      "properties": {
+        "files": {"type": "integer"},
+        "created": {"type": "integer"},
+        "updated": {"type": "integer"},
+        "deleted": {"type": "integer"},
+        "lines_added": {"type": "integer"},
+        "lines_removed": {"type": "integer"},
+        "net_lines": {"type": "integer"},
+        "churn_lines": {"type": "integer"},
+        "share_pct": {"type": "number"},
+        "value_score": {"type": "number"}
+      }
+    }
+  }
+}

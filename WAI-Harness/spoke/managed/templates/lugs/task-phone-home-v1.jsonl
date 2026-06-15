@@ -1,0 +1,47 @@
+{
+  "_meta": {
+    "template_name": "phone-home-task",
+    "version": "1.1",
+    "purpose": "Request status report from spoke - NOT an executable instruction"
+  },
+  "_behavior_directive": {
+    "what_this_is": "A REQUEST for the inbox processor to generate a status report",
+    "what_this_is_NOT": "An instruction for the AI agent to execute or implement",
+    "processing_agent": "wai/inbox_processor.py (automatic, not AI)",
+    "ai_agent_action": "NONE - this is processed automatically before you see it",
+    "expected_outcome": "A response lug appears in outbox/ with spoke status data"
+  },
+  "id": "task-phone-home-v{version}-{spoke_id}-{timestamp}",
+  "ty": "phone-home",
+  "category": "phone-home",
+  "source_wheel_id": "hub",
+  "destination_wheel_id": "{spoke_id}",
+  "created_at": "{created_at}",
+  "status": "pending",
+  "content": {
+    "request_type": "status_report",
+    "description": "Inbox processor will read state files and generate a status report. No AI action required.",
+    "trigger_condition": {
+      "type": "version_match",
+      "framework_version_gte": "{min_version}",
+      "_note": "Only process if spoke framework >= this version"
+    },
+    "report_fields_to_collect": [
+      "wheel_id",
+      "spoke_id",
+      "framework_version",
+      "git_status",
+      "session_count",
+      "last_closeout",
+      "lugs_count",
+      "signals_generated",
+      "adoption_status",
+      "qualifiers"
+    ]
+  },
+  "_instructions_for_humans": {
+    "for_hub_operator": "Generate this task via phone_home_distributor.py. Place in hub outbox. Auto-teach delivers to spokes.",
+    "for_spoke_user": "You should not see this - it's processed automatically on wakeup before your session starts.",
+    "if_you_see_this": "The inbox processor should have handled this. Check WAI-Spoke/logs/heartbeat.jsonl for errors."
+  }
+}

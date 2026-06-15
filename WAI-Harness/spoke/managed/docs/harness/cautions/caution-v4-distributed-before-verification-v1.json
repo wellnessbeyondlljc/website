@@ -1,0 +1,15 @@
+{
+  "id": "caution-v4-distributed-before-verification-v1",
+  "module": "harness-v4",
+  "severity": "high",
+  "captured_by": "session-20260609-1605.mariov96",
+  "captured_at": "2026-06-10T00:30:00Z",
+  "decision": "v4 WAI-Harness was DISTRIBUTED into 26 spokes + hub BEFORE strong verification or code completion (6/48 epic ACs full, 37 partial, single-agent self-reviewed). Speed chosen over completeness.",
+  "why_debt": "A distributed-but-unverified harness means the fleet may be running on built-not-wired or partially-correct mechanisms; a defect propagates widely before it is caught. The fresh-actor audit this session already caught 2 self-overclaims in one small reconciliation \u2014 extrapolate to 26 spokes.",
+  "rectification": "After the prevent-state-decay hardening lands and the epic reaches a trustworthy bar, run a fleet-wide verification pass (per-spoke harness_upgrade verify + AC-evidence audit) BEFORE relying on any distributed v4 behavior. Do NOT activate more spokes on v4 until then.",
+  "tracked_as": "impl-v4-fleet-verification-pass-v1 (to be created when hardening lands)",
+  "human_gate": true,
+  "verification_done": "fleet-verification-pass-2026-06-10: integrity PASS 27/27, currency STALE 27/27, activation DORMANT 27/27. Latent risk only (nothing live on v4).",
+  "status": "verified-latent-risk-contained",
+  "residual": "Fleet must be brought CURRENT + re-verified per-spoke BEFORE activation (task-fleet-recurrency-before-activation-v1). v4 stays dormant until then."
+}

@@ -1,0 +1,128 @@
+{
+  "id": "spec-signal-routing-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "protocol",
+    "id": "signal-routing",
+    "label": "Signal Routing"
+  },
+  "title": "Signal Routing -- current lug routing rules and the replacement for deprecated SIGNAL routing",
+  "what": "Signal routing (routed_to=SIGNAL) is fully deprecated. No new lug should ever use routed_to=SIGNAL. The canonical routing values are: LOCAL (stays in this spoke), FRAMEWORK (improvement relevant to all spokes, delivered as an impl/task lug via the hub-spoke transport), SPOKE/{spoke_id} (work for a specific named spoke), and ASSESSOR (model telemetry deposited to hub assessor inbox). User-action-required alerts use type=signal lugs written directly to {hub_path}/WAI-Hub/signals/inbox/ with no routed_to field — these are messages to the human, not directives to agents. The old pattern of creating a signal lug with routed_to=SIGNAL as a fleet-wide patch mechanism is retired. Framework fixes and improvements now flow as impl/task lugs with routed_to=FRAMEWORK: the framework implements the fix, publishes a teaching, and spokes absorb it at next session start. The decision table is: if a human must read it and decide — write a type=signal to hub signals/inbox/; if an agent can implement it without human input — create a task/impl lug; if it improves the framework for all spokes — task/impl with routed_to=FRAMEWORK; if it belongs to another specific spoke — routed_to=SPOKE/{id}. Existing signal lugs encountered with routed_to=SIGNAL must be converted to impl/task lugs with routed_to=LOCAL or routed_to=FRAMEWORK — they must not be delivered to any hub inbox and must not be skipped. The scope_verified_by field is required on all lugs with routed_to != LOCAL, recording who confirmed the routing decision.",
+  "why": "The SIGNAL routing mechanism was deprecated because it conflated two distinct concerns: fleet-wide urgent patches (now handled by FRAMEWORK impl lugs plus teachings) and user-action-required alerts (now type=signal to hub signals/inbox/). The old mechanism created ambiguity about who acts on what and caused agents to misroute spoke-specific issues as fleet-wide urgencies.",
+  "audience": [
+    "dev",
+    "agent"
+  ],
+  "use_cases": [
+    {
+      "title": "Routing a framework improvement",
+      "trigger": "Agent identifies a gap in the WAI lug schema that affects all spokes",
+      "outcome": "Agent creates a task lug with routed_to=FRAMEWORK, delivers it to framework/WAI-Spoke/lugs/incoming/, framework implements and publishes a teaching",
+      "persona": "agent"
+    },
+    {
+      "title": "Alerting the user to a decision they must make",
+      "trigger": "Agent cannot resolve a breaking conflict without human input",
+      "outcome": "Agent writes a type=signal lug to {hub_path}/WAI-Hub/signals/inbox/ — no routed_to field needed; user sees it at next session start",
+      "persona": "agent"
+    },
+    {
+      "title": "Converting a deprecated SIGNAL lug",
+      "trigger": "Agent encounters an open lug with routed_to=SIGNAL",
+      "outcome": "Agent rewrites routed_to to LOCAL or FRAMEWORK based on scope, stores as impl/task lug — does not deliver to hub inbox",
+      "persona": "agent"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "SIGNAL routing is banned",
+      "description": "routed_to=SIGNAL must never appear in a new lug. If found in an existing lug, convert it to LOCAL or FRAMEWORK. There are no valid use cases remaining."
+    },
+    {
+      "name": "Human alerts vs agent directives",
+      "description": "type=signal to hub signals/inbox/ is for humans only — agents show it but cannot resolve it. task/impl lugs with appropriate routed_to values are for agents."
+    }
+  ],
+  "how": {
+    "trigger": "Any lug creation or delivery decision requiring routing classification",
+    "steps_summary": [
+      "1. Determine who acts: human-only decision → type=signal to hub signals/inbox/; agent-executable → task/impl lug",
+      "2. Determine scope: only this spoke → LOCAL; all spokes (framework) → FRAMEWORK; specific spoke → SPOKE/{id}; telemetry → ASSESSOR",
+      "3. Set routed_to to one of: LOCAL, FRAMEWORK, SPOKE/{spoke_id}, ASSESSOR",
+      "4. Set scope_verified_by: user, ozi, framework, or auto-signal",
+      "5. For FRAMEWORK: deliver impl/task lug to framework/WAI-Spoke/lugs/incoming/ immediately",
+      "6. For SPOKE/{id}: look up path in hub-registry.json, deliver to {path}/WAI-Spoke/lugs/incoming/"
+    ],
+    "constraints": [
+      "routed_to=SIGNAL is fully deprecated — zero valid use cases",
+      "type=signal lugs have no routed_to field — they are written directly to hub signals/inbox/",
+      "scope_verified_by is required on all lugs with routed_to != LOCAL"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Every lug creation (routing decision required at creation time)",
+      "Encountering an existing lug with routed_to=SIGNAL (conversion required)"
+    ],
+    "not_when": [
+      "There are no conditions under which routed_to=SIGNAL is valid"
+    ],
+    "frequency": "Per lug creation"
+  },
+  "schema": {
+    "inputs": [
+      "Lug scope and audience analysis (who implements, who reads)",
+      "hub-registry.json — for SPOKE/{id} path resolution"
+    ],
+    "outputs": [
+      "Lug with routed_to set to LOCAL, FRAMEWORK, SPOKE/{id}, or ASSESSOR",
+      "For type=signal: file at {hub_path}/WAI-Hub/signals/inbox/{id}.json"
+    ],
+    "state_changes": [
+      "FRAMEWORK lugs: delivered to framework incoming/, completed locally after delivery",
+      "SPOKE/{id} lugs: delivered to target spoke incoming/, outgoing/ audit copy created"
+    ]
+  },
+  "constraints": [
+    "routed_to=SIGNAL is banned — converting found instances is mandatory, not optional",
+    "type=signal to hub signals/inbox/ requires: title, body, source_spoke, created_at, status=open fields"
+  ],
+  "tests": [
+    {
+      "test_file": "tests/idempotency/test_signal_deduplication.py",
+      "test_names": [],
+      "coverage_area": "signal deduplication on re-delivery",
+      "last_verified": null
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "partial",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "signal-routing",
+  "body": "Signal routing (routed_to=SIGNAL) is fully and permanently deprecated. No new lug should ever use routed_to=SIGNAL — there are zero valid conditions for its use. The canonical routing values for all lugs are: LOCAL (work stays in this spoke), FRAMEWORK (improvement affecting all spokes — delivered as impl/task lug via hub-spoke transport), SPOKE/{spoke_id} (work for a specific named spoke identified in hub-registry.json), and ASSESSOR (model telemetry deposited to hub assessor inbox). The mechanism that replaced SIGNAL routing operates in two distinct channels based on audience. For agent-executable work: create impl/task lugs with routed_to=FRAMEWORK or routed_to=SPOKE/{id}. For user-action-required alerts: create type=signal lugs written directly to {hub_path}/WAI-Hub/signals/inbox/{id}.json — these require no routed_to field and are shown to the user at session start but are not actionable by agents. If an agent encounters an existing lug with routed_to=SIGNAL it must convert the lug to LOCAL or FRAMEWORK based on scope analysis before doing anything else — conversion is mandatory, not optional. Converting means rewriting the routed_to field and storing the lug in the correct bytype/ path; it does not mean delivering it to hub inbox. The scope decision rule is: human-only decision (no agent can resolve without human input) → type=signal to hub/signals/inbox/; agent-resolvable work → task/impl lug with LOCAL/FRAMEWORK/SPOKE routing; informational with no action required → learning lug or memory file. Framework publishing a teaching is the correct mechanism for fleet-wide behavioral updates — not signals.",
+  "done_when": [
+    "No new lug created in any session contains routed_to=SIGNAL — Ozi routing gate rejects any lug with this value at dispatch time",
+    "An existing lug with routed_to=SIGNAL is converted to routed_to=LOCAL or routed_to=FRAMEWORK before the session ends, and the conversion is verified by checking the file on disk",
+    "A user-action-required alert is written to {hub_path}/WAI-Hub/signals/inbox/ as a type=signal lug with title, body, source_spoke, created_at, and status=open fields — no routed_to field present",
+    "A FRAMEWORK-scoped impl lug is delivered to framework/WAI-Spoke/lugs/incoming/ at creation time, not queued for closeout delivery",
+    "scope_verified_by is set on all lugs with routed_to != LOCAL, recording one of: user, ozi, framework, auto-signal"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-hub-spoke-sync-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

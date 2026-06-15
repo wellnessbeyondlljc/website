@@ -1,0 +1,280 @@
+# Teaching: Hub teachings_repo Migration — Replace Framework Symlink
+
+**Type:** Infrastructure Migration
+**Version:** 1.0.0
+**Created:** 2026-03-23
+**Safe to Auto-Adopt:** false
+**Affects:** Hub directory structure, teaching distribution path, framework symlink
+**Supersedes:** nothing — new capability
+**Requires Manual Review:** Yes — creates directories, copies files, optionally removes symlink
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone and has no dependencies.
+
+**However:** Verify the hub is accessible and framework/teachings/ contains the teachings you want to distribute before applying.
+
+```bash
+# Confirm hub is accessible
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+echo "Hub path: $HUB_PATH"
+ls "$HUB_PATH" && echo "PASS — hub accessible" || echo "FAIL — hub not found"
+
+# Confirm canonical evolution teachings are in place
+ls /home/mario/projects/wheelwright/framework/teachings/skill-wai-lug-advisor-v2.md.teaching 2>/dev/null \
+  && echo "PASS — canonical teachings present" \
+  || echo "FAIL — run framework closeout first to generate teachings"
+```
+
+## Batch Sequence
+
+**Batch:** hub-migration-v1
+**Apply order:** 1 of 2
+**Depends on:** none
+**Required before:** skill-wai-wakeup-hub-path-v2 (H-02) — the new path must exist before wakeup is updated to read it
+**Parallel safe:** no — H-01 must complete before H-02
+**Full batch order:** H-01 → H-02 → (manual: remove symlink)
+
+---
+
+## What This Teaching Does
+
+Creates a proper `teachings_repo/` directory structure on the hub, replacing the current `framework` symlink with a real file tree. This enables:
+
+1. Clean copy-based teaching distribution (no symlink dependencies)
+2. Per-spoke teaching namespacing (`teachings_repo/{spoke_id}/current/`)
+3. Archive support for superseded teachings (`teachings_repo/{spoke_id}/archive/`)
+4. Per-spoke and hub-level `index.json` catalogs
+
+---
+
+## Why This Matters
+
+The current hub has `framework -> ../framework/teachings` as a symlink. This works but:
+- Creates a fragile filesystem dependency (symlink breaks if either directory moves)
+- Conflates "framework source" with "hub distribution copy"
+- Prevents proper archive/index management
+- Closeout Step 9b publishes to `teachings_repo/` but nothing reads from there yet
+
+After this migration, the hub holds its own copy of teachings — independent of the framework repo location.
+
+---
+
+## What Gets Created
+
+```
+{hub_path}/teachings_repo/
+  framework/
+    current/           ← copy of framework/teachings/*.teaching (current versions)
+    archive/           ← superseded versions (empty at migration time)
+    index.json         ← catalog of current teachings
+  index.json           ← hub-level catalog of all spoke repos
+{hub_path}/WAI-Hub/
+  Signals/
+    incoming/          ← high-impact lugs from connected spokes
+    processed/         ← inspected signals, moved by receiving spoke at closeout
+```
+
+---
+
+## Resolving {framework_path}
+
+```bash
+# From the framework spoke:
+FRAMEWORK_PATH="/home/mario/projects/wheelwright/framework"
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+echo "Framework: $FRAMEWORK_PATH"
+echo "Hub: $HUB_PATH"
+```
+
+---
+
+## How to Apply This Teaching
+
+**Apply from the framework spoke directory.**
+
+### Step 1 — Verify current state
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+FRAMEWORK_PATH="/home/mario/projects/wheelwright/framework"
+
+echo "=== Current hub/framework ==="
+ls -la "$HUB_PATH/framework" 2>/dev/null || echo "framework dir/symlink not found"
+
+echo "=== teachings_repo status ==="
+ls "$HUB_PATH/teachings_repo" 2>/dev/null && echo "EXISTS — will skip creation" || echo "Not present — will create"
+
+echo "=== WAI-Hub status ==="
+ls "$HUB_PATH/WAI-Hub" 2>/dev/null && echo "EXISTS" || echo "Not present — will create"
+```
+
+### Step 2 — Create teachings_repo/framework/ structure
+
+```bash
+mkdir -p "$HUB_PATH/teachings_repo/framework/current"
+mkdir -p "$HUB_PATH/teachings_repo/framework/archive"
+echo "Created teachings_repo/framework/ structure"
+```
+
+### Step 3 — Copy current teachings into teachings_repo/framework/current/
+
+```bash
+\cp "$FRAMEWORK_PATH/teachings/"*.teaching "$HUB_PATH/teachings_repo/framework/current/"
+echo "Copied teachings:"
+ls "$HUB_PATH/teachings_repo/framework/current/"
+```
+
+### Step 4 — Create index.json files
+
+```bash
+python3 << 'EOF'
+import json, os, re
+from datetime import datetime, timezone
+
+hub_path = os.popen("python3 -c \"import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])\"").read().strip()
+current_dir = os.path.join(hub_path, "teachings_repo/framework/current")
+
+teachings = []
+for fname in sorted(os.listdir(current_dir)):
+    if fname.endswith(".md.teaching"):
+        fpath = os.path.join(current_dir, fname)
+        # Extract header metadata from teaching file
+        meta = {"filename": fname, "path": f"framework/current/{fname}"}
+        with open(fpath) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("**Version:**"):
+                    meta["version"] = line.split(":**", 1)[1].strip()
+                elif line.startswith("**Safe to Auto-Adopt:**"):
+                    meta["safe_to_auto_adopt"] = "true" in line.lower()
+                elif line.startswith("**Type:**"):
+                    meta["type"] = line.split(":**", 1)[1].strip()
+                elif line.startswith("# Teaching:"):
+                    meta["title"] = line[len("# Teaching:"):].strip()
+                    break
+        teachings.append(meta)
+
+spoke_index = {
+    "spoke_id": "framework",
+    "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "current_count": len(teachings),
+    "teachings": teachings
+}
+
+with open(os.path.join(hub_path, "teachings_repo/framework/index.json"), "w") as f:
+    json.dump(spoke_index, f, indent=2)
+print(f"Wrote teachings_repo/framework/index.json ({len(teachings)} teachings)")
+
+hub_index = {
+    "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "spokes": ["framework"]
+}
+with open(os.path.join(hub_path, "teachings_repo/index.json"), "w") as f:
+    json.dump(hub_index, f, indent=2)
+print("Wrote teachings_repo/index.json")
+EOF
+```
+
+### Step 5 — Create WAI-Hub/Signals/ bulletin directories
+
+```bash
+mkdir -p "$HUB_PATH/WAI-Hub/Signals/incoming"
+mkdir -p "$HUB_PATH/WAI-Hub/Signals/processed"
+touch "$HUB_PATH/WAI-Hub/Signals/incoming/.gitkeep"
+touch "$HUB_PATH/WAI-Hub/Signals/processed/.gitkeep"
+echo "Created WAI-Hub/Signals/ bulletin directories"
+```
+
+### Step 6 — Verify (before symlink removal)
+
+```bash
+echo "=== teachings_repo/framework/current/ ==="
+ls "$HUB_PATH/teachings_repo/framework/current/" | head -20
+
+echo ""
+echo "=== index.json ==="
+python3 -c "import json; d=json.load(open('$HUB_PATH/teachings_repo/framework/index.json')); print(f\"Teachings: {d['current_count']}, Updated: {d['updated_at']}\")"
+
+echo ""
+echo "=== WAI-Hub/Signals/ ==="
+ls "$HUB_PATH/WAI-Hub/Signals/"
+
+echo ""
+echo "Both the old framework/ symlink and new teachings_repo/ now serve teachings."
+echo "Keep both until H-02 (wakeup path update) is applied to ALL spokes."
+echo "Then remove the symlink with: rm '$HUB_PATH/framework'"
+```
+
+### Step 7 — (Optional, LAST) Remove symlink after H-02 is deployed to all spokes
+
+**Do NOT run this until Step H-02 (wai-wakeup-hub-path-v2) has been applied to every spoke that uses this hub.**
+
+```bash
+# Only run after confirming H-02 applied everywhere
+\rm "$HUB_PATH/framework"
+echo "Symlink removed — all spokes must now read from teachings_repo/"
+```
+
+### Step 8 — Move teaching to processed
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/seed/ingest/skill-hub-teachings-repo-migration-v1.md.teaching WAI-Spoke/seed/ingest/processed/ 2>/dev/null || echo "Not in ingest/ — already in source"
+```
+
+---
+
+## Behavioral Implications
+
+After this migration:
+- Closeout Step 9b publishes to `teachings_repo/framework/current/` — and spokes will find them there
+- Hub wakeup reads `teachings_repo/*/current/` — already correct in template wai.md
+- Spoke wakeup reads both `teachings_repo/framework/current/` and `framework/` (dual-read via H-02) — then `framework/` is removed
+- Hub bulletin `WAI-Hub/Signals/incoming/` is active — closeout Step 9c can now write to it
+
+---
+
+## Verification
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+
+# 1. teachings_repo exists with current teachings
+ls "$HUB_PATH/teachings_repo/framework/current/"*.teaching 2>/dev/null \
+  && echo "PASS — teachings_repo populated" \
+  || echo "FAIL — teachings_repo empty or missing"
+
+# 2. index.json is present
+ls "$HUB_PATH/teachings_repo/framework/index.json" 2>/dev/null \
+  && echo "PASS — index.json present" \
+  || echo "FAIL — index.json missing"
+
+# 3. WAI-Hub/Signals/ directories exist
+ls "$HUB_PATH/WAI-Hub/Signals/incoming" 2>/dev/null \
+  && echo "PASS — hub bulletin incoming/ present" \
+  || echo "FAIL — hub bulletin not created"
+
+# 4. Count teachings
+python3 -c "
+import json
+d = json.load(open('$HUB_PATH/teachings_repo/framework/index.json'))
+print(f\"PASS — {d['current_count']} teachings indexed\")
+"
+```
+
+---
+
+## Backward Compatibility
+
+- Old `framework/` symlink is preserved until explicitly removed — zero disruption during transition
+- Spokes reading `framework/` continue to work until H-02 is applied and symlink removed
+- No existing spoke state is modified by this teaching
+
+---
+
+**Teaching Package:** skill-hub-teachings-repo-migration-v1
+**Safe to Auto-Adopt:** No — creates directories and copies files; requires verification at each step
+**Impact:** Hub infrastructure — establishes proper teaching distribution path; prerequisite for symlink removal

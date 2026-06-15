@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "wheel_kb_version": null,
+  "hub_kb_version": null,
+  "last_sync": null,
+  "sync_status": "never_synced",
+  "_instructions": {
+    "for_llms": "This file tracks synchronization between this wheel and its hub. Read only.",
+    "sync_statuses": ["never_synced", "synced", "pending_push", "pending_pull", "conflict"]
+  }
+}

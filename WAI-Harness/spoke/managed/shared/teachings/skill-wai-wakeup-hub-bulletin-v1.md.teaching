@@ -1,0 +1,204 @@
+# Teaching: WAI Wakeup Hub Bulletin Check — Step 3a Extension
+
+**Type:** Protocol Enhancement
+**Version:** 1.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** true
+**Affects:** Wakeup protocol Step 3a, hub signal visibility at session start
+**Prerequisite:** Hub must have WAI-Hub/Signals/incoming/ directory (from skill-wai-closeout-v2 teaching)
+
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| skill-wai-closeout-v2 applied | `grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai-closeout.md && echo PASS \|\| echo FAIL` | Wakeup bulletin check finds nowhere to route signals |
+
+**Check before applying:**
+```bash
+grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai-closeout.md \
+  && echo "PREREQ MET — safe to apply T-06" \
+  || echo "BLOCKED — apply skill-wai-closeout-v2 (T-02) first"
+```
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 6 of 6
+**Depends on:** skill-wai-closeout-v2 (T-02) — wakeup reads signals that closeout must write
+**Required before:** none
+**Parallel safe:** no — must be applied after T-02 completes
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Provides
+
+An extension to wakeup Step 3a (Hub Teaching Discovery) that checks the hub's signal bulletin board for new cross-spoke signals at session start.
+
+When agents on one spoke publish high-impact signals (impact > 7), those signals are written to `{hub_path}/WAI-Hub/Signals/incoming/` at closeout. This teaching ensures the receiving spoke checks that directory on wakeup and surfaces any new signals in the briefing.
+
+---
+
+## Why This Matters
+
+Before this change, signals were trapped on the spoke that generated them. Cross-spoke learning required manual review or explicit hub sync. The bulletin board model makes high-impact signals automatically visible to all connected spokes at their next wakeup — without requiring bulk data transfer or hub-spoke merges.
+
+The flow:
+1. Spoke A generates a signal (impact > 7) — written to `WAI-Hub/Signals/incoming/` at closeout
+2. Spoke B wakes up — checks `incoming/`, sees new signals, surfaces them in briefing
+3. User decides whether to act on hub signal — it is advisory only, never auto-adopted
+
+---
+
+## What Changed in templates/commands/wai.md
+
+A "Hub Signal Bulletin" sub-section was added to Step 3a:
+
+```
+**Hub Signal Bulletin (incoming/):**
+
+Check {hub_path}/WAI-Hub/Signals/incoming/ for new signal files:
+1. For each .json file found: read it, check if already known (id present in WAI-Lugs.jsonl)
+2. If new: surface in briefing as "Hub signal: {title} (impact={impact}, from={node})"
+3. Do NOT auto-adopt — signals are advisory. User decides whether to act.
+4. After inspection: optionally move processed signals to WAI-Hub/Signals/processed/ at closeout
+
+If hub_path is null or hub not accessible: skip silently.
+```
+
+---
+
+## Resolving {framework_path}
+
+`{framework_path}` is the root of the Wheelwright framework repository. Resolve from `WAI-State.json` at `wheel.framework_path`, or ask the user.
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+```
+
+---
+
+## About the `node` field in briefing output
+
+The sample briefing shows `from=framework` — this comes from the signal lug's `created_by` field (or `source_wheel_id` if present). When surfacing hub signals, use `created_by` as the "from" value. There is no separate `node` field required on signal lugs.
+
+Sample: `"Hub signal: P11 Lug-First Memory (impact=9, from=claude-sonnet-4-6)"`
+
+---
+
+## Who moves signals from incoming/ to processed/?
+
+The **receiving spoke** moves signals it has inspected from `incoming/` to `processed/` — at closeout (Step 9c). The originating spoke only writes to `incoming/`. The hub does not move files automatically.
+
+Rule: if a signal's `id` is already in your `WAI-Lugs.jsonl`, it is considered processed. Move it to `processed/` at closeout.
+
+---
+
+## How to Apply This Teaching
+
+### Prerequisite check — verify Teaching 2 is applied first
+
+This teaching adds a wakeup check that reads from `WAI-Hub/Signals/incoming/`. That directory is created by Teaching 2 (skill-wai-closeout-v2). Apply Teaching 2 before this one, or the bulletin check will silently find nothing.
+
+```bash
+# Confirm closeout has Step 9c (Teaching 2 was applied)
+grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai-closeout.md && echo "PASS — prereq met" || echo "WARNING — apply skill-wai-closeout-v2 first"
+```
+
+### Step 1 — Update wakeup command file
+
+```bash
+cp "$FRAMEWORK_PATH/templates/commands/wai.md" WAI-Spoke/commands/wai.md
+```
+
+**Warning:** If your spoke has customized `wai.md`, edit it manually to add the Hub Signal Bulletin sub-section to Step 3a rather than overwriting.
+
+### Step 2 — Set up hub bulletin directories (if hub owner)
+
+If you manage the hub, create the bulletin directories:
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+
+if [ -n "$HUB_PATH" ] && [ -d "$HUB_PATH" ]; then
+  mkdir -p "$HUB_PATH/WAI-Hub/Signals/incoming"
+  mkdir -p "$HUB_PATH/WAI-Hub/Signals/processed"
+  touch "$HUB_PATH/WAI-Hub/Signals/incoming/.gitkeep"
+  touch "$HUB_PATH/WAI-Hub/Signals/processed/.gitkeep"
+  echo "Hub bulletin directories created"
+else
+  echo "Hub not connected — skipping bulletin setup"
+fi
+```
+
+### Step 3 — Move teaching to processed
+
+```bash
+mv WAI-Spoke/seed/ingest/skill-wai-wakeup-hub-bulletin-v1.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+On wakeup, the briefing will now include a "Hub Signals" section if any new signals are found:
+
+```
+Hub Signals (incoming/):
+  - signal-p11-lug-first-memory-20260322 (impact=9, from=framework)
+    "P11 Lug-First Memory: if work state is not in a lug, the next agent starts blind"
+  → Advisory only. Decide whether to add to local WAI-Lugs.jsonl.
+```
+
+If no hub signals exist or hub is not connected: section is omitted from briefing. Zero noise when unused.
+
+---
+
+## Integration with Closeout
+
+This teaching pairs with `skill-wai-closeout-v2` (Step 9c). The full flow:
+
+```
+Closeout (Step 9c): spoke writes impact>7 lugs → {hub_path}/WAI-Hub/Signals/incoming/
+Wakeup (Step 3a):   spoke reads {hub_path}/WAI-Hub/Signals/incoming/ → surfaces new signals in briefing
+```
+
+Both teachings should be adopted together for the full cross-spoke signal flow.
+
+---
+
+## Verification
+
+```bash
+# 1. Hub bulletin check is present in wakeup
+grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai.md && echo "PASS — bulletin check present" || echo "FAIL — bulletin check missing"
+
+# 2. Prereq: closeout Step 9c is present
+grep -q "Hub Signal Bulletin" WAI-Spoke/commands/wai-closeout.md && echo "PASS — closeout Step 9c present" || echo "WARNING — apply skill-wai-closeout-v2 for full flow"
+
+# 3. If hub connected: confirm bulletin directory exists
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'] or '')" 2>/dev/null)
+if [ -n "$HUB_PATH" ] && [ -d "$HUB_PATH/WAI-Hub/Signals/incoming" ]; then
+  echo "PASS — hub bulletin directory accessible"
+  ls "$HUB_PATH/WAI-Hub/Signals/incoming/"
+else
+  echo "INFO — hub bulletin not set up (expected if hub_path is null or hub not connected)"
+fi
+```
+
+---
+
+## Backward Compatibility
+
+- If `hub_path` is null: sub-section is skipped silently at wakeup
+- If hub directory does not exist: skipped silently
+- No changes to existing wakeup steps 1-9 behavior
+- Hub signals are advisory only — no automatic adoption
+
+---
+
+**Teaching Package:** skill-wai-wakeup-hub-bulletin-v1
+**Safe to Auto-Adopt:** Yes
+**Impact:** Cross-spoke signal visibility — enables passive knowledge distribution across the network

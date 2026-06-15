@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScanState Schema",
+  "description": "Track nightly scan execution state and progress per spoke",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "description": "Version of this schema",
+          "default": "1.0"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When ScanState was first created"
+        }
+      },
+      "required": ["schema_version", "created_at"]
+    },
+    "last_full_run_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp of last complete scan run across all spokes"
+    },
+    "spokes": {
+      "type": "object",
+      "description": "Per-spoke scan state",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "spoke_id": {
+            "type": "string",
+            "description": "Spoke identifier"
+          },
+          "path": {
+            "type": "string",
+            "description": "Filesystem path to spoke"
+          },
+          "last_scan_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last time this spoke was incrementally scanned"
+          },
+          "archaeology_complete": {
+            "type": "boolean",
+            "description": "Mirrors PathGraph.json metadata.archaeology_complete"
+          },
+          "sessions_scanned_count": {
+            "type": "integer",
+            "description": "Lifetime count of sessions processed for this spoke"
+          },
+          "last_bubble_count": {
+            "type": "integer",
+            "description": "Number of bubble-up items surfaced in last scan run"
+          },
+          "last_session_processed": {
+            "type": ["string", "null"],
+            "description": "ID of the last session processed"
+          },
+          "error_on_last_run": {
+            "type": ["string", "null"],
+            "description": "Error message if last scan failed for this spoke, null if successful"
+          }
+        },
+        "required": ["spoke_id", "path", "archaeology_complete"]
+      }
+    }
+  },
+  "required": ["metadata", "spokes"]
+}

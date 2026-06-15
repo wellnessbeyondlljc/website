@@ -1,0 +1,110 @@
+# Teaching: WAI Wakeup Step 4.2 — Fleet Health Aggregation (Hub Only)
+
+**Type:** skill
+**safe_to_auto_adopt:** true
+
+---
+
+## Prerequisites
+
+None — standalone. Useful only on hub nodes; safe to apply to spoke-type nodes (step is a no-op if `node_type != "hub"`).
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** none (pairs well with skill-wai-closeout-health-report-v1 which sends reports to hub)
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Provides
+
+Adds Step 4.2 to `wai.md` — hub-only fleet health aggregation at wakeup.
+
+At wakeup, the hub:
+1. Scans `WAI-Spoke/seed/ingest/spoke-health-*.json` for reports sent by spokes at closeout (Step 9d)
+2. Aggregates scores, computes fleet status (healthy / degraded / critical)
+3. Surfaces a Fleet Health table in the briefing
+4. Appends a `fleet-health` lug to `WAI-Spoke/WAI-Lugs.jsonl`
+5. Moves processed reports to `seed/ingest/processed/`
+
+This gives the hub operator an immediate fleet snapshot without manually inspecting each spoke.
+
+---
+
+## How to Apply
+
+1. Open `WAI-Spoke/commands/wai.md`
+2. Find the block ending with: `File left in seed/ingest/ — fix and retry.` followed by `---` and `## Step 5: Display Briefing`
+3. Insert the following block **between** that `---` and `## Step 5`:
+
+```
+## Step 4.2: Fleet Health Aggregation (Hub Only)
+
+**Runs only when `node_type == "hub"`.**
+
+Aggregate spoke self-health reports delivered to the hub inbox at spoke closeout (Step 9d).
+
+**Scan for reports:**
+ls WAI-Spoke/seed/ingest/spoke-health-*.json 2>/dev/null
+
+**For each file found:**
+1. Read the JSON (schema: id, spoke_id, session_id, timestamp, score, percent, status, failures[])
+2. Collect: spoke_id, score, percent, status, timestamp, failures
+
+**Aggregate and display:**
+
+Compute fleet status:
+- healthy — all spokes at 100%
+- degraded — any spoke 80-99%
+- critical — any spoke <80%
+
+Surface in briefing as:
+
+### Fleet Health
+| Spoke | Score | Status | Failures | Reported |
+|---|---|---|---|---|
+| wheelwright | 16/16 (100%) | healthy | — | 2026-03-23T02:00Z |
+
+Fleet status: HEALTHY — all spokes nominal
+
+**If no reports found:** Continue silently — log "Fleet health: no spoke reports in inbox."
+
+**After display:**
+1. Append a fleet-health lug to WAI-Spoke/WAI-Lugs.jsonl:
+{
+  "id": "fleet-health-{YYYYMMDD-HHMM}",
+  "type": "fleet-health",
+  "timestamp": "ISO-8601",
+  "spoke_count": N,
+  "fleet_status": "healthy | degraded | critical",
+  "spokes": [{"spoke_id": "...", "score": "N/M", "percent": 100, "status": "healthy", "failures": []}]
+}
+2. Move each processed file to WAI-Spoke/seed/ingest/processed/
+
+---
+```
+
+---
+
+## Verification
+
+After applying:
+```bash
+grep -q "4.2: Fleet Health" WAI-Spoke/commands/wai.md && echo PASS || echo FAIL
+```
+
+---
+
+## Backward Compatibility
+
+Safe for any spoke running wai.md v1 or v2. The step is a no-op on non-hub nodes. If no health reports are present, the step logs silently and continues.
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

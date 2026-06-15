@@ -1,0 +1,128 @@
+{
+  "id": "spec-lug-authoring-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "workflow",
+    "id": "lug-authoring",
+    "label": "Lug Authoring Workflow"
+  },
+  "title": "Lug Authoring Workflow -- creating complete, implementable lugs",
+  "what": "The lug authoring workflow is the process for creating a lug that is complete, unambiguous, and dispatchable by Ozi or any future agent. A lug must be authored with full PEV (perceive/execute/verify), acceptance criteria, effort and impact scores, target_files, and model_fit before it is stored. Incomplete lugs are a primary failure mode.",
+  "why": "Lugs travel across sessions and agents. If a lug is incomplete when created, the agent dispatching it will have no context. Ozi cannot execute placeholder lugs. Every lug must be implementable at creation.",
+  "audience": [
+    "dev",
+    "agent"
+  ],
+  "use_cases": [
+    {
+      "title": "Creating an impl lug for a new feature",
+      "trigger": "User describes a new feature or improvement",
+      "outcome": "Agent creates complete impl lug with PEV, acceptance criteria, effort, impact, model_fit, target_files, blocked_by. Stored in bytype/implementation/open/.",
+      "persona": "dev"
+    },
+    {
+      "title": "Creating a spec lug for a new behavior",
+      "trigger": "A new spoke feature is implemented",
+      "outcome": "Agent creates spec lug documenting: what, why, audience, use_cases, how, tests. Stored in bytype/spec/active/.",
+      "persona": "dev"
+    },
+    {
+      "title": "Lug review before dispatch",
+      "trigger": "Ozi or lug-reviewer subagent audits open lugs",
+      "outcome": "Lugs missing required fields are flagged - agent must complete them before they enter the dispatch queue.",
+      "persona": "agent"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Lug before plan execution",
+      "description": "Always create and improve the lug BEFORE starting execution. The lug is the spec; execution follows the lug."
+    },
+    {
+      "name": "PEV chain for complexity",
+      "description": "For complex work (6+ steps or 2+ files), use structured perceive/execute/verify fields rather than free-text description."
+    }
+  ],
+  "how": {
+    "trigger": "Planning gate: any change touching 2+ files or 6+ steps requires a lug before execution",
+    "steps_summary": [
+      "1. Determine type: implementation (planned work), spec (behavior doc), bug, feature, epic",
+      "2. Generate id: sha256(title)[:12] or descriptive slug for impl/spec lugs",
+      "3. Set required fields: title, impact, effort, model_fit, routed_to, target_files",
+      "4. Write perceive (current state), execute (numbered steps), verify (commands)",
+      "5. Write acceptance_criteria (testable statements)",
+      "6. Set blocked_by (empty list if none)",
+      "7. Store at bytype/{type}/open/{id}.json"
+    ],
+    "constraints": [
+      "Never create a lug without complete PEV, acceptance criteria, effort score, and file targets",
+      "spec_id must reference an existing active spec lug if one covers the behavior",
+      "model_fit must be haiku, sonnet, or opus"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Before any implementation of non-trivial work",
+      "When planning a new spoke feature"
+    ],
+    "not_when": [
+      "One-line fixes or pure read-only operations"
+    ],
+    "frequency": "Per work item"
+  },
+  "schema": {
+    "inputs": [
+      "User description of work or feature"
+    ],
+    "outputs": [
+      "bytype/{type}/open/{id}.json - new lug file"
+    ],
+    "state_changes": [
+      "WAI-LugIndex.jsonl regenerated at next closeout",
+      "WAI-SpecIndex.jsonl regenerated if type=spec"
+    ]
+  },
+  "constraints": [
+    "Placeholder lugs are banned - Ozi enforces this",
+    "Do not walk away from creation without a complete lug"
+  ],
+  "tests": [
+    {
+      "test_file": "tests/behavioral/test_lug_lifecycle.py",
+      "test_names": [],
+      "coverage_area": "lug lifecycle state transitions",
+      "last_verified": null
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "partial",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "lug-authoring",
+  "body": "A lug is a JSON work item stored at WAI-Spoke/lugs/bytype/{type}/{status}/{id}.json. The lug authoring workflow defines the minimum viable content required before a lug is stored. Every actionable lug (type: task, bug, feature, implementation, epic, review) must include PEV fields: perceive (what to read before starting), execute (numbered steps to take), and verify (commands that confirm success). Additionally required are: title (5+ words, indicative of intent), impact (1-10), effort (1-5), model_fit (haiku/sonnet/opus), routed_to (LOCAL/FRAMEWORK/SPOKE/{id}/ASSESSOR), and acceptance_criteria (array of testable strings). Implementation lugs also require target_files or files_to_edit so sub-agent dispatch knows where to work. The lug ID is generated as sha256(title)[:12] for standard lugs, or a descriptive slug for foundation, epic, and spec lugs. The planning gate fires when work touches 2+ files or has 6+ steps — a lug must exist before any implementation begins. After authoring, the Navigator recommendations-current.json is consulted to inject recommended_model if available. GT candidacy is evaluated: if model_fit=haiku and gastown is installed, execution_substrate is set to gastown and gt_convoy_hint is derived from the title. The lug-reviewer subagent and Ozi both enforce PEV completeness — lugs missing required fields are rejected at dispatch time. Placeholder lugs (lugs with perceive or execute referencing 'TBD', 'see above', or left empty) are banned. Spec lugs follow a distinct draft/active/deprecated lifecycle rather than open/completed. A lug is only considered dogfood-ready when a cold agent with zero session context could implement it correctly without asking a single clarifying question.",
+  "done_when": [
+    "A lug stored in bytype/*/open/ has non-empty perceive, execute (with numbered steps), and verify fields",
+    "model_fit is one of haiku, sonnet, or opus — absent or invalid values cause Ozi to skip the lug",
+    "An implementation lug has at least one file path in target_files or files_to_edit",
+    "The lug-reviewer subagent rejects a lug with empty acceptance_criteria and returns a list of missing fields",
+    "Lug ID matches sha256(title)[:12] for standard lugs or a valid descriptive slug for epic/foundation/spec types"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-spec-system-v1",
+    "spec-ozi-queue-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

@@ -1,0 +1,102 @@
+{
+  "_description": "Module adoption state for this spoke",
+  "_structure_version": "1.0",
+  "_purpose": "Track which module versions this spoke has adopted and local changes pending hub submission",
+
+  "spoke_id": null,
+  "spoke_name": null,
+  "framework_version": "3.1.0",
+
+  "adopted_modules": {
+    "lugs": {
+      "version": "2.0",
+      "clean_version": "2.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "registry": {
+      "version": "3.0",
+      "clean_version": "3.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "teach": {
+      "version": "1.0",
+      "clean_version": "1.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "discovery": {
+      "version": "1.0",
+      "clean_version": "1.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "templates": {
+      "version": "1.5",
+      "clean_version": "1.5",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "analytics": {
+      "version": "1.0",
+      "clean_version": "1.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "quality_gates": {
+      "version": "1.0",
+      "clean_version": "1.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    },
+    "session": {
+      "version": "1.0",
+      "clean_version": "1.0",
+      "local_changes": 0,
+      "adopted_at": null,
+      "source": "framework_init",
+      "status": "clean",
+      "pending_lugs": []
+    }
+  },
+
+  "pending_upgrades": [],
+
+  "last_checked": null,
+  "last_teach_cycle": null,
+
+  "_status_values": {
+    "clean": "Synced with hub, no pending changes",
+    "dirty": "Has local changes pending hub submission (version has -N suffix)",
+    "behind": "Hub has newer version available",
+    "conflicted": "Local changes exist and hub has new version"
+  },
+
+  "_version_format": {
+    "clean": "2.0 (synced with hub)",
+    "dirty": "2.0-3 (3 local changes pending)",
+    "post_teach": "2.1 (hub integrated changes, counter reset)"
+  }
+}

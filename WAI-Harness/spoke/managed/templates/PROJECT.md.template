@@ -1,0 +1,154 @@
+# Project: ${PROJECT_NAME}
+
+**Project ID:** ${PROJECT_ID}
+**Hub:** ${HUB_PATH}
+**Framework Version:** 2.0.0
+
+---
+
+## Overview
+
+${PROJECT_DESCRIPTION}
+
+This project is organized using Wheelwright Framework v2 architecture with Hub-Project-Spoke hierarchy.
+
+---
+
+## Project Structure
+
+```
+${PROJECT_ROOT}/
+├── hub/                 # Wheelwright Hub (ecosystem center)
+│   ├── registry.yaml    # Extension registry
+│   ├── health.yaml      # System health status
+│   ├── intake/          # Cross-node signals inbox
+│   ├── archive/         # Processed signals
+│   └── machines/        # Machine profiles
+├── project/             # Project-level coordination (this level)
+│   ├── BRIEF.md         # Shared behavioral rules
+│   ├── PROJECT.md       # This file
+│   └── WAI-Manifest.yaml  # Project manifest
+└── spokes/              # Individual extensions (work happens here)
+    ├── spoke-1/
+    ├── spoke-2/
+    └── ...
+```
+
+---
+
+## Spokes in This Project
+
+${SPOKE_LIST}
+
+---
+
+## Shared Rules (Project BRIEF)
+
+All spokes in this project follow these shared rules:
+
+1. **Quality Standards:**
+   ${QUALITY_STANDARDS}
+
+2. **Dependency Policy:**
+   ${DEPENDENCY_POLICY}
+
+3. **Testing Requirements:**
+   ${TESTING_REQUIREMENTS}
+
+4. **Documentation Standards:**
+   ${DOCUMENTATION_STANDARDS}
+
+---
+
+## Cross-Spoke Communication
+
+**Signal Flow:**
+1. Spoke publishes high-impact decision (impact >= 8)
+2. Signal written to hub/intake/
+3. hub-watcher notifies other spokes on their next session_start
+4. Spokes acknowledge or adopt the pattern
+
+**Example signals:**
+- Authentication pattern changes
+- New architectural decisions
+- Performance optimizations discovered
+- Bug patterns and fixes
+
+---
+
+## Machine Profiles
+
+Project tracks machine profiles in `hub/machines/` to optimize IDE settings per machine.
+
+**Current machines:**
+${MACHINE_LIST}
+
+See: **AI-AGENT-MACHINE-PROTOCOL.md** for optimization details.
+
+---
+
+## Framework Updates
+
+**Current framework version:** ${FRAMEWORK_VERSION}
+
+When Hub framework updates:
+1. hub-watcher notifies spokes on session_start
+2. User can run `/framework-update` in any spoke
+3. framework-updater cascades new templates to spokes
+4. Conflicting templates require manual merge
+
+---
+
+## Maintenance
+
+### Health Checks
+Run in any spoke:
+```bash
+/wai-status              # Extension health
+python -m wai.closeout_validator --check  # Closeout readiness
+```
+
+Run from hub:
+```bash
+python -m wai.hub.health_check   # Ecosystem health
+```
+
+### Common Tasks
+- **Add new spoke:** `python -m wai init --spoke <name>`
+- **Check signals:** Review `hub/intake/` directory
+- **Update framework:** Run `/framework-update` in spoke
+- **Audit structure:** Run `/audit-files` or file-audit skill
+
+---
+
+## Integration with Claude Code
+
+This project uses **Claude Code CLI** with Wheelwright integration:
+
+1. **Session Start:**
+   - integration-check verifies environment
+   - Briefing shows machine, recent work, action items
+   - hub-watcher checks for updates
+
+2. **During Work:**
+   - Skills fire automatically (guardians, advisors, watchers)
+   - Observations logged, Lugs created
+   - Machine-aware recommendations
+
+3. **Session End:**
+   - Closeout ceremony with session synthesis
+   - `/shipit` commits with co-author attribution
+   - Ready for next session
+
+---
+
+## Related Documents
+
+- **CLAUDE.md** - Instructions for Claude Code (priority 0)
+- **BRIEF.md** - Behavioral rules (project level)
+- **AI-AGENT-MACHINE-PROTOCOL.md** - Machine optimization
+- **REGISTRY-STRUCTURE.md** - Hub registry documentation
+
+---
+
+**Last Updated:** ${TIMESTAMP}

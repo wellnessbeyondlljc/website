@@ -1,0 +1,66 @@
+{
+  "wheel": {
+    "version": "1.0.0",
+    "framework_version": "3.0.0",
+    "node_type": "spoke",
+    "name": "My Project",
+    "description": null,
+    "hub_path": null,
+    "status": "active",
+    "last_modified_at": null,
+    "last_modified_by": null,
+    "spoke_id": null,
+    "spoke_types": []
+  },
+  "_project_foundation": {
+    "completed": false
+  },
+  "_session_state": {
+    "session_count": 0,
+    "last_session_id": null,
+    "last_closeout": null,
+    "next_session_recommendation": "Run /wai to begin your first session.",
+    "requires_review": false,
+    "mode": "execution"
+  },
+  "_work_queue": {
+    "enabled": true,
+    "phases": [],
+    "items": [],
+    "queue_state": {
+      "ready_count": 0,
+      "needs_refinement_count": 0,
+      "blocked_count": 0
+    },
+    "last_scored_at": null
+  },
+  "_critical_directives": {
+    "_READ_FIRST": "STOP. Read these directives before any action.",
+    "integration_check": {
+      "on_wakeup": [
+        "1. Read AGENTS.md, CLAUDE.md, or GEMINI.md (whichever exists for your tool)",
+        "2. Read WAI-Spoke/WAI-Guide.md for full protocol",
+        "3. Check WAI-Spoke/seed/ingest/ for pending teachings",
+        "4. Present summary of what you learned before proceeding"
+      ]
+    }
+  },
+  "ai_context": {
+    "conversation_tracking": true,
+    "capacity_monitoring": true,
+    "alert_threshold": "80%"
+  },
+  "feature_toggles": {
+    "session_continuity": true,
+    "token_efficiency": true,
+    "analytics": true,
+    "closeout_processing": true,
+    "hub_learning": true,
+    "quality_gates": true
+  },
+  "_index": {
+    "last_sync_ts": null,
+    "pending_sync_count": 0,
+    "sync_enabled": true
+  }
+}

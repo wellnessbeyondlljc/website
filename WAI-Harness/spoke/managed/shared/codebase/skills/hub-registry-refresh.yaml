@@ -1,0 +1,222 @@
+id: hub-registry-refresh
+name: "Hub Registry Refresh"
+role: watcher
+model_tier: standard
+
+trigger: "on_wakeup"  # Runs automatically on hub wakeup to refresh registry
+
+description: >
+  Hub aggregates metadata from all spokes to maintain a live registry.
+  Each spoke maintains its own .spoke-metadata.yaml via self-registry skill.
+  Hub's registry-refresh runs on wakeup to read all spoke metadata and build
+  the authoritative registry. Used for help routing, BI, and status awareness.
+
+scope:
+  reads:
+    - "all spokes' .spoke-metadata.yaml files (via teach cycle)"
+    - "hub/registry.yaml (existing registry)"
+    - "WAI-Spoke/WAI-Lugs.jsonl (for metadata-update lugs)"
+
+  writes:
+    - "hub/registry.yaml (aggregated live registry)"
+    - "hub/registry-refresh.log (audit trail)"
+    - "WAI-Spoke/WAI-Lugs.jsonl (create registry-refresh lug)"
+
+prerequisites:
+  - "All active spokes must have .spoke-metadata.yaml file"
+  - "Hub must have list of known spoke paths"
+  - "Hub can read from spoke directories via teach mechanism"
+
+output:
+  on_success: "Registry aggregated and updated from spoke metadata"
+  on_partial_success: "Registry updated with available spoke data, warnings logged for missing spokes"
+  on_failure: "Previous registry retained, diagnostic lug created"
+
+algorithm:
+  step_1_discover_active_spokes:
+    description: "Build list of spokes to query for metadata"
+
+    sources:
+      - "hub/registry.yaml existing nodes (skip archived)"
+      - "WAI-Spoke/lugs/outgoing/ for new spoke announcements"
+      - "git-tracked spoke directories"
+
+    filter: "status = active OR status = suspended (exclude archived)"
+
+    result: "list of spoke paths to query"
+
+  step_2_collect_spoke_metadata:
+    description: "Read .spoke-metadata.yaml from each active spoke"
+
+    for_each_spoke:
+      read_file: "{spoke}/.spoke-metadata.yaml"
+      on_found: "Parse and validate YAML structure"
+      on_not_found: "Log warning: 'Spoke {spoke} has no metadata file'"
+      on_invalid: "Log error: 'Spoke {spoke} metadata failed validation'"
+      collect: "Valid metadata into aggregation list"
+
+    aggregation_list_contains:
+      - spoke path and metadata
+      - timestamp of metadata (last_updated)
+      - validation status (valid/invalid)
+
+  step_3_detect_changes:
+    description: "Compare new metadata against previous registry"
+
+    for_each_spoke:
+      compare:
+        - "previous registry entry vs. new metadata"
+        - "activity metrics (commits_30d, lugs_created, etc.)"
+        - "status changes (active → archived, etc.)"
+        - "scope/offerings changes"
+
+    track_changes:
+      - "new spokes appeared"
+      - "spokes became archived"
+      - "spokes became inactive (no recent activity)"
+      - "spokes added/removed capabilities"
+
+  step_4_build_aggregated_registry:
+    description: "Construct the live registry from spoke metadata"
+
+    output_structure:
+      version: "2.0"
+      aggregated_at: "ISO-8601 timestamp"
+      aggregated_by: "hub-registry-refresh skill"
+      spoke_count_active: "number"
+      spoke_count_archived: "number"
+      spoke_count_total: "number"
+
+      nodes: [
+        {
+          path: "project/spoke (from metadata)",
+          type: "spoke|hub|archive (from metadata)",
+          status: "active|archived|suspended (from metadata)",
+          mission: "from metadata",
+          scope_domains: "from metadata",
+          boundaries: "from metadata",
+          expertise_offers: "from metadata",
+          stack: "from metadata",
+          team_model: "from metadata",
+          framework_version: "from metadata",
+          skills_loaded: "from metadata",
+          activity_metrics: {
+            commits_30d: "from metadata",
+            lugs_created_30d: "from metadata",
+            open_lugs: "from metadata",
+            last_session: "from metadata",
+            days_since_activity: "from metadata"
+          },
+          metadata_last_updated: "timestamp from spoke metadata",
+          metadata_valid: "true|false"
+        }
+      ]
+
+      warnings: [
+        {
+          spoke: "path",
+          warning: "description (missing file, invalid metadata, no activity, etc.)"
+        }
+      ]
+
+  step_5_publish_updated_registry:
+    description: "Write aggregated registry to hub/registry.yaml"
+
+    file_path: "hub/registry.yaml"
+    format: "YAML (same as before, now with current spoke metadata)"
+    backup: "archive previous registry.yaml with timestamp"
+
+  step_6_log_refresh_activity:
+    description: "Create audit trail of refresh operation"
+
+    create_refresh_log:
+      file: "hub/registry-refresh.log"
+      entries:
+        - "timestamp of refresh"
+        - "spokes queried: count"
+        - "spokes with valid metadata: count"
+        - "spokes with invalid/missing metadata: list"
+        - "changes detected: list"
+        - "status: success|partial_success|failure"
+
+  step_7_create_registry_lug:
+    description: "Create lug for audit trail and metadata-update detection"
+
+    create_lug:
+      id: "hub-registry-refresh-{timestamp}"
+      type: "administrative"
+      title: "Hub registry aggregated from spoke metadata"
+      description: "Registry updated from {spoke_count_active} active spokes. Changes: {summary_of_changes}"
+      status: "published"
+      impact: "3"
+      perceive: "Hub queried all active spokes for .spoke-metadata.yaml"
+      execute: "Aggregated metadata into hub/registry.yaml"
+      verify: "Registry now reflects current state of all spokes"
+
+      metrics:
+        spokes_active: "number"
+        spokes_archived: "number"
+        metadata_valid: "count"
+        metadata_invalid: "count"
+        new_spokes: "count"
+        spokes_archived_this_cycle: "count"
+
+use_cases:
+  - scenario: "Hub wakes up"
+    action: "registry-refresh runs automatically"
+    result: "hub/registry.yaml updated with latest spoke metadata. Help routing based on current reality."
+
+  - scenario: "New spoke comes online"
+    action: "New spoke creates .spoke-metadata.yaml (self-registry)"
+    trigger: "Hub wakeup runs registry-refresh"
+    result: "New spoke appears in registry automatically. No manual entry needed."
+
+  - scenario: "Spoke is archived"
+    action: "Spoke runs self-registry with status: archived"
+    trigger: "Hub wakeup runs registry-refresh"
+    result: "Spoke moves from active to archived in registry. Still in history, not routed to."
+
+  - scenario: "Spoke adds new expertise"
+    action: "Spoke updates EXTENSION.md, runs self-registry"
+    trigger: "Hub wakeup"
+    result: "Registry shows new capability. Help system can now route new questions to this spoke."
+
+  - scenario: "BI: Which spokes are most active?"
+    query: "Hub reads registry activity metrics"
+    result: "Spokes ranked by commits_30d, lugs_created, session recency. Hub sees health of the wheel."
+
+  - scenario: "BI: Which spokes have been inactive?"
+    query: "Hub reads days_since_activity metrics"
+    result: "Spokes with no activity in 90+ days flagged. Hub can investigate or archive."
+
+tests:
+  - name: "Registry aggregated from all spoke metadata"
+    input: "5 spokes with valid .spoke-metadata.yaml files"
+    expected: "hub/registry.yaml contains all 5 spokes with correct metadata"
+
+  - name: "Missing metadata logged as warning"
+    input: "4 spokes with metadata, 1 missing file"
+    expected: "Registry contains 4 spokes, warning logged for 1 spoke without metadata"
+
+  - name: "Invalid metadata flagged"
+    input: "Spoke with incomplete/invalid .spoke-metadata.yaml"
+    expected: "Spoke included in registry, marked invalid:true, warning created"
+
+  - name: "Changes detected and logged"
+    input: "Spoke status changed from active to archived"
+    expected: "Registry updated, change logged in registry-refresh.log and lug"
+
+  - name: "Activity metrics visible in registry"
+    input: "Spoke with 30 commits, 5 lugs created, 2 days since last session"
+    expected: "Registry shows activity_metrics: {commits_30d: 30, lugs_created_30d: 5, days_since_activity: 2}"
+
+  - name: "Runs on every hub wakeup"
+    input: "Hub wakeup cycles (daily, weekly, etc.)"
+    expected: "registry-refresh runs each time, registry always current"
+
+notes:
+  - "Registry is live and authoritative because it's built from spoke self-declarations every wakeup"
+  - "No manual registry editing. Hub aggregates, spokes declare."
+  - "Activity metrics provide BI for wheel health"
+  - "Warnings for missing/invalid metadata help identify spoke maintenance issues"
+  - "Archive trail lets hub see history and trends"

@@ -1,0 +1,595 @@
+id: historian
+name: "Historian"
+role: advisor
+model_tier: haiku  # 8d: Haiku for all scan passes and KB index matching. Sonnet only for promotion decisions requiring full article review.
+
+trigger: "on_wakeup_check AND on_demand AND on_query_lug"
+
+description: >
+  Advisor that periodically reviews accumulated session track points from
+  three perspectives: user, model, and directions. The Historian is an
+  interpreter, not an editor — it reads tracks and produces analysis but
+  never modifies track or point data. It maintains its own lugs and review
+  files within its advisor directory.
+  v2: adds findings-log dedup, sentiment field reading, hub KB routing (Bucket 3),
+  bidirectional hub queries, frustration escalation, taste.spoke nudges, and
+  configurable cycling threshold.
+
+location: "WAI-Spoke/advisors/historian/"
+
+scope:
+  reads:
+    - "WAI-Spoke/sessions/track_*.jsonl (accumulated session tracks)"
+    - "WAI-Spoke/sessions/WAI_Track-*.jsonl (event-based external tracks)"
+    - "WAI-Spoke/taste.spoke.yaml (project preferences + historian config)"
+    - "Hub taste.user (user preferences, if hub connected)"
+    - "WAI-Spoke/WAI-State.json (session history, model_log)"
+    - "framework/skills/*.yaml (current skill definitions)"
+    - "templates/commands/*.md (current protocol definitions)"
+    - "WAI-Spoke/lugs/incoming/ (historian-query lugs — checked at run start)"
+    - "WAI-Spoke/advisors/historian/findings-log.jsonl (local dedup state)"
+
+  writes:
+    - "WAI-Spoke/advisors/historian/reviews/review-YYYYMMDD-HHMM.md"
+    - "WAI-Spoke/advisors/historian/passes.jsonl (record of processed sessions)"
+    - "WAI-Spoke/advisors/historian/vectors.jsonl (tracked interest vectors)"
+    - "WAI-Spoke/advisors/historian/findings-log.jsonl (routed findings — dedup state)"
+    - "WAI-Spoke/lugs/bytype/signal/undelivered/ (Bucket 3 KB findings + query replies)"
+    - "WAI-Spoke/taste.spoke.yaml (frustration nudges appended to nudges[])"
+
+  proposes:
+    - "taste.spoke nudges (appended as proposed entries for Bucket 1 frustration findings)"
+    - "taste.user nudges (appended as proposed entries)"
+    - "Protocol improvements (via lug to outbox, requires teaching approval gate)"
+    - "Outside suggestions (in review file only)"
+    - "Bucket 3 KB contributions (routed to hub-kb via closeout Step 9c)"
+
+  never_modifies:
+    - "sessions/track_*.jsonl — tracks are immutable records"
+    - "sessions/WAI_Track-*.jsonl — external tracks are immutable records"
+    - "WAI-Lugs.jsonl — historian tracks its own work in its own directory"
+    - "Any skill or template file — proposes changes, never applies them"
+
+prerequisites:
+  - "20+ unreviewed points across sessions (threshold for proposing review — lowered from 30 due to Haiku cost reduction)"
+  - "WAI-Spoke/advisors/historian/ directory exists"
+  - "WAI-Spoke/advisors/historian/findings-log.jsonl exists (create empty if absent)"
+
+# ---------------------------------------------------------------------------
+# TRIGGER LOGIC
+# ---------------------------------------------------------------------------
+
+trigger_logic:
+  on_wakeup:
+    description: "Check for query lugs first, then review threshold"
+    algorithm:
+      - "STEP 0 — Query lug check (8c): scan WAI-Spoke/lugs/incoming/ for any lug with type='historian-query'. If found, run focused_query mode (see focused_query section below) instead of general review. Move query lug to incoming/processed/ after handling."
+      - "Read WAI-Spoke/advisors/historian/findings-log.jsonl (create empty if absent). Load all finding_ids into a skip-set for dedup."
+      - "Read passes.jsonl to find last reviewed session and point"
+      - "Count unreviewed points across all session tracks since last pass"
+      - "Read cycling threshold from taste.spoke.yaml historian.cycling_threshold (default: 3 if absent)"
+      - "If >= 20 unreviewed points: suggest review to user"
+      - "Suggestion format: 'Historian: {N} unreviewed points across {M} sessions. Run /wai-review?'"
+      - "If < 20: silent"
+      - "After threshold check, run pattern-scan (see pattern_scan section)"
+
+  on_demand:
+    description: "User explicitly requests /wai-review"
+    action: "Run review immediately regardless of point count"
+
+  focused_query:
+    description: "Directed scan in response to a historian-query lug from hub"
+    trigger: "type='historian-query' lug found in incoming/ at wakeup"
+    algorithm:
+      - "Extract fields: topic, ask, reply_to, reply_schema from the query lug"
+      - "Run pattern-scan scoped to the query topic — filter track points for relevance to topic"
+      - "Package findings as a reply lug: {type: 'historian-reply', re: <query_id>, findings: [...], reply_to: <reply_to_path>}"
+      - "Write reply lug to lugs/bytype/signal/undelivered/ for delivery at closeout"
+      - "Move historian-query lug to incoming/processed/"
+
+# ---------------------------------------------------------------------------
+# PATTERN SCAN (AUTO-DETECT MODE)
+# ---------------------------------------------------------------------------
+
+pattern_scan:
+  description: >
+    Lightweight automated mode. Runs every wakeup to detect recurring patterns
+    across sessions. Complements narrative-review (periodic/deep). Pattern-scan
+    is continuous and incremental — only new sessions are scanned each wakeup.
+  trigger: "on_wakeup — always, runs after narrative-review threshold check"
+  fields_scanned: ["open", "activity", "decisions"]
+
+  activity_filter_exclude:
+    description: >
+      Activity items whose first normalized token matches any of these are
+      skipped before similarity scan. Prevents protocol-routine maintenance
+      phrases from generating noise clusters. Only applies to the activity[]
+      field — open[] and decisions[] are not filtered.
+    tokens:
+      - "added"
+      - "adopted"
+      - "appended"
+      - "applied"
+      - "bumped"
+      - "checked"
+      - "closed"
+      - "committed"
+      - "confirmed"
+      - "converted"
+      - "copied"
+      - "created"
+      - "deleted"
+      - "detected"
+      - "fixed"
+      - "initialized"
+      - "installed"
+      - "loaded"
+      - "merged"
+      - "moved"
+      - "parsed"
+      - "pushed"
+      - "ran"
+      - "read"
+      - "reconciled"
+      - "removed"
+      - "replaced"
+      - "staged"
+      - "updated"
+      - "verified"
+
+  # Dual-format support (added by epic-chat-to-track-v1):
+  # - Turn-based: track_*.jsonl with {open[], activity[], decisions[]} per point
+  # - Event-based: WAI_Track-*.jsonl from external AI chats (Chat-to-Track)
+  #   Format detected by first line containing "event":"session_start"
+  #   Event types mapped to historian fields — see extraction step
+  #   Two independent watermarks used (ASCII sort order issue — see step 3)
+  algorithm:
+    - "Read WAI-Spoke/advisors/historian/scan_state.json (if exists) to get last_scan_session_internal and last_scan_session_external. Backward compat: if only last_scan_session exists (old format), treat it as last_scan_session_internal and start last_scan_session_external from null."
+    - "List WAI-Spoke/sessions/track_*.jsonl AND WAI-Spoke/sessions/WAI_Track-*.jsonl. Sort each glob independently by filename. Process as two separate streams — do NOT merge into a single sorted sequence (ASCII sort puts uppercase WAI_Track before lowercase track_, which breaks incremental watermarking)."
+    - "Load sessions using two independent watermarks: (a) For track_*.jsonl files: load where filename > last_scan_session_internal. (b) For WAI_Track-*.jsonl files: load where filename > last_scan_session_external."
+    - "Format detection: For each loaded file, read the first line. If it contains '\"event\":\"session_start\"', mark as event-based format. Otherwise, treat as turn-based format (existing behavior). Use the filename (without path and extension) as the session_id for event-based files."
+    - "For each loaded session: extract all items from open[], activity[], decisions[] fields across all points. Record (text, session_id, turn, field) for each item."
+    - "Event-based extraction: For files marked as event-based format, extract items using this mapping: (a) Lines with '\"event\":\"decision_made\"' — extract the 'decision' field text, record with field=decisions. (b) Lines with '\"event\":\"concept_update\"' — extract 'concept' + ': ' + 'action' as text, record with field=activity. (c) Lines with '\"event\":\"concept_fossil\"' — extract 'concept' + ' ' + 'status' as text, record with field=open. (d) Lines with '\"event\":\"turn_marker\"' — extract 'focus' field text, record with field=activity. (e) Lines with '\"event\":\"context_canary\"' — extract 'warning' field text, record with field=open. (f) Lines with '\"event\":\"architecture_signal\"' — extract 'description' field text, record with field=activity. Skip session_start, session_end, artifact_reference, and asset_created events (no historian-relevant text). After extraction, proceed to the same normalization and similarity pipeline as turn-based items."
+    - "For each open[] item: if item is a JSON object with {text, type} fields, extract text=item.text and open_type=item.type. If item is a plain string, treat as text=item and open_type=unknown. For open_type in [intentional, deferred]: skip this item unless it has appeared in 6+ distinct sessions (high-recurrence override — surfaces persistent intentional deferrals). For open_type in [blocked, unknown]: process normally through remaining steps."
+    - "Filter activity[] items: lowercase each item, split on whitespace, take the first token. If it matches any entry in activity_filter_exclude.tokens, skip this item. open[] and decisions[] items are never filtered."
+    - "Token-normalize each remaining text item: lowercase, strip punctuation, split on whitespace, remove stop words [a, an, the, is, was, were, has, have, had, be, been, to, of, in, on, at, for, with, from, as, this, that, not, but]"
+    - "Compare each new item against items from prior sessions using Jaccard similarity: |tokens(A) ∩ tokens(B)| / |tokens(A) ∪ tokens(B)|. Similarity threshold: 0.3"
+    - "Group item-pairs with similarity >= 0.3 into clusters"
+    - "For each cluster, classify pattern_type by source field and count: open_recurrence (open[] field, 3+ distinct sessions), workaround_churn (activity[] field, 4+ total occurrences OR 2+ distinct sessions), reopened_decision (decisions[] field, 2+ distinct sessions)"
+    - "For each cluster meeting its threshold: search vectors.jsonl for existing vector where Jaccard(cluster sample text, vector.sample_text) >= 0.3. If found: update last_seen, increment occurrences, append score to similarity_scores. If new: append entry to vectors.jsonl with status=watching."
+    - "Write scan_state.json: { last_scan_session_internal: newest track_* filename just processed, last_scan_session_external: newest WAI_Track-* filename just processed }"
+  surfacing:
+    condition: "vectors.jsonl has entries with status=watching AND occurrences >= threshold (open_recurrence: 3, workaround_churn: 4, reopened_decision: 2)"
+    output_format: "Pattern: {description} — {occurrences}x across {N} sessions. Investigate: {investigation_prompt}"
+    max_shown: 3
+    location: "wakeup Step 5c, after narrative-review threshold suggestion"
+    silent_when: "No qualifying vectors or no advisors/historian/ directory"
+
+  open_type_overrides:
+    description: >-
+      open[] items with type=intentional or type=deferred are filtered from
+      pattern-scan by default. They are only re-admitted if they appear in
+      6+ distinct sessions — indicating the item is not merely planned but
+      persistently unaddressed. This override ensures genuinely stuck items
+      surface even when originally marked as known deferrals.
+    filtered_types: [intentional, deferred]
+    override_threshold: 6
+    override_unit: distinct_sessions
+    passthrough_types: [unknown, blocked]
+
+# ---------------------------------------------------------------------------
+# FINDINGS LOG (8d) — LOCAL DEDUP STATE
+# ---------------------------------------------------------------------------
+
+findings_log:
+  path: "WAI-Spoke/advisors/historian/findings-log.jsonl"
+  description: >
+    Persistent record of every finding the Historian has routed. Read at the start
+    of every run to skip already-processed findings. Prevents re-routing the same
+    track points across sessions and eliminates duplicate KB contributions.
+
+  schema:
+    finding_id: "unique ID within this spoke (e.g. finding-YYYYMMDD-NN)"
+    type: "recommendation | addressable_improvement | incomplete_work | challenge"
+    tag: "delight | frustration | cycling | null"
+    title: "finding title (short)"
+    routed_to: "hub-kb | local | spoke:<id> | framework"
+    routed_at: "ISO-8601 timestamp"
+    lug_id: "ID of the lug written for this finding (if applicable)"
+    status: "delivered | open | resolved"
+    consecutive_unresolved_passes: "int — incremented each run when tag=frustration and status != resolved (8f)"
+    unresolved_frustration: "bool — set true when consecutive_unresolved_passes >= 3 (8f)"
+    resolved_by: "teaching_id — set when a teaching resolves this finding (8f)"
+
+  dedup_algorithm:
+    - "At run start: load findings-log.jsonl, extract all finding_ids into a skip-set"
+    - "Before routing any finding: check finding_id against skip-set — skip if present"
+    - "After routing: append entry to findings-log.jsonl immediately"
+    - "Never rewrite the log — append only"
+
+  frustration_escalation:
+    description: "8f — escalate persistent frustrations to hub for framework resolution"
+    algorithm:
+      - "At end of each run: for each finding with tag=frustration and status != resolved: increment consecutive_unresolved_passes"
+      - "If consecutive_unresolved_passes >= 3: set unresolved_frustration=true"
+      - "Write updated entry to findings-log.jsonl"
+      - "Hub Librarian detects unresolved_frustration=true on intake — writes escalation lug to framework asking for a solution"
+      - "When a framework teaching resolves the frustration: set resolved_by=<teaching_id> and status=resolved"
+
+# ---------------------------------------------------------------------------
+# BUCKET CLASSIFICATION (8b, 8e) — FINDING SCOPE
+# ---------------------------------------------------------------------------
+
+bucket_classification:
+  description: >
+    Every finding is assigned a bucket at routing time. Bucket determines destination.
+
+  buckets:
+    bucket_1:
+      scope: "Me"
+      description: "Improvement relevant only to this spoke / this user"
+      destination: "local — taste.spoke.yaml nudges (if frustration) or review file"
+      frustration_action: "8g — append nudge to taste.spoke.yaml nudges[] (see taste_spoke_nudges)"
+
+    bucket_2:
+      scope: "Framework"
+      description: "Protocol gap, schema improvement, or skill update"
+      destination: "framework — lug to WAI-Spoke/lugs/outgoing/ with routed_to=FRAMEWORK (requires teaching approval gate)"
+
+    bucket_3:
+      scope: "Wheel"
+      description: "Learning valuable to other spokes in the fleet — hub KB contribution"
+      destination: "hub-kb — write signal lug to lugs/bytype/signal/undelivered/ with scope=wheel, destination=hub-kb"
+      delivery: "Closeout Step 9c delivers destination=hub-kb lugs to {hub_path}/WAI-Spoke/lugs/incoming/"
+      qualifier_requirement: >
+        All Bucket 3 findings MUST include a qualifiers block. Without qualifiers, the hub Librarian
+        flags the finding for manual review instead of auto-promoting. Set qualifiers at routing time
+        — the Historian agent knows the project context.
+      qualifier_schema:
+        project_types: ["marketing-site", "saas", "ecommerce", "internal-tool", "tool", "api", "framework"]
+        languages: ["javascript", "typescript", "python", "bash", "rust", "html-css"]
+        frameworks: ["react", "next.js", "vercel", "netlify", "supabase", "flask", "cloudflare-pages", "resend", "stripe"]
+        domains: ["ux", "pre-launch", "deployment", "email-delivery", "auth", "payments", "seo", "testing", "agent-workflow", "security"]
+        themes: ["design-quality", "user-intent", "launch-readiness", "integration-pattern", "failure-mode", "collaboration"]
+
+# ---------------------------------------------------------------------------
+# TASTE SPOKE NUDGES (8g)
+# ---------------------------------------------------------------------------
+
+taste_spoke_nudges:
+  description: >
+    Bucket 1 frustration findings are written as behavioral nudges to taste.spoke.yaml.
+    This makes taste.spoke.yaml a living record of collaboration friction rather than
+    a bootstrapped stub.
+  algorithm:
+    - "After classifying a Bucket 1 finding as frustration-tagged:"
+    - "Read WAI-Spoke/taste.spoke.yaml"
+    - "Check nudges[] array for any entry where note matches this finding's title (dedup)"
+    - "If not present: append {source: 'historian', type: 'frustration', note: '<finding title>', added_at: '<ISO timestamp>'}"
+    - "Write updated taste.spoke.yaml"
+  note: "Only frustration-tagged Bucket 1 findings trigger this. Delight findings and non-Bucket-1 findings do not write to taste.spoke."
+
+# ---------------------------------------------------------------------------
+# CONFIGURATION (8h)
+# ---------------------------------------------------------------------------
+
+configuration:
+  cycling_threshold:
+    description: "Number of sessions a pattern must recur before classified as cycling"
+    default: 3
+    config_path: "taste.spoke.yaml → historian.cycling_threshold"
+    read_algorithm: >
+      import yaml
+      try:
+        d = yaml.safe_load(open('WAI-Spoke/taste.spoke.yaml'))
+        threshold = d.get('historian', {}).get('cycling_threshold', 3)
+      except FileNotFoundError:
+        threshold = 3
+
+# ---------------------------------------------------------------------------
+# SENTIMENT READING (8a)
+# ---------------------------------------------------------------------------
+
+sentiment_reading:
+  description: >
+    Track points may carry an optional top-level sentiment field written at entry time.
+    The Historian reads this field directly rather than inferring emotional cues from
+    language — dramatically cheaper and more reliable for retrospective detection.
+  field: "sentiment"
+  valid_values: ["frustration", "delight", null]
+  behavior:
+    - "When reading track points, check for sentiment field on each entry"
+    - "frustration entries: weight toward frustration-tagged findings in the same time window"
+    - "delight entries: weight toward delight-tagged findings"
+    - "null or absent: neutral — no sentiment weighting"
+  note: "Agent writes sentiment at track point creation time when the signal is strong. Never inferred retroactively by the Historian."
+
+# ---------------------------------------------------------------------------
+# THREE PERSPECTIVES
+# ---------------------------------------------------------------------------
+
+perspectives:
+  user:
+    examines: "What the user asked, how they directed, what they corrected, what frustrated them"
+    looking_for:
+      - "Preference patterns (communication style, pacing, detail level)"
+      - "Recurring corrections (agent keeps making the same mistake)"
+      - "Satisfaction signals (user said 'perfect', 'exactly', or moved forward without correction)"
+      - "Frustration signals (user repeated themselves, said 'no', corrected fundamentals)"
+      - "Direction style (hands-on vs delegating, planning vs executing)"
+
+  model:
+    examines: "What the agent did, how it reasoned, where it struggled, what it got wrong"
+    looking_for:
+      - "Reasoning patterns (does agent consistently struggle with certain task types?)"
+      - "Difficulty clusters (specific phases or topics that generate more turns)"
+      - "Model-task fit (execution tasks on Opus, design tasks on Haiku)"
+      - "Blind spots (things the agent missed that the user caught)"
+      - "Quality of thinking field (is the agent's self-reported reasoning useful or generic?)"
+
+  directions:
+    examines: "Specs, prompts, skills, protocols that governed behavior"
+    looking_for:
+      - "Gaps in guidance (agent had to improvise where a skill should have existed)"
+      - "Rules that helped (agent followed a protocol and it worked well)"
+      - "Rules that were ignored (protocol exists but agent didn't follow it)"
+      - "Missing protocols (recurring situations with no skill coverage)"
+      - "Discussed topics that never found a home in tool design"
+
+# ---------------------------------------------------------------------------
+# REVIEW PROCESS
+# ---------------------------------------------------------------------------
+
+review_process:
+  batch_selection:
+    description: "Choose which points to review"
+    strategies:
+      - name: "recent"
+        description: "Most recent N unreviewed points"
+        default: true
+        sizes: [5, 10, 20, 40]
+      - name: "random"
+        description: "Random sample across all unreviewed points"
+        use_when: "Looking for patterns that recency bias would hide"
+        sizes: [10, 20, 40]
+
+    size_guidance: >
+      Start with recent-30 (the threshold). Use smaller batches (5-10) for
+      tight pattern detection on recent work. Use larger batches (40) for
+      macro trend discovery across many sessions. Random sampling helps
+      find patterns that only appear when juxtaposing distant sessions.
+
+  review_goals:
+    - goal: "Revisit important questions"
+      description: >
+        Find open threads from points that never got resolved. Did the
+        answer emerge in a later turn or session? Is it still hanging?
+        Hanging questions that span 3+ sessions are significant.
+
+    - goal: "Notice patterns in reasoning or difficulty"
+      description: >
+        Look for clusters: same phase appearing repeatedly, same type of
+        correction from user, same kind of insight recurring. Patterns
+        confirmed across 5+ points are noteworthy.
+
+    - goal: "Separate temporary from durable"
+      description: >
+        An insight that mattered in the moment — does it still matter?
+        Temporary: "this API returns XML not JSON" (context-specific).
+        Durable: "always check spoke structure version before assuming files exist" (universal).
+
+    - goal: "Convert insights into operating behavior"
+      description: >
+        A pattern confirmed across 10+ points is not just an observation.
+        It should become a rule, a skill update, a taste entry, or a
+        protocol change. Propose the conversion.
+
+    - goal: "Verify discussed topics found a home"
+      description: >
+        Ideas and decisions captured in points — did they actually land
+        in a skill, a lug, a teaching, or a taste entry? Or were they
+        just talked about and forgotten? Flag orphaned topics.
+
+# ---------------------------------------------------------------------------
+# VECTORS OF INTEREST
+# ---------------------------------------------------------------------------
+
+vectors:
+  description: >
+    The Historian can identify patterns worth watching across future reviews.
+    These are stored in vectors.jsonl and checked against new points in
+    subsequent passes. A vector is a hypothesis: "this pattern might be
+    significant — watch for more evidence."
+
+  schema:
+    id: "vector-YYYYMMDD-HHMM-NN"
+    created: "ISO-8601"
+    description: "What the pattern is"
+    evidence: ["point references where pattern was observed"]
+    status: "watching | confirmed | dismissed"
+    threshold: "How many more observations before action warranted"
+    pattern_type: "open_recurrence | workaround_churn | reopened_decision"
+    first_seen: "track_YYYYMMDD-HHMM — session ID of first occurrence"
+    last_seen: "track_YYYYMMDD-HHMM — session ID of most recent occurrence"
+    occurrences: "integer — total count across all sessions"
+    sample_text: "string — representative text from most recent occurrence"
+    similarity_scores: "[float] — Jaccard scores between matched occurrences"
+    investigation_prompt: "string — suggested question to surface to user at wakeup"
+
+  lifecycle: >
+    Created during review when a potential pattern is noticed but not yet
+    confirmed. Each subsequent review checks new points against active
+    vectors. If evidence accumulates past threshold, vector status moves
+    to "confirmed" and an action is proposed. If no new evidence after 3
+    reviews, vector moves to "dismissed."
+
+# ---------------------------------------------------------------------------
+# OUTPUTS
+# ---------------------------------------------------------------------------
+
+outputs:
+  review_file:
+    location: "WAI-Spoke/advisors/historian/reviews/review-YYYYMMDD-HHMM.md"
+    format: "markdown"
+    sections:
+      - "## Review Summary"
+      - "## User Perspective — Improvement Suggestions"
+      - "## Model Perspective — Improvement Suggestions"
+      - "## Directions Perspective — Improvement Suggestions"
+      - "## Vectors Updated (watching / confirmed / dismissed)"
+      - "## Outside Suggestions (things beyond WAI)"
+
+  taste_nudges:
+    format: "Appended to WAI-Spoke/taste.spoke.yaml nudges[] directly (8g)"
+    trigger: "Bucket 1 frustration-tagged findings only"
+    dedup: "Skip if note already present in nudges[]"
+    entry_format: "{source: 'historian', type: 'frustration', note: '<finding title>', added_at: '<ISO timestamp>'}"
+    detail: "See taste_spoke_nudges section for full algorithm"
+
+  protocol_improvements:
+    format: "Lug placed in WAI-Spoke/lugs/outgoing/"
+    approval_gate: >
+      Same gate as teachings: present verification summary, show what
+      changes, wait for user approval. The Historian NEVER directly
+      edits skills or protocols.
+
+  kb_contributions:
+    format: "Signal lug in WAI-Spoke/lugs/bytype/signal/undelivered/ with scope=wheel, destination=hub-kb"
+    delivery: "Closeout Step 9c delivers to {hub_path}/WAI-Spoke/lugs/incoming/"
+    qualifier_required: true
+    trigger: "Bucket 3 findings only"
+    lug_completeness: "All KB contribution lugs must include: id, type, title, brief, context, routed_to, scope, destination, qualifiers, created_at"
+
+  query_replies:
+    format: "Reply lug in WAI-Spoke/lugs/bytype/signal/undelivered/ with type=historian-reply"
+    trigger: "Focused query mode (historian-query lug found in incoming/)"
+    delivery: "Closeout Step 9c delivers to reply_to path specified in query lug"
+
+  findings_log_record:
+    location: "WAI-Spoke/advisors/historian/findings-log.jsonl"
+    written_when: "Immediately after each finding is routed"
+    purpose: "Dedup state — prevents re-routing the same findings in future runs"
+    schema: "See findings_log.schema section"
+
+  passes_record:
+    location: "WAI-Spoke/advisors/historian/passes.jsonl"
+    schema:
+      id: "pass-YYYYMMDD-HHMM"
+      timestamp: "ISO-8601"
+      sessions_reviewed: ["session folder names"]
+      points_reviewed: "count"
+      batch_strategy: "recent | random"
+      batch_size: "number"
+      vectors_created: "count"
+      vectors_confirmed: "count"
+      nudges_proposed: "count"
+      protocol_proposals: "count"
+      kb_contributions: "integer — Bucket 3 findings routed this pass"
+      patterns_detected: "integer — new vectors created during this pass"
+      patterns_surfaced: "integer — patterns surfaced at wakeup this pass"
+
+# ---------------------------------------------------------------------------
+# MODEL TIER TESTING
+# ---------------------------------------------------------------------------
+
+model_tier_testing:
+  description: >
+    After 1 week of data accumulation, run comparison reviews on the same
+    batch using different model tiers. Measure quality of outputs.
+
+  methodology:
+    - "Select a batch of 20 points"
+    - "Run historian review on Haiku — save as review-haiku-{id}.md"
+    - "Run historian review on Sonnet — save as review-sonnet-{id}.md"
+    - "Run historian review on Opus — save as review-opus-{id}.md"
+    - "Compare: pattern detection quality, insight depth, actionability of suggestions"
+    - "Record findings in a lug for future reference"
+
+  hypothesis: >
+    Structural pattern detection (user corrections, phase distribution) may
+    work on Haiku. Nuanced interpretation (frustration signals, reasoning
+    blind spots, orphaned topics) likely needs Sonnet or Opus. The cost
+    difference matters — if Haiku handles 70% of the value, use it for
+    routine reviews and reserve Sonnet/Opus for deep dives.
+
+# ---------------------------------------------------------------------------
+# TESTS
+# ---------------------------------------------------------------------------
+
+tests:
+  - name: "Threshold detection on wakeup"
+    setup: "35 unreviewed points across 3 sessions"
+    action: "Wakeup protocol runs"
+    expected: "Historian suggests review: '35 unreviewed points across 3 sessions'"
+
+  - name: "Silent when under threshold"
+    setup: "15 unreviewed points"
+    action: "Wakeup protocol runs"
+    expected: "No historian suggestion"
+
+  - name: "Review produces three-perspective analysis"
+    setup: "30 points available, /wai-review triggered"
+    action: "Historian runs review"
+    expected: "Review file created with all three perspective sections"
+
+  - name: "Historian never modifies tracks"
+    setup: "Review running on 3 session tracks"
+    action: "Historian completes review"
+    expected: "All track.jsonl files unchanged (byte-identical before and after)"
+
+  - name: "Vector lifecycle"
+    setup: "Pattern noticed in review 1, evidence accumulates in reviews 2-3"
+    action: "Three sequential reviews"
+    expected: "Vector created as 'watching', moves to 'confirmed', action proposed"
+
+  - name: "Protocol improvement uses approval gate"
+    setup: "Historian identifies protocol gap"
+    action: "Historian proposes improvement"
+    expected: "Lug placed in outbox, NOT applied directly. Requires teaching approval."
+
+  - name: "Pattern-scan detects open_recurrence"
+    setup: "3 session tracks each contain an open[] item with Jaccard similarity >= 0.3 to each other. No scan_state.json exists."
+    action: "Wakeup runs pattern-scan"
+    expected: "vectors.jsonl has a new entry with pattern_type=open_recurrence, occurrences=3, status=watching. scan_state.json created with last_scan_session set."
+
+  - name: "Pattern-scan surfaces at wakeup Step 5c"
+    setup: "vectors.jsonl has entry with status=watching, occurrences=3, pattern_type=open_recurrence, investigation_prompt set"
+    action: "Wakeup protocol Step 5c runs"
+    expected: "Output includes 'Pattern: {description} — 3x across N sessions. Investigate: {investigation_prompt}'"
+
+  - name: "Pattern-scan is incremental"
+    setup: "scan_state.json has last_scan_session=track_20260313-0400. 3 older sessions + 1 newer session exist."
+    action: "Wakeup runs pattern-scan"
+    expected: "Only the 1 newer session is scanned. Existing vectors updated if new evidence meets similarity threshold. scan_state.json updated to newest session."
+
+  - name: "Pattern-scan filters protocol-routine activity items"
+    setup: "Session tracks contain only activity[] items: 'committed WAI-State.json', 'updated wai.md', 'copied teaching to processed/', 'created sessions/ directory'. No open[] or decisions[] items."
+    action: "Wakeup runs pattern-scan"
+    expected: "No new vectors created. All activity items matched activity_filter_exclude first-token check and were skipped before similarity scan."
+
+  - name: "activity_filter_exclude does not suppress open[] or decisions[]"
+    setup: "Track has open[] item 'updated approach to lug authoring — decision deferred' and decisions[] item 'updated schema to v2'. Both start with filtered token 'updated'."
+    action: "Wakeup runs pattern-scan"
+    expected: "Both items are processed normally. Filter only applies to activity[] field."
+
+  - name: "Pattern-scan skips intentional and deferred open items below override threshold"
+    setup: "5 session tracks each contain an open[] item with type=deferred and Jaccard similarity >= 0.3. scan_state.json does not exist."
+    action: "Wakeup runs pattern-scan"
+    expected: "No vector created (5 sessions < 6-session override threshold). Items skipped."
+
+notes:
+  - "The Historian is an interpreter, not an editor. It observes and proposes."
+  - "It maintains its own state (passes, vectors, reviews, findings-log) in its advisor directory."
+  - "Model tier: Haiku for all scan passes and KB index matching. Sonnet only for promotion decisions requiring full article review."
+  - "The three perspectives ensure no single viewpoint dominates the analysis."
+  - "Vectors are the Historian's memory — patterns it's watching for confirmation."
+  - "Threshold lowered to 20 points (from 30) due to Haiku cost reduction enabling more frequent runs."
+  - "findings-log.jsonl is the dedup anchor — never re-route a finding that's already logged."
+  - "Bucket 3 findings without qualifiers will be held for manual review by hub Librarian — always populate qualifiers."
+  - "Frustration escalation at 3+ consecutive passes triggers framework resolution path — this is how the fleet learns from repeated friction."
+  - "sentiment field in track points is the cheap signal — write it at entry time, read it in bulk at Historian run time."
+
+origin:
+  concept: "WAI origin conversation (2026-03-07) — Historian advisor in advisor ecosystem"
+  design_session: "2026-03-12, Sessions 10-11"
+  test_bench_critique: "17-issue review drove specificity of this skill"

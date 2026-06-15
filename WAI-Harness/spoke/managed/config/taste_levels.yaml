@@ -1,0 +1,189 @@
+# Taste Engine Hierarchy Levels
+# Defines the precedence structure for taste profile inheritance
+
+# Hierarchy levels define the precedence order for taste constraints.
+# Higher weight values indicate higher precedence (override lower weights).
+# Each level can have specific metadata and configuration.
+
+hierarchy_levels:
+  - name: hub
+    weight: 90
+    description: "Hub-level taste for organization-wide standards and policies"
+    is_spoke_specific: false
+    metadata:
+      scope: "organization"
+      managed_by: "hub_admin"
+      review_required: true
+      auto_promote: false
+
+  - name: org
+    weight: 80
+    description: "Organization-level taste overrides for divisions or business units"
+    is_spoke_specific: false
+    metadata:
+      scope: "organization"
+      managed_by: "org_admin"
+      review_required: true
+      auto_promote: false
+
+  - name: dept
+    weight: 70
+    description: "Department-level taste preferences for functional areas"
+    is_spoke_specific: false
+    metadata:
+      scope: "department"
+      managed_by: "dept_lead"
+      review_required: false
+      auto_promote: true
+
+  - name: role
+    weight: 60
+    description: "Role-specific taste adjustments for different team functions"
+    is_spoke_specific: false
+    metadata:
+      scope: "role"
+      managed_by: "team_lead"
+      review_required: false
+      auto_promote: true
+
+  - name: individual
+    weight: 50
+    description: "Individual user preferences and personalization"
+    is_spoke_specific: false
+    metadata:
+      scope: "individual"
+      managed_by: "user"
+      review_required: false
+      auto_promote: false
+
+  - name: spoke
+    weight: 40
+    description: "Spoke-specific project overrides and local adaptations"
+    is_spoke_specific: true
+    metadata:
+      scope: "project"
+      managed_by: "project_lead"
+      review_required: false
+      auto_promote: true  # Spoke values can be promoted to hub
+
+# Conflict resolution rules
+conflict_resolution:
+  # Default resolution strategy when conflicts are detected
+  default_strategy: "highest_precedence"
+  
+  # Rules for different conflict types
+  conflict_types:
+    value_mismatch:
+      auto_resolve: true
+      resolution: "use_highest_precedence"
+      log_conflict: true
+      
+    structure_mismatch:
+      auto_resolve: false
+      resolution: "manual_review"
+      log_conflict: true
+      
+    dependency_conflict:
+      auto_resolve: false
+      resolution: "manual_review"
+      log_conflict: true
+      
+    scope_conflict:
+      auto_resolve: true
+      resolution: "move_to_correct_scope"
+      log_conflict: false
+
+# Inheritance rules
+inheritance:
+  # Whether to inherit from parent levels when not explicitly set
+  implicit_inheritance: true
+  
+  # How to handle missing values during inheritance
+  missing_value_handling:
+    strategy: "skip"  # skip, use_default, raise_error
+    default_values:
+      numeric: 0
+      string: ""
+      boolean: false
+      list: []
+  
+  # Validation rules during inheritance
+  validation:
+    type_strictness: "strict"  # strict, lenient, none
+    required_fields: []
+    
+  # Decay settings for inherited values
+  decay:
+    enabled: true
+    half_life_days: 90  # Values decay to 50% influence after 90 days
+    minimum_influence: 0.1  # 10% minimum influence even after full decay
+
+# Promotion settings
+promotion:
+  # Auto-promotion thresholds
+  thresholds:
+    min_spokes: 3  # Minimum number of spokes using the same value
+    min_sessions: 10  # Minimum number of sessions with the constraint
+    success_threshold: 0.7  # Minimum success score for promotion
+    age_days: 30  # Minimum age in days before promotion consideration
+    
+  # Review requirements
+  review:
+    required_for_new_constraints: true
+    required_for_value_changes: false
+    required_for_type_changes: true
+    auto_approve_threshold: 0.9  # Auto-approve if confidence >= 90%
+
+# Hub update settings
+hub_updates:
+  # Batch processing settings
+  batching:
+    max_batch_size: 100
+    batch_timeout_minutes: 60
+    
+  # Quality thresholds
+  quality_thresholds:
+    min_confidence: 0.6
+    min_evidence_count: 3
+    max_conflicting_evidence: 0.1  # 10% max conflicting evidence
+    
+  # Update frequency
+  frequency:
+    scheduled: "daily"  # daily, weekly, monthly
+    on_demand: true
+    emergency: false
+
+# Logging and monitoring
+monitoring:
+  # Metrics to track
+  metrics:
+    - conflict_count
+    - resolution_time
+    - promotion_success_rate
+    - inheritance_accuracy
+    
+  # Alert thresholds
+  alerts:
+    high_conflict_rate:
+      threshold: 10  # conflicts per day
+      window_hours: 24
+      
+    promotion_failure_rate:
+      threshold: 0.2  # 20% failure rate
+      window_hours: 168  # 1 week
+      
+    inheritance_error_rate:
+      threshold: 0.01  # 1% error rate
+      window_hours: 24
+
+# Version information
+version:
+  current: "3.5.0"
+  compatibility: "3.x"
+  last_updated: "2026-04-09"
+  
+  # Migration requirements
+  migration:
+    from_version: "3.4.0"
+    required: false
+    notes: "Backward compatible with all 3.x versions"

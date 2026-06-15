@@ -1,0 +1,67 @@
+{
+  "id": "spec-ozi-advisor-init-routine-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-28T00:30:00Z",
+  "updated_at": "2026-05-28T00:30:00Z",
+  "routed_to": "FRAMEWORK",
+  "impact": 9,
+  "subject": { "kind": "process", "id": "ozi-advisor-init", "label": "Ozi Advisor Init Routine" },
+  "title": "Ozi Advisor Init Routine — sequential per-spoke advisor activation with budget negotiation",
+  "what": "When a new spoke registers in hub-registry.json, Ozi runs an advisor init sequence. Each advisor is initialized in sequence (not parallel) so budget allocation is informed by what prior advisors already claimed. Each advisor reads the spoke context, selects scout templates from the master catalog, customizes prompts for this spoke's file paths, writes schedule.yaml + coverage_taxonomy.yaml, and negotiates a time budget. At the end, an activation_summary.json is written and surfaced to Wilbur.",
+  "why": "Without init, advisors must be manually wired per spoke — a bottleneck that prevents fleet expansion. With init, every new spoke gets a personalized, budget-aware advisor stack automatically. The sequential order prevents advisor budget wars: high-priority advisors (Vera, Archie) claim first; lower-priority advisors get what remains.",
+  "trigger_conditions": [
+    "new spoke entry appears in hub-registry.json",
+    "manual: ozi init-advisors --spoke <spoke_id>",
+    "re-init: ozi init-advisors --spoke <spoke_id> --reset (clears and re-derives from catalog)"
+  ],
+  "init_sequence": {
+    "step_1_discover_spoke_context": {
+      "what": "Read CLAUDE.md, WAI-State.json, stack markers, project_type from spoke root",
+      "output": "spoke_context object: {project_type, stack, team_size, activation_class, goals}"
+    },
+    "step_2_compute_fleet_budget": {
+      "what": "Read fleet_budget from hub config (total seconds/week across all advisors on this spoke). Default: 3600s/week.",
+      "output": "remaining_budget_seconds — decremented as each advisor claims allocation"
+    },
+    "step_3_initialize_advisors_in_sequence": {
+      "order": "Determined by advisor registry priority field. Default order: vera → archie → expediter → historian → jordy → luci → will → clara → mark → sage",
+      "per_advisor": {
+        "a_select_templates": "Match spoke_context.activation_class against scout catalog — select scout templates relevant to this spoke type",
+        "b_customize_prompts": "Replace file path placeholders in templates with this spoke's actual paths",
+        "c_negotiate_budget": "Advisor reads remaining_budget_seconds, proposes time_request, Ozi grants min(requested, remaining * advisor_priority_fraction)",
+        "d_write_schedule": "Write {advisor}/schedule.yaml with granted budget and cadence derived from spoke activity level",
+        "e_write_taxonomy": "Write {advisor}/coverage_taxonomy.yaml derived from selected templates, all initially status=draft",
+        "f_write_wishlist": "Write {advisor}/scout_wishlist.yaml from taxonomy gap_scouts_needed list",
+        "g_decrement_budget": "remaining_budget_seconds -= time_grant.granted_allocation_seconds"
+      }
+    },
+    "step_4_write_activation_summary": {
+      "path": "WAI-Spoke/advisors/activation_summary.json",
+      "fields": ["spoke_id", "initialized_at", "spoke_context", "advisors_activated", "total_budget_allocated", "budget_remaining", "advisor_allocations"]
+    },
+    "step_5_surface_to_wilbur": {
+      "what": "Append activation_summary to Wilbur's inbox",
+      "path": "wilbur/WAI-Spoke/lugs/incoming/ (deliver as a lug type=signal, routed_to=WILBUR)",
+      "wilbur_reads": "fleet coverage_score, budget balance, spoke_context, any dimensions with gap_risk=high"
+    }
+  },
+  "scout_catalog": {
+    "location": "hub/WAI-Hub/scout-catalog/",
+    "structure": "One subfolder per advisor_id. Each subfolder has template scout JSONs with {{SPOKE_ROOT}}, {{SPOKE_ID}}, {{PROJECT_TYPE}} placeholders.",
+    "activation_classes": ["all_spoke_types", "product_spokes", "framework_spokes", "service_spokes"]
+  },
+  "budget_priority_fractions": {
+    "vera": 0.25,
+    "archie": 0.25,
+    "expediter": 0.10,
+    "historian": 0.15,
+    "jordy": 0.10,
+    "luci": 0.05,
+    "will": 0.05,
+    "others": 0.05
+  },
+  "advisor_init_order_rationale": "Vera and Archie run first because they produce the highest-density findings per dollar. Expediter runs third because it feeds the queue that all advisors depend on. Historian runs fourth to inform Ozi of behavioral patterns. Jordy and Luci are tail-end because they are spoke-specific and lower-frequency.",
+  "implementation_notes": "Implement as a skill file at templates/commands/wai-ozi-advisor-init.md. Ozi dispatches this skill when hub-registry.json changes (hook) or on manual trigger. The skill reads the scout catalog from hub, does template substitution, and writes all files atomically."
+}

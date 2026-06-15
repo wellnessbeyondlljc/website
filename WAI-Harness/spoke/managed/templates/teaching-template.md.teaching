@@ -1,0 +1,148 @@
+# Teaching: {title}
+
+**Type:** {Protocol Enhancement | Protocol Correction | Bug Fix | Migration Signal | Principle + Signal}
+**Version:** {major}.{minor}.{patch}
+**Created:** {YYYY-MM-DD}
+**safe_to_auto_adopt:** true  ← DEFAULT (change to false only if teaching should NOT auto-apply; if unsure, escalate to framework team)
+**applies_to_spoke_types:** all  ← 'all' (default) | comma-list of spoke type tags e.g. 'telegram-bot,discord-bot' | 'none' (hub-only)
+**Affects:** {list of affected components}
+**Supersedes:** {prior teaching id or "nothing"}
+**weight:** {1 | 5 | 10 | 25}  ← 1=patch/fix/wording, 5=behaviour update, 10=schema or protocol change, 25=architectural addition or new advisor
+**fingerprint:** {3-char alphanumeric}  ← derive: first 3 chars of MD5(teaching-id + ":" + weight). Changing weight invalidates fingerprint (integrity property).
+
+---
+
+## Prerequisites
+
+**applies_to_spoke_types:** When set to anything other than `all`, wai-teach checks the target spoke's `WAI-State.json` `wheel.spoke_types[]` array before writing to ingest. If no intersection, the teaching is skipped for that spoke.
+
+{Choose one:}
+
+**Standalone (no dependencies):**
+None — this teaching is standalone and has no dependencies.
+
+**With dependencies:**
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| {teaching-id} applied | `{shell check} && echo PASS \|\| echo FAIL` | {what breaks without it} |
+
+**Check before applying (if dependencies exist):**
+```bash
+{runnable command returning PASS/FAIL}
+```
+
+## Batch Sequence
+
+**Batch:** {batch-name or "standalone"}
+**Apply order:** {N of M or "1 of 1"}
+**Depends on:** {teaching-id (T-NN) or "none"}
+**Required before:** {teaching-id (T-NN) or "none"}
+**Parallel safe:** {yes | no — reason}
+**Full batch order:** {T-01 → T-02 → ... or "standalone"}
+
+---
+
+## What This Teaching Provides
+
+{High-level summary of what this teaching adds, fixes, or changes. 2-4 sentences.}
+
+---
+
+## Why This Matters
+
+{Explanation of the problem this solves and the impact on spoke behavior without this fix.}
+
+---
+
+## What Changed in {file path}
+
+{Specific description of what was added, removed, or modified in the source file(s).}
+
+{Include before/after code blocks if helpful.}
+
+---
+
+## Context Doc Patch
+
+**Required when:** teaching changes architecture, schema, behaviour, or principles.
+**Omit entirely when:** patch/fix with no conceptual change (weight=1 teachings usually qualify).
+
+Apply patches to `WAI-Spoke/wai-context.md` before marking teaching as processed. Apply in the order listed.
+
+```json
+[
+  {
+    "section": "{Section heading in wai-context.md — must match exactly}",
+    "action": "add | replace | remove",
+    "content": "{Prose to insert or replace. Use 'null' for action=remove.}"
+  }
+]
+```
+
+---
+
+## Resolving {framework_path}
+
+`{framework_path}` is the root of the Wheelwright framework repository. Resolve from `WAI-State.json` at `wheel.framework_path`, or ask the user.
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+echo "Framework path: $FRAMEWORK_PATH"
+# If empty, ask the user or check ~/projects/wheelwright/framework
+```
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — {First action}
+
+{Instructions and commands for this step.}
+
+### Step {N} — Move teaching to processed
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/seed/ingest/{filename}.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Behavioral Implications
+
+{What changes in agent behavior after this teaching is applied. Be specific about what agents will do differently.}
+
+---
+
+## Verification
+
+After applying:
+
+```bash
+# {What to check — use PASS/FAIL output pattern}
+{check command} && echo "PASS — {what passed}" || echo "FAIL — {what failed}"
+```
+
+---
+
+## Backward Compatibility
+
+- {List what existing data, behavior, and conventions are preserved}
+- {Note any dual-read compatibility if applicable}
+
+---
+
+{If this teaching embeds a signal lug, include it here:}
+## Embedded Signal Lug
+
+Append to `WAI-Lugs.jsonl` (idempotent — skip if id already present):
+
+```json
+{"id": "{signal-id}", "type": "signal", "title": "{title}", "description": "{description}", "impact": {8-10}, "created_by": "{agent}", "created_at": "{ISO-8601}", "rationale": "{why it matters}"}
+```
+
+---
+
+**Teaching Package:** {package-id}
+**safe_to_auto_adopt:** {true | false — reason}
+**Impact:** {description of impact scope and severity}

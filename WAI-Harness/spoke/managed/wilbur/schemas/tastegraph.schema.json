@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TasteGraph Preference Entry",
+  "description": "A single structured preference in Mario's TasteGraph model. Consumed by Wilbur and WAI advisors to shape agent behavior according to Mario's stated and verified preferences.",
+  "type": "object",
+  "required": ["id", "category", "key", "value", "confidence", "source", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique preference ID in slug format. Convention: {category-abbrev}-{kebab-description}"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "work_style",
+        "communication",
+        "temporal",
+        "risk_tolerance",
+        "aesthetic",
+        "engagement",
+        "cost_sensitivity",
+        "notification_preferences",
+        "accessibility",
+        "alignment_gates",
+        "output_format",
+        "trust_ladder",
+        "locale",
+        "audience_profile"
+      ],
+      "description": "Preference category. See tastegraph-spec.md Section 3 for category descriptions."
+    },
+    "key": {
+      "type": "string",
+      "description": "Machine-readable preference key within its category. Used for programmatic lookup by advisors."
+    },
+    "value": {
+      "description": "The preference value. Type varies: string for descriptive preferences, boolean for on/off flags, object for structured preferences with sub-fields."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["stated", "inferred", "verified"],
+      "description": "stated=user explicitly documented this; inferred=derived from observed behavior, must be verified before use; verified=user confirmed this preference is accurate"
+    },
+    "source": {
+      "type": "string",
+      "description": "Where this preference was derived from. Examples: 'CLAUDE.md anti-patterns', 'session-20260525-1442', 'feedback_no_permission_asking.md', 'lug-tastegraph-spec-v1 minder_seed_preferences_to_capture'"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this preference was first recorded"
+    },
+    "last_verified": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when Mario last confirmed this preference. Null = never explicitly re-verified after creation."
+    },
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Optional free-text notes. Recommended: capture the rationale or observed context that led to this preference."
+    }
+  }
+}

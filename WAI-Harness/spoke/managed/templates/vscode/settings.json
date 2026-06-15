@@ -1,0 +1,9 @@
+{
+  "continue.systemMessage": "This project uses Wheelwright for persistent AI context. READ THESE FILES FIRST:\n\n1. .WAI/WAI-Guide.md - Token efficiency protocols, workflow modes, session commands\n2. .WAI/WAI-State.json - Project foundation, decisions, constraints\n3. .WAI/WAI-State.md - Strategic vision\n\nKEY PROTOCOLS:\n- ADAPTIVE workflow: Complex tasks (multi-file OR >5 steps) require Discussion → READY TO PLAN → PLAN ACCEPTED gates\n- Simple tasks proceed with YOLO autonomy\n- Checkpointing every 3-5 steps for large plans\n- Context hygiene: Never repeat large content, use file:line references\n- Commands: Time, Compact, Closeout, Shipit\n\nFull instructions in .WAI/WAI-Guide.md",
+
+  "github.copilot.chat.codeGeneration.instructions": [
+    {
+      "text": "Read .WAI/WAI-Guide.md for token efficiency protocols before starting work"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "id": "spec-work-class-portfolio-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:12:00Z",
+  "updated_at": "2026-05-30T17:12:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 7,
+  "subject": "Work Class Portfolio Planning \u2014 predictable blend coverage across work types for autonomous sessions",
+  "title": "Work Class Portfolio Planning \u2014 Navigator-Driven Balanced Session Composition",
+  "what": "Defines Work Class Portfolio Planning: the mechanism by which Autopilot (AP) and Ozi receive a portfolio slice from Navigator that guarantees predictable blend coverage across work types (feature | maintenance | security | docs | performance | debt). Rather than always executing the highest-ROI lug, AP plans each session as a portfolio of N items balanced across work classes. Navigator enforces blend constraints so no single work class dominates across consecutive sessions. The portfolio slice is the input to AP's session_plan in the goal chain.",
+  "why": "Pure ROI-ordered execution produces lopsided sessions: high-ROI features crowd out maintenance and debt work until the codebase degrades and ROI on all future work drops. Portfolio planning prevents this: it distributes attention across work classes each session, mimicking how a healthy engineering team allocates time. Without this, autonomous sessions become feature-factories that accumulate invisible maintenance debt. Predictable blend coverage is the unique WAI constraint \u2014 it is not the same as traditional multi-objective optimization because the blend must be predictable (stakeholder-observable) rather than just Pareto-efficient.",
+  "audience": [
+    "Navigator \u2014 computes and returns portfolio slices on request",
+    "AP \u2014 receives portfolio slice and builds session_plan from it",
+    "Ozi \u2014 uses portfolio slices to compose nightly session batches",
+    "Mario \u2014 reviews portfolio blend via Navigator reports to ensure the allocation matches his priorities"
+  ],
+  "use_cases": [
+    "Session startup: AP requests portfolio slice for a 100k-token session; Navigator returns 5 items: 2 feature, 1 maintenance, 1 debt, 1 security \u2014 AP plans all 5 in sequence",
+    "Blend correction: last 3 sessions were all feature work; Navigator adjusts next slice to 50% maintenance/debt to rebalance",
+    "Consecutive session Ozi: Ozi dispatches 5 nightly sessions; Navigator distributes portfolio slices so the 5 sessions collectively hit the target blend percentages",
+    "Override: Mario specifies 'this week focus on security' \u2014 Navigator boosts security weight temporarily; portfolio slices reflect the override",
+    "Blend audit: Mario asks 'what was our blend last 30 sessions?'; Navigator returns actuals vs target blend percentages"
+  ],
+  "patterns": [
+    "Portfolio slice = ordered list: Navigator returns N items in execution order; AP executes them in that order; no reordering by AP",
+    "Blend target: configurable per spoke in WAI-Spoke/advisors/navigator/portfolio-config.json; defaults: feature=35%, maintenance=25%, debt=20%, security=10%, docs=5%, performance=5%",
+    "Blend accounting: Navigator tracks actuals per session in portfolio-history.json; uses actuals to compute correction in next slice",
+    "Session budget fit: Navigator filters items by model_fit and estimated_token_cost before including in slice; items too large for the budget are held for a dedicated session",
+    "Focus-lock override: items in a focus-locked initiative always fill their slot first before blend correction is applied"
+  ],
+  "schema": {
+    "portfolio_config_file": "WAI-Spoke/advisors/navigator/portfolio-config.json",
+    "portfolio_config": {
+      "wheel_id": "string",
+      "target_blend": {
+        "feature": "float 0-1 \u2014 must sum to 1.0 across all classes",
+        "maintenance": "float",
+        "debt": "float",
+        "security": "float",
+        "docs": "float",
+        "performance": "float"
+      },
+      "blend_window_sessions": "int default 10 \u2014 how many recent sessions to average when computing actuals",
+      "max_items_per_slice": "int default 5",
+      "focus_lock_override": "bool default true \u2014 focus-lock items always fill first"
+    },
+    "portfolio_slice_request": {
+      "session_budget_tokens": "int",
+      "model_id": "string \u2014 items must be model_fit compatible",
+      "session_type": "interactive | autonomous",
+      "force_blend_reset": "bool default false \u2014 ignore actuals, return pure target blend"
+    },
+    "portfolio_slice_response": {
+      "generated_at": "ISO-8601",
+      "session_budget_tokens": "int",
+      "target_blend": "object \u2014 copy of config",
+      "actual_blend_last_N": "object \u2014 actuals over blend_window_sessions",
+      "correction_applied": "object \u2014 adjustments made to hit target",
+      "slice": [
+        {
+          "position": "int \u2014 1-based execution order",
+          "lug_id": "string",
+          "title": "string",
+          "work_class": "feature | maintenance | debt | security | docs | performance",
+          "roi": "float",
+          "estimated_tokens": "int | null",
+          "model_fit": "haiku | sonnet | opus"
+        }
+      ],
+      "items_held": [
+        "lug_id \u2014 items not included due to budget or blend constraints; candidates for next session"
+      ]
+    },
+    "portfolio_history_file": "WAI-Spoke/advisors/navigator/portfolio-history.json",
+    "portfolio_history": {
+      "sessions": [
+        {
+          "session_id": "string",
+          "ts": "ISO-8601",
+          "slice": [
+            "lug_id"
+          ],
+          "completed": [
+            "lug_id"
+          ],
+          "blend_actual": "object \u2014 {work_class: fraction} for this session only"
+        }
+      ]
+    }
+  },
+  "constraints": [
+    "target_blend values must sum to 1.0; Navigator rejects or normalizes configs that don't",
+    "AP must not reorder the portfolio slice \u2014 the order encodes blend and dependency decisions made by Navigator",
+    "Navigator must not include items from a focus-locked initiative that the AP session cannot complete within its token budget",
+    "blend_window_sessions must be at least 3 to produce meaningful actuals; single-session actuals are not corrective",
+    "work_class is a required field on all lug types; lugs without work_class are treated as debt for blend accounting purposes",
+    "Portfolio history is a spoke-side file; it is never sent to the hub (contains session-level operational data, not fleet intelligence)"
+  ],
+  "tests": [
+    "Target blend enforcement: 10 ready items all of class 'feature'; slice of 5 returns at most ceil(0.35 * 5)=2 feature items; remainder pulled from lower-ROI other-class items",
+    "Blend correction: last 5 sessions were 100% feature; next slice has 0 feature items until actuals recover toward target",
+    "Focus-lock priority: 1 focus-lock item + 4 feature items; focus-lock item is position=1 regardless of ROI",
+    "Budget fit: 1 item estimated at 150k tokens, session budget 100k; item appears in items_held, not in slice",
+    "blend sum validation: config with blend not summing to 1.0 \u2014 Navigator rejects with clear error",
+    "Portfolio history append: after session completes, blend_actual recorded matches completed lug work_classes"
+  ],
+  "impl_lugs": [
+    "impl-work-class-portfolio-config-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-06-02T20:34:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "work_class field: add to all existing lug types retroactively, or only require for new lugs going forward?",
+      "estimated_tokens: who computes this? Navigator estimating from lug size is inaccurate; should this come from a Haiku pre-scan of each lug's execute section?",
+      "Blend override: should Mario's 'focus on X this week' override be a temporary portfolio-config mutation or a separate priority boost mechanism?"
+    ]
+  },
+  "related_specs": [
+    "spec-goal-chain-v1",
+    "spec-goal-queue-v1",
+    "spec-sentinel-advisor-v1",
+    "spec-evolution-lifecycle-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec. Read WAI-Spoke/advisors/navigator/recommendations-current.json for current Navigator behavior. Check if WAI-Spoke/advisors/navigator/portfolio-config.json exists. Scan 10 recent lugs in bytype/ and note their work_class field (or absence).",
+  "execute": "1. Create WAI-Spoke/advisors/navigator/portfolio-config.json with default target blend. 2. Audit existing lugs for work_class field; add where missing. 3. Implement portfolio_slice() function in Navigator advisor: blend accounting from history + correction + focus-lock priority + budget fit. 4. Create WAI-Spoke/advisors/navigator/portfolio-history.json scaffold. 5. Wire portfolio_slice() into AP session startup after goal chain claim.",
+  "verify": "1. portfolio-config.json parses and target_blend sums to 1.0. 2. Slice of all-feature items returns at most target feature fraction. 3. Blend correction adjusts slice after lopsided history. 4. Focus-lock item appears first. 5. Over-budget item appears in items_held.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

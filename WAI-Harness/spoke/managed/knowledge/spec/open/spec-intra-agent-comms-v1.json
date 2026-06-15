@@ -1,0 +1,145 @@
+{
+  "id": "spec-intra-agent-comms-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:10:00Z",
+  "updated_at": "2026-05-30T17:10:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 9,
+  "subject": "Intra-agent communications \u2014 synchronous consultation, handoff, and collaborative planning between Claude Code sessions",
+  "title": "Intra-Agent Communications \u2014 agent_messages + Herald Daemon + Consult-Before-Deliver",
+  "what": "Defines the intra-agent communication layer: how two Claude Code sessions (in the same or different spokes) communicate synchronously. The layer consists of: (1) the agent_messages Supabase table as the shared communication bus; (2) the Herald daemon which polls agent_messages and spawns CC sessions headless to respond; (3) three communication patterns: consult-before-deliver (ask before landing a lug), handoff (transfer an in-progress chain to another session), and collaborative planning (joint spec or design). This is the mechanism that allows an AP session to consult a Sentinel session before finalizing an architecture decision, or to hand off a chain when its token budget is exhausted.",
+  "why": "Currently sessions are isolated \u2014 a session can deliver a lug to another spoke but cannot ask a question and wait for an answer within the same interaction. This forces guess-and-deliver patterns that produce misaligned lugs. Intra-agent comms enables consult-before-deliver: before landing a lug that affects another spoke, the originating session sends a message and waits for the target spoke's session to respond. It also enables handoff: when session A exhausts its budget mid-chain, it can hand the chain to session B with full context, avoiding the orphan-chain pattern.",
+  "audience": [
+    "AP \u2014 initiates consultations before cross-spoke lug delivery",
+    "Herald daemon \u2014 the runtime that makes intra-agent comms possible by spawning responder sessions",
+    "Ozi \u2014 uses handoff to redistribute chains when budget is exhausted mid-run",
+    "Any session that needs synchronous input from another spoke before proceeding"
+  ],
+  "use_cases": [
+    "Consult-before-deliver: AP wants to deliver impl-lug to framework spoke; sends agent_message to framework Ozi; Herald spawns framework session; session responds with 'proceed' or 'modify X first'; AP delivers (or revises) lug",
+    "Handoff: Ozi session A claims chain-herald-impl-v1, completes 3/7 children, hits 80k token limit; sends handoff message to Ozi session B with completed_children[] context; session B claims the same chain and resumes from child 4",
+    "Collaborative planning: two sessions co-author a spec by exchanging messages through agent_messages; each appends to a shared draft in the thread",
+    "Spawned-by-herald session: a session started by the Herald daemon auto-exits after responding (spawned_by=herald flag in session-guard.json triggers this behavior)",
+    "Cross-spoke consultation: spoke A asks spoke B 'do you have ToolGraph entry for anthropic-haiku?' and receives a structured response without a full lug round-trip"
+  ],
+  "patterns": [
+    "agent_messages is the bus: all intra-agent communication flows through this Supabase table \u2014 no direct file writes between sessions",
+    "consult-before-deliver: SHOULD send a message and await response before delivering any lug that will require significant work from the receiving spoke",
+    "Herald spawns responders: Herald daemon polls agent_messages for rows with status=pending and to_spoke matching its spoke; spawns a CC headless session to respond; marks row status=responded after session exits",
+    "Thread model: a thread_id groups a multi-turn conversation; initiating session creates the thread_id; all follow-up messages share it",
+    "Handoff message carries full chain context: completed_children[], deferred_children[], current file_scope, chain_id \u2014 receiving session uses this to resume without re-reading all history",
+    "Spawned-by-herald auto-exit: Herald sets spawned_by=herald in session-guard.json before spawning CC; startup check detects this flag and configures the session to exit after first response"
+  ],
+  "schema": {
+    "agent_messages_table": {
+      "storage": "Supabase table: agent_messages",
+      "columns": {
+        "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+        "thread_id": "uuid NOT NULL \u2014 groups multi-turn conversations; initiator creates via gen_random_uuid()",
+        "session_id": "text NOT NULL \u2014 sending session_id",
+        "from_spoke": "text NOT NULL \u2014 wheel_id of sending spoke",
+        "to_spoke": "text NOT NULL \u2014 wheel_id of target spoke",
+        "message_type": "text NOT NULL \u2014 consult | handoff | collaborative | response | ack",
+        "message": "jsonb NOT NULL \u2014 structured message body (see message_body_schema below)",
+        "status": "text NOT NULL DEFAULT 'pending' \u2014 pending | responded | acknowledged | expired",
+        "ts": "timestamptz NOT NULL DEFAULT now()",
+        "responded_at": "timestamptz",
+        "response": "jsonb \u2014 populated by the responder session",
+        "ttl_hours": "int DEFAULT 2 \u2014 message expires if not responded to within this window"
+      },
+      "indexes": [
+        "to_spoke, status \u2014 Herald poll query",
+        "thread_id \u2014 conversation grouping",
+        "ts \u2014 TTL expiry sweep"
+      ]
+    },
+    "message_body_schema": {
+      "consult": {
+        "question": "string \u2014 the question being asked",
+        "context": "object \u2014 relevant lug IDs, file paths, or structured context",
+        "response_schema": "object | null \u2014 JSON Schema the responder should conform to; null means free-text"
+      },
+      "handoff": {
+        "chain_id": "string",
+        "completed_children": [
+          "lug_id"
+        ],
+        "deferred_children": [
+          "lug_id"
+        ],
+        "file_scope": [
+          "path"
+        ],
+        "context_summary": "string \u2014 1-3 sentences on what was done and what remains"
+      },
+      "collaborative": {
+        "artifact_type": "spec | design | plan",
+        "artifact_id": "string",
+        "contribution": "string \u2014 the contributing session's addition",
+        "draft_path": "string | null \u2014 path to the shared draft file"
+      },
+      "response": {
+        "in_reply_to": "uuid \u2014 message id being responded to",
+        "answer": "object | string \u2014 structured per response_schema or free-text",
+        "verdict": "proceed | modify | reject | null \u2014 for consult responses"
+      }
+    },
+    "herald_daemon": {
+      "purpose": "Polls agent_messages for pending messages addressed to this spoke; spawns a headless CC session to respond; marks rows responded",
+      "poll_interval_seconds": 30,
+      "spawn_command": "claude-code --headless --session-type=herald-responder --thread-id={thread_id} --message-id={id}",
+      "session_guard_herald_flag": {
+        "spawned_by": "herald",
+        "thread_id": "uuid",
+        "message_id": "uuid",
+        "auto_exit_after_response": true
+      },
+      "exit_condition": "Herald-spawned sessions exit immediately after writing a response row to agent_messages; they do not continue to a full wakeup"
+    }
+  },
+  "constraints": [
+    "agent_messages is the only permitted intra-agent communication channel \u2014 no direct file writes between sessions for coordination",
+    "Consult-before-deliver is SHOULD not MUST: sessions MAY deliver lugs without consulting when the scope is clearly contained; consultation is required when the lug has cross-spoke behavioral impact",
+    "A Herald-spawned session MUST exit after responding; it must not enter full wakeup or claim chains",
+    "Thread TTL: a thread with no activity for ttl_hours is expired; Herald stops polling for it; initiating session must retry with a new thread_id",
+    "Handoff messages must include a complete context_summary \u2014 a receiving session must be able to resume from the handoff message alone without reading all prior track entries",
+    "Response schema conformance: if a consult message includes response_schema, the responder must validate its response against it before sending"
+  ],
+  "tests": [
+    "Consult roundtrip: session A sends consult message to spoke B; Herald detects it, spawns CC in spoke B; spoke B session responds; session A reads response; thread status=responded",
+    "Handoff roundtrip: session A sends handoff for chain-X with completed=[C1, C2]; session B receives handoff, claims chain-X, resumes from C3",
+    "Herald auto-exit: Herald-spawned session has spawned_by=herald in session-guard.json; after sending response, session exits without entering wakeup loop",
+    "TTL expiry: message with ttl_hours=0 is immediately expired; Herald skips it; no session spawned",
+    "Response schema validation: consult with response_schema={type:object, required:[verdict]}; responder sends {verdict:proceed} \u2014 passes; missing verdict \u2014 fails",
+    "Multi-turn thread: session A sends consult, B responds, A sends follow-up consult on same thread_id \u2014 Herald connects them as one conversation"
+  ],
+  "impl_lugs": [
+    "impl-intra-agent-comms-schema-seed-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-06-02T20:34:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "Herald daemon deployment: always-on process vs. cron-triggered? Always-on requires separate infra; cron has up-to-30s latency per message.",
+      "Local fallback when Supabase unavailable: file-based message passing via WAI-Spoke/runtime/messages-inbox.json? How does Herald detect incoming messages without Supabase polling?",
+      "Consult-before-deliver enforcement: should this be a lug schema constraint (blocked_by=consult-thread-id) or a behavioral guideline only?",
+      "Security: Herald spawns CC with full permissions in the target spoke; what stops a malicious message from triggering unintended work? Message author must be in a trusted wheel_id list."
+    ]
+  },
+  "related_specs": [
+    "spec-goal-chain-v1",
+    "spec-goal-queue-v1",
+    "spec-herald-daemon-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec. Check if Supabase agent_messages table already exists (query information_schema.tables). Read spec-herald-daemon-v1 if present for full Herald implementation. Read WAI-Spoke/WAI-State.json for current session_guard structure to understand spawned_by flag integration.",
+  "execute": "1. Create Supabase agent_messages table per schema above. 2. Implement send_message() and poll_messages() functions (tools/agent_comms.py). 3. Add spawned_by=herald flag handling to session startup: detect herald session type, configure auto-exit. 4. Implement Herald daemon poll loop (initially as a cron job, not always-on). 5. Implement consult-before-deliver workflow: send consult, poll for response (max 2min timeout), read verdict. 6. Implement handoff workflow: send handoff message, release chain claim.",
+  "verify": "1. agent_messages table exists in Supabase with correct schema. 2. send_message() writes a row and returns message_id. 3. poll_messages() for to_spoke returns pending rows. 4. Herald-spawned session detects spawned_by=herald and exits after one response. 5. Consult roundtrip completes in under 5 minutes (Herald poll + CC spawn + respond + read).",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

@@ -1,0 +1,155 @@
+{
+  "id": "spec-evolution-lifecycle-v1",
+  "type": "spec",
+  "status": "completed",
+  "version": "1.0.0",
+  "created_at": "2026-05-28T21:30:00Z",
+  "updated_at": "2026-05-31T16:55:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.243",
+  "impact": 7,
+  "subject": {
+    "kind": "feature",
+    "id": "evolution-lifecycle",
+    "label": "Advisor Evolution Lifecycle"
+  },
+  "title": "Advisor Evolution Lifecycle — observation to adoption with cohort gate and watchdog",
+  "what": "The evolution lifecycle governs how advisor behavior changes are proposed, validated, approved, and monitored. It spans five stages: observation recording, hypothesis formation, hub-side cohort gate, lead approval, and watchdog monitoring post-adoption. The EvolutionEngine class in advisors/evolution_engine.py implements all spoke-side stages. Hub-side cohort gate is managed by the Architect advisor.",
+  "why": "Without a structured lifecycle, advisor behavior changes are applied ad-hoc with no validation, no fleet-wide consistency, and no rollback safety. The lifecycle ensures that high-risk changes require broader evidence before adoption and that degradation is automatically detected and reversed.",
+  "audience": [
+    "admin",
+    "dev",
+    "ozi"
+  ],
+  "use_cases": [
+    {
+      "title": "Spoke advisor detects recurring pattern",
+      "trigger": "record_observation() called 3+ times with fired=True for same pattern_id",
+      "outcome": "check_and_form_if_ready() creates a hypothesis lug in bytype/hypothesis/open/",
+      "persona": "ozi"
+    },
+    {
+      "title": "Hub cohort gate confirms pattern is fleet-wide",
+      "trigger": "Architect advisor reads hypothesis, checks cohort_confirmation_count across all spokes",
+      "outcome": "Hub upserts cohort_confirmation_count >= 3 to advisor_hypotheses table; spoke reads count via get_cohort_confirmation_count()",
+      "persona": "admin"
+    },
+    {
+      "title": "Lead approves adoption",
+      "trigger": "Admin runs promote_hypothesis(hyp_id, 'adopted')",
+      "outcome": "Hypothesis status set to 'adopted', advisor_versions row upserted, watchdog window started",
+      "persona": "admin"
+    },
+    {
+      "title": "Watchdog detects act-rate degradation",
+      "trigger": "auto_rollback_if_degraded() called during nightly advisor run",
+      "outcome": "Pre-adoption YAML restored, lifecycle event written, finding lug created",
+      "persona": "ozi"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Hypothesis type is 'hypothesis', not 'other'",
+      "description": "Hypothesis lugs use type='hypothesis' and live in bytype/hypothesis/open/. They are NOT lug type 'other'. The status field supports: open, testing, confirmed, rejected, adopted."
+    },
+    {
+      "name": "Low-risk hypotheses can be adopted without cohort gate",
+      "description": "evolution_risk='low' hypotheses may skip hub cohort gate (cohort_confirmation_count=0 acceptable). Medium and high risk require hub-side confirmation."
+    },
+    {
+      "name": "advisor_versions upserted on adoption",
+      "description": "When promote_hypothesis() transitions to 'adopted', a row is written to advisor_versions with advisor_id, wheel_id, version, definition_yaml, and activated_at."
+    },
+    {
+      "name": "Corpus test observations use a dedicated observation_type",
+      "description": "record_corpus_test_observation() writes observations with observation_type='corpus_test' to the corpus-test-{test_id} advisor buffer, enabling separation from behavioral observations in analysis."
+    }
+  ],
+  "how": {
+    "trigger": "EvolutionEngine.record_observation() called by advisors after each activation",
+    "steps_summary": [
+      "1. Advisor calls record_observation(advisor_id, pattern_id, fired, user_response) — writes to local JSONL buffer + Supabase best-effort",
+      "2. Advisor calls check_and_form_if_ready() — if threshold crossed and no open hypothesis, form_hypothesis() creates hypothesis lug in bytype/hypothesis/open/",
+      "3. Hub Architect advisor reads hypothesis, checks fleet-wide cohort_confirmation_count, upserts back to advisor_hypotheses",
+      "4. Lead calls promote_hypothesis(hyp_id, 'testing') then promote_hypothesis(hyp_id, 'confirmed') — optional intermediate stages",
+      "5. Lead calls promote_hypothesis(hyp_id, 'adopted') — updates hypothesis lug status, upserts advisor_versions row, calls start_watchdog()",
+      "6. Nightly: auto_rollback_if_degraded() checks act-rate degradation within watchdog window; rolls back if >30% drop"
+    ],
+    "constraints": [
+      "Medium and high risk hypotheses require cohort_confirmation_count >= 3 before promotion to 'confirmed'",
+      "Watchdog windows: low=14 days, medium=28 days, high=56 days",
+      "Corpus test observations write to a separate advisor buffer prefixed 'corpus-test-'"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "After each advisor activation (fired=True or fired=False)",
+      "On lead decision to approve or reject a hypothesis",
+      "Nightly auto_rollback check"
+    ],
+    "not_when": [
+      "Hypotheses should not be formed for single-occurrence patterns (count < threshold)"
+    ],
+    "frequency": "Per advisor activation + nightly watchdog check"
+  },
+  "schema": {
+    "inputs": [
+      "WAI-Spoke/advisors/{advisor_id}/observations_buffer.jsonl — local observation log",
+      "Supabase advisor_observations table — fleet-visible mirror",
+      "Supabase advisor_hypotheses table — hypothesis state with cohort count"
+    ],
+    "outputs": [
+      "WAI-Spoke/lugs/bytype/hypothesis/open/{hyp_id}.json — hypothesis lug",
+      "Supabase advisor_versions table — version history on adoption",
+      "WAI-Spoke/lugs/bytype/other/open/finding-watchdog-*.json — rollback finding lugs"
+    ],
+    "state_changes": [
+      "observations_buffer.jsonl grows by one line per record_observation() call",
+      "hypothesis lug status updated by promote_hypothesis()",
+      "advisor_versions row inserted on adoption"
+    ]
+  },
+  "constraints": [
+    "EvolutionEngine is spoke-side only — hub cohort gate is hub-side (Architect advisor)",
+    "Rollback is best-effort when pre_adoption_backup.yaml is missing",
+    "Observation IDs are uuid4 — globally unique across spokes"
+  ],
+  "tests": [],
+  "impl_lugs": [
+    "impl-evolution-mechanism-gaps-v1"
+  ],
+  "health": {
+    "test_coverage": "behavioral",
+    "test_file": "tests/behavioral/test_evolution_engine.py",
+    "test_count": 32,
+    "last_impl_lug_completed": "impl-evolution-mechanism-gaps-v1",
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": "2026-05-31T16:55:00Z",
+    "verification_note": "All 32 behavioral tests pass. All 8 required EvolutionEngine methods present. bytype/hypothesis/ directory exists."
+  },
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-advisor-system-v1",
+    "spec-advisor-yaml-schema-v1"
+  ],
+  "outcome": "Verified complete: all 32 behavioral tests pass, all 8 required EvolutionEngine methods confirmed present, bytype/hypothesis/ directory exists, health fields accurate. No gaps found.",
+  "completed_at": "2026-05-31T16:55:00Z",
+  "gitnexus_symbols": [
+    "EvolutionEngine",
+    "record_observation",
+    "form_hypothesis",
+    "promote_hypothesis",
+    "record_corpus_test_observation",
+    "check_and_form_if_ready",
+    "start_watchdog",
+    "auto_rollback_if_degraded"
+  ],
+  "execution_mode": "tender",
+  "execution_substrate": null,
+  "gt_convoy_hint": "requires review: quality=0",
+  "perceive": "Read this spec (spec-evolution-lifecycle-v1). Read WAI-Spoke/advisors/evolution_engine.py — verify all required methods exist: record_observation(), check_and_form_if_ready(), form_hypothesis(), promote_hypothesis(), start_watchdog(), auto_rollback_if_degraded(), record_corpus_test_observation(), get_cohort_confirmation_count(). Read tests/behavioral/test_evolution_engine.py — confirm 32 tests present and check last run status. Check WAI-Spoke/lugs/bytype/hypothesis/ directory exists. Review health fields on this spec for staleness.",
+  "execute": "Run: python3 -m pytest tests/behavioral/test_evolution_engine.py -q --tb=short to confirm all 32 tests pass. For any missing method in EvolutionEngine: create an impl lug targeting WAI-Spoke/advisors/evolution_engine.py with the gap described in perceive/execute/verify, append it to impl_lugs[] on this spec, routed_to=LOCAL, model_fit=haiku. If all methods present and tests pass: update health.last_impl_lug_completed and health.spec_drift_risk. If bytype/hypothesis/ directory missing: mkdir -p WAI-Spoke/lugs/bytype/hypothesis/open/.",
+  "verify": "All 32 behavioral tests pass (python3 -m pytest tests/behavioral/test_evolution_engine.py). EvolutionEngine has all 8 required methods. WAI-Spoke/lugs/bytype/hypothesis/ directory exists. health.test_coverage='behavioral' and health.test_count=32 match actual test file. No open spec_drift_risk=high flags on this spec."
+}

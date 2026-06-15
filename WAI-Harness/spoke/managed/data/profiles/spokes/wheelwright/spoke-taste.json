@@ -1,0 +1,59 @@
+{
+  "spoke_name": "wheelwright",
+  "version": "1.0.0",
+  "created_at": "2026-04-09T16:03:00Z",
+  "last_updated": "2026-04-09T16:03:00Z",
+  "inherited_from": "hub",
+  "overrides": {
+    "python": {
+      "max_line_length": 100,
+      "target_version": "3.11",
+      "type_checking": "strict"
+    },
+    "testing": {
+      "framework": "pytest",
+      "min_coverage": 85,
+      "test_style": "given_when_then"
+    },
+    "documentation": {
+      "docstring_style": "google",
+      "api_docs_required": true,
+      "changelog_format": "keepachangelog"
+    },
+    "quality": {
+      "linting": {
+        "tool": "ruff",
+        "strict_mode": true,
+        "exclude_patterns": ["tests/*", "docs/*"]
+      },
+      "formatting": {
+        "tool": "black",
+        "line_length": 100,
+        "target_version": "py311"
+      }
+    },
+    "workflow": {
+      "ci_cd": "github_actions",
+      "branch_protection": true,
+      "required_reviews": 1
+    }
+  },
+  "spoke_specific": {
+    "ai_integration": {
+      "enabled": true,
+      "preferred_models": ["claude-sonnet", "claude-opus"],
+      "session_continuity": "wheelwright"
+    },
+    "development": {
+      "local_environment": "venv",
+      "dependency_management": "pip",
+      "virtual_environments": true
+    }
+  },
+  "metadata": {
+    "description": "Taste profile for the Wheelwright framework project itself",
+    "inherits_from_hub": true,
+    "conflicts_resolved": 0,
+    "last_hub_sync": "2026-04-09T16:03:00Z"
+  }
+}

@@ -1,0 +1,40 @@
+{
+    "lug_policies": {
+        "bug": {
+            "close_requires": [
+                "test_added",
+                "test_verified"
+            ],
+            "priority_default": "high",
+            "description": "Bugs require tests to prevent regressions"
+        },
+        "issue": {
+            "close_requires": [
+                "verification_needed"
+            ],
+            "priority_default": "medium",
+            "description": "Issues require verification before closing"
+        },
+        "work": {
+            "close_requires": [],
+            "priority_default": "medium",
+            "description": "General work items have no mandatory requirements"
+        },
+        "epic": {
+            "close_requires": [
+                "all_children_closed"
+            ],
+            "priority_default": "high",
+            "description": "Epics require all child Lugs to be closed"
+        },
+        "ask": {
+            "close_requires": [
+                "answer_provided"
+            ],
+            "priority_default": "low",
+            "description": "Questions require answers"
+        }
+    },
+    "version": "1.0.0",
+    "description": "Policy enforcement rules for Lug system - type-based requirements"
+}

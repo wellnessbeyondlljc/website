@@ -1,0 +1,213 @@
+# Teaching: WAI Wakeup Hub Path v2 — Spoke Reads teachings_repo/ with Fallback
+
+**Type:** Protocol Update
+**Version:** 2.0.0
+**Created:** 2026-03-23
+**Safe to Auto-Adopt:** true
+**Affects:** Wakeup Step 3a, spoke teaching discovery path
+**Supersedes:** wai-step3a-path-split-v1.md.teaching (if present)
+
+---
+
+## Prerequisites
+
+| Requirement | Verify with | Blocks |
+|---|---|---|
+| skill-hub-teachings-repo-migration-v1 applied | `ls "${HUB_PATH}/teachings_repo/framework/current/"*.teaching 2>/dev/null && echo PASS \|\| echo FAIL` | Spoke wakeup reads from a path that doesn't exist yet |
+
+**Check before applying:**
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+ls "$HUB_PATH/teachings_repo/framework/current/"*.teaching 2>/dev/null \
+  && echo "PREREQ MET — safe to apply H-02" \
+  || echo "BLOCKED — apply skill-hub-teachings-repo-migration-v1 (H-01) first"
+```
+
+## Batch Sequence
+
+**Batch:** hub-migration-v1
+**Apply order:** 2 of 2
+**Depends on:** skill-hub-teachings-repo-migration-v1 (H-01) — teachings_repo/ must exist
+**Required before:** symlink removal (manual final step — do not remove hub/framework until this is applied everywhere)
+**Parallel safe:** no — must follow H-01
+**Full batch order:** H-01 → H-02 → (manual: remove framework symlink)
+
+---
+
+## What This Teaching Does
+
+Updates wakeup Step 3a in `templates/commands/wai.md` and `WAI-Spoke/commands/wai.md` so that spoke-type nodes check the new `teachings_repo/framework/current/` path **first**, with a fallback to the legacy `framework/` path.
+
+**Dual-read is deliberate:** The fallback ensures spokes remain functional during the transition window when some hubs have the new structure and some don't. Once all hubs are migrated (H-01 applied everywhere), the fallback path becomes dead code — remove it at your discretion.
+
+---
+
+## Why This Matters
+
+After `skill-hub-teachings-repo-migration-v1` creates `teachings_repo/` on the hub, closeout Step 9b publishes new teachings there. But the spoke wakeup still reads only from the old `framework/` symlink path. This teaching connects the two — spokes will find teachings at the canonical path, not just the legacy one.
+
+**Without this fix:** Hub publishes to `teachings_repo/`, spoke reads from `framework/`, teachings are never discovered. Even if H-01 is applied, spokes won't see new teachings until H-02 is also applied.
+
+---
+
+## What Changes in templates/commands/wai.md
+
+Step 3a spoke branch changes from:
+
+```bash
+else
+  # Spoke learns from framework + aggregated cross-spoke teachings
+  ls -1 "${HUB_PATH}/framework/*.teaching" 2>/dev/null
+  ls -1 "${HUB_PATH}/cross_spoke/current/*.teaching" 2>/dev/null
+fi
+```
+
+To:
+
+```bash
+else
+  # Spoke learns from framework + aggregated cross-spoke teachings
+  # Primary: teachings_repo/ (canonical path after hub-migration-v1)
+  ls -1 "${HUB_PATH}/teachings_repo/framework/current/*.teaching" 2>/dev/null
+  # Fallback: legacy framework/ symlink path (remove after all hubs migrated)
+  ls -1 "${HUB_PATH}/framework/*.teaching" 2>/dev/null
+  ls -1 "${HUB_PATH}/cross_spoke/current/*.teaching" 2>/dev/null
+fi
+```
+
+**Deduplication:** The wakeup protocol already checks `seed/ingest/processed/` by filename before adding a teaching to the discovery queue. A teaching present in both paths will be discovered once and processed once.
+
+---
+
+## Resolving {framework_path}
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+echo "Framework path: $FRAMEWORK_PATH"
+# If empty, use: /home/mario/projects/wheelwright/framework
+```
+
+---
+
+## How to Apply This Teaching
+
+**Apply to each spoke individually (including hub's WAI-Spoke/commands/).**
+
+### Step 1 — Check prerequisite
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+ls "$HUB_PATH/teachings_repo/framework/current/"*.teaching 2>/dev/null \
+  && echo "PREREQ MET" \
+  || echo "BLOCKED — apply H-01 first"
+```
+
+### Step 2 — Update wai.md (option A: copy from framework template)
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '/home/mario/projects/wheelwright/framework')")
+\cp "$FRAMEWORK_PATH/templates/commands/wai.md" WAI-Spoke/commands/wai.md
+echo "Updated WAI-Spoke/commands/wai.md from template"
+```
+
+**Option B: Manual edit (for spokes with customized wai.md)**
+
+Open `WAI-Spoke/commands/wai.md`, find the `else` branch in Step 3a, and insert the `teachings_repo/` line:
+
+```bash
+# Primary: teachings_repo/ (canonical path after hub-migration-v1)
+ls -1 "${HUB_PATH}/teachings_repo/framework/current/*.teaching" 2>/dev/null
+# Fallback: legacy framework/ symlink path (remove after all hubs migrated)
+ls -1 "${HUB_PATH}/framework/*.teaching" 2>/dev/null
+```
+
+### Step 3 — Verify the new path reads correctly
+
+```bash
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+
+echo "=== New path (teachings_repo/) ==="
+ls -1 "$HUB_PATH/teachings_repo/framework/current/"*.teaching 2>/dev/null \
+  | wc -l | xargs -I{} echo "{} teachings at new path"
+
+echo "=== Fallback path (framework/ symlink) ==="
+ls -1 "$HUB_PATH/framework/"*.teaching 2>/dev/null \
+  | wc -l | xargs -I{} echo "{} teachings at fallback path"
+
+# Both should return the same count during transition
+```
+
+### Step 4 — Move teaching to processed
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/seed/ingest/skill-wai-wakeup-hub-path-v2.md.teaching WAI-Spoke/seed/ingest/processed/ 2>/dev/null || echo "Not in ingest/ — already in source"
+```
+
+---
+
+## Behavioral Implications
+
+After applying:
+- Spoke wakeup discovers new teachings from `teachings_repo/framework/current/` first
+- Spoke wakeup falls back to `framework/` during transition (deduplication prevents double-processing)
+- When all spokes have H-02 applied, the hub administrator can safely remove the `framework` symlink
+- The framework closeout Step 9b publishes to `teachings_repo/` — this is now connected end-to-end
+
+**Full teaching distribution flow after H-01 + H-02:**
+```
+Framework closeout (Step 9b) → copies to hub/teachings_repo/framework/current/
+Spoke wakeup (Step 3a)       → reads from hub/teachings_repo/framework/current/
+                              → falls back to hub/framework/ (via symlink, during transition)
+```
+
+---
+
+## Verification
+
+```bash
+# 1. New path is in wai.md
+grep -q "teachings_repo/framework/current" WAI-Spoke/commands/wai.md \
+  && echo "PASS — new path present" \
+  || echo "FAIL — new path missing"
+
+# 2. Fallback path is still in wai.md (during transition)
+grep -q "framework/\*\.teaching" WAI-Spoke/commands/wai.md \
+  && echo "PASS — fallback present" \
+  || echo "INFO — fallback removed (only OK if all hubs migrated)"
+
+# 3. New path resolves to actual files
+HUB_PATH=$(python3 -c "import json; print(json.load(open('WAI-Spoke/WAI-State.json'))['wheel']['hub_path'])")
+ls "$HUB_PATH/teachings_repo/framework/current/"*.teaching 2>/dev/null \
+  && echo "PASS — teachings readable at new path" \
+  || echo "FAIL — teachings not found at new path (apply H-01 first)"
+```
+
+---
+
+## Removing the Fallback (Post-Migration Cleanup)
+
+After all spokes have applied H-02 and you've confirmed no spoke is still reading from `framework/`, remove the symlink and the fallback line:
+
+```bash
+# 1. Remove symlink on hub
+\rm "$HUB_PATH/framework"
+echo "Symlink removed"
+
+# 2. Remove fallback line from each spoke's wai.md (manual edit)
+# Remove: ls -1 "${HUB_PATH}/framework/*.teaching" 2>/dev/null
+```
+
+---
+
+## Backward Compatibility
+
+- The `framework/` fallback keeps all spokes operational during migration
+- No existing teachings are affected — same files, new path
+- Spokes that don't apply H-02 continue reading from the symlink (until it's removed)
+
+---
+
+**Teaching Package:** skill-wai-wakeup-hub-path-v2
+**Safe to Auto-Adopt:** Yes (option A only — if using option B with customized wai.md, review manually)
+**Impact:** Connects hub teaching publication to spoke discovery — required for the canonical `teachings_repo/` distribution model to function end-to-end

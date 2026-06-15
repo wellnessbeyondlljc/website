@@ -1,0 +1,90 @@
+---
+title: "Hub Teams Registry — spoke relationship groups with shared purpose"
+version: 1.0.0
+safe_to_auto_adopt: true
+target: hub
+session: session-20260402-1327
+framework_version: "2.0.149"
+weight: 5
+fingerprint: tms
+---
+
+## Summary
+
+Add teams concept to hub registry. Teams group spokes by shared purpose, commercial intent, or relationship. Enables Ozi routing intelligence to make smart cross-spoke suggestions and frame wins appropriately.
+
+## Prerequisites
+
+- Hub registry exists at `WAI-Hub/registry/`
+- Ozi routing intelligence is active
+
+## Change
+
+1. Create `WAI-Hub/registry/teams.json` using schema from `templates/registry/teams-schema.json`
+2. Add `teams[]` field to spoke registry entries (list of team IDs)
+3. Add `standalone` flag to spoke entries (default false)
+4. Update Ozi routing logic to check team membership before cross-spoke suggestions
+
+## Schema
+
+Teams.json structure:
+
+```json
+{
+  "metadata": {
+    "created_at": "2026-04-02T...",
+    "framework_version": "2.0.149"
+  },
+  "teams": [
+    {
+      "id": "wheelwright-team",
+      "name": "Wheelwright Project",
+      "purpose": "Commercial Wheelwright offerings — framework, website, docs",
+      "commercial": true,
+      "public_facing": true,
+      "members": [
+        {"spoke_id": "wheelwright-framework", "relevance_note": "Core product"},
+        {"spoke_id": "wheelwright-website", "relevance_note": "Public presence"},
+        {"spoke_id": "wheelwright-tracks", "relevance_note": "Documentation"}
+      ]
+    }
+  ]
+}
+```
+
+Spoke registry extension:
+
+```json
+{
+  "wheel_id": "wheelwright-framework",
+  "teams": ["wheelwright-team"],
+  "standalone": false
+}
+```
+
+## Routing Logic
+
+Before surfacing cross-spoke suggestion:
+1. Check if source and target share a team
+2. If no shared team → skip suggestion
+3. If shared team + commercial=true → frame for publicizing
+4. If target spoke standalone=true → never suggest
+
+## Batch Sequence
+
+No dependencies.
+
+## Verification
+
+- `test -f WAI-Hub/registry/teams.json`
+- `grep "teams" WAI-Hub/registry/incoming/*.json` — should find teams[] field
+- Ozi suggests cross-spoke updates only for team members
+
+## Context Doc Patch
+
+Add after "## Hub Registry":
+```
+- Teams: spokes grouped by shared purpose/commercial intent
+- Routing: cross-spoke suggestions check team membership first
+- Standalone spokes never suggested for cross-promotion
+```

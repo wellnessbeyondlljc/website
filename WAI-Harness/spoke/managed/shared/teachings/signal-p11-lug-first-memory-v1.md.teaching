@@ -1,0 +1,195 @@
+# Teaching: P11 — Lug-First Memory
+
+**Type:** Principle + Signal
+**Version:** 1.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** true
+**Affects:** Agent behavior, state tracking, work handoff, sub-agent dispatch
+**Signal Impact:** 9
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone and has no dependencies.
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 3 of 6
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Provides
+
+A new WAI principle — **P11: Lug-First Memory** — and the corresponding signal lug documenting its origin.
+
+P11 addresses a recurring failure mode: agents storing work state in TaskCreate calls, scratch markdown files, or "in their head" across multi-step operations. These storage locations do not survive session ends and are invisible to the wakeup protocol. The next agent starts blind.
+
+**The rule:** If you store work state anywhere other than a lug, the next agent starts blind.
+
+---
+
+## The Principle
+
+### P11: Lug-First Memory
+
+Lugs in `WAI-Spoke/WAI-Lugs.jsonl` are the ONLY storage the wakeup protocol reads at session start. When a session ends or is interrupted, lugs survive. Everything else is gone.
+
+**What does NOT survive:**
+- `TaskCreate` / `TaskUpdate` calls — not read on wakeup, invisible to future agents
+- Standalone `.md` scratch files — not indexed at wakeup, go stale, unrecoverable without manual search
+- State "held in your head" across a planned multi-step operation
+
+**What to put in lugs instead:**
+- Work to be done (intent, scope, acceptance criteria)
+- Decisions and rationale
+- Progress and handoff state
+- Prompts for sub-agents (`workflow.subagent_prompt`)
+- Open questions and blockers
+
+**Trigger condition:** Any time you are about to call `TaskCreate`, write a scratch `.md` file, or hold state "in your head" across a planned multi-step operation — stop. Put it in a lug instead.
+
+**Minimal example:**
+```json
+{
+  "id": "work-my-feature-20260322",
+  "type": "work",
+  "title": "My feature implementation",
+  "status": "in-progress",
+  "workflow": {
+    "subagent_prompt": "You are implementing X. Context: ... Task: ... Acceptance criteria: ...",
+    "completed_steps": ["step 1", "step 2"],
+    "next_step": "step 3"
+  }
+}
+```
+
+If the session ends now, the next agent reads this lug on wakeup and knows exactly where to resume.
+
+**Demonstrated:** A subagent dispatch prompt was fully recovered after session interruption because it was stored in `workflow.subagent_prompt` on a lug. The next agent found it cold, reproduced it, and resumed work. The equivalent stored in a Task would have been unrecoverable.
+
+---
+
+## What Changed in templates/commands/wai-principles.md
+
+P11 was added as a new section with:
+- The core rule statement
+- Explanation of what doesn't survive
+- Explicit trigger condition
+- Minimal JSON example with workflow.subagent_prompt
+- Real-world demonstration note
+
+P11 was also added to the Principle Summary table at the bottom of the file.
+
+---
+
+## Resolving {framework_path}
+
+`{framework_path}` is the root of the Wheelwright framework repository. Resolve from `WAI-State.json` at `wheel.framework_path`, or ask the user.
+
+```bash
+FRAMEWORK_PATH=$(python3 -c "import json; d=json.load(open('WAI-Spoke/WAI-State.json')); print(d['wheel'].get('framework_path') or '')")
+```
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — Update wai-principles command file
+
+```bash
+# If the file already exists, replace it:
+cp "$FRAMEWORK_PATH/templates/commands/wai-principles.md" WAI-Spoke/commands/wai-principles.md
+
+# If WAI-Spoke/commands/wai-principles.md does not exist yet (v1 spoke), create it:
+mkdir -p WAI-Spoke/commands/
+cp "$FRAMEWORK_PATH/templates/commands/wai-principles.md" WAI-Spoke/commands/wai-principles.md
+```
+
+### Step 2 — Adopt the principle behaviorally
+
+No file changes required beyond the command file. The principle applies to agent behavior, not configuration.
+
+Review your current workflow:
+- Do you use `TaskCreate` to track work items? → Move to lugs
+- Do you write scratch `.md` files for in-progress work? → Move to lugs with `workflow.next_step`
+- Do you dispatch sub-agents with prompts that live only in chat? → Move prompt to `workflow.subagent_prompt` on a lug
+
+### Step 3 — Move teaching to processed
+
+```bash
+mv WAI-Spoke/seed/ingest/signal-p11-lug-first-memory-v1.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Embedded Signal Lug
+
+Receiving spokes should append this signal lug to their `WAI-Lugs.jsonl` (idempotent — skip if id already present).
+
+**Note:** Replace `session_id` with your current session's id when appending. The `id` field is what drives idempotency — do not change it.
+
+```json
+{"id": "signal-p11-lug-first-memory-20260322", "type": "signal", "title": "P11 Lug-First Memory: if work state is not in a lug, the next agent starts blind", "description": "TaskCreate calls, scratch md files, and in-head state do not survive session ends. Only WAI-Lugs.jsonl is read on wakeup. All work state, subagent prompts, and handoff context must be in lugs.", "impact": 9, "created_by": "claude-sonnet-4-6", "created_at": "2026-03-22T00:00:00Z", "session_id": "YOUR-CURRENT-SESSION-ID", "rationale": "Discovered when recovering an interrupted session — the only recoverable state was what had been put in lugs. TaskCreate entries and scratch files were gone. The principle was dogfooded via cold-start sub-agent before adoption."}
+```
+
+To append idempotently:
+```bash
+python3 -c "
+import json
+lug_id = 'signal-p11-lug-first-memory-20260322'
+existing = set()
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try:
+            l = json.loads(line.strip())
+            existing.add(l.get('id', l.get('i', '')))
+        except: pass
+if lug_id not in existing:
+    lug = {\"id\": lug_id, \"type\": \"signal\", \"title\": \"P11 Lug-First Memory: if work state is not in a lug, the next agent starts blind\", \"description\": \"TaskCreate calls, scratch md files, and in-head state do not survive session ends. Only WAI-Lugs.jsonl is read on wakeup.\", \"impact\": 9, \"created_by\": \"claude-sonnet-4-6\", \"created_at\": \"2026-03-22T00:00:00Z\"}
+    with open('WAI-Spoke/WAI-Lugs.jsonl', 'a') as f:
+        f.write(json.dumps(lug) + '\n')
+    print('Signal lug appended')
+else:
+    print('Already present — skipped')
+"
+```
+
+---
+
+## Verification
+
+```bash
+# 1. P11 is in the principles file
+grep -q "P11" WAI-Spoke/commands/wai-principles.md && echo "PASS — P11 present" || echo "FAIL — P11 missing"
+
+# 2. Signal lug is in WAI-Lugs.jsonl
+python3 -c "
+import json
+ids = set()
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try: ids.add(json.loads(line.strip()).get('id',''))
+        except: pass
+print('Present' if 'signal-p11-lug-first-memory-20260322' in ids else 'MISSING')
+"
+```
+
+---
+
+## Backward Compatibility
+
+- Additive only — no existing behavior changed
+- P11 is a behavioral principle, not a structural migration
+- Agents that already use lugs for state are already compliant
+
+---
+
+**Teaching Package:** signal-p11-lug-first-memory-v1
+**Safe to Auto-Adopt:** Yes
+**Impact:** 9 — changes how agents store and recover work state across sessions

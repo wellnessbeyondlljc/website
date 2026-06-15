@@ -1,0 +1,103 @@
+{
+  "id": "spec-session-track-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 7,
+  "subject": {
+    "kind": "workflow",
+    "id": "session-track",
+    "label": "Session Track"
+  },
+  "title": "Session Track -- append-only event log for every session",
+  "what": "Every Claude session appends structured events to a track.jsonl file at WAI-Spoke/sessions/session-{YYYYMMDD-HHMM}/track.jsonl. Events include session_start, tool_use, decision, completion, and closeout_started. The track is append-only and persists across context compaction.",
+  "why": "Without session track, all activity is lost at session end. Historians read tracks to surface patterns. Ozi uses track data to understand session health. Post-mortem analysis requires track records.",
+  "audience": [
+    "agent",
+    "dev"
+  ],
+  "use_cases": [
+    {
+      "title": "Session continuity after interrupt",
+      "trigger": "Session interrupted (crash or compaction) - new session starts",
+      "outcome": "New session reads prior track to understand last known state before interruption",
+      "persona": "agent"
+    },
+    {
+      "title": "Historian pattern scan",
+      "trigger": "Historian advisor runs nightly",
+      "outcome": "Historian reads last N tracks to detect recurring issues or successes",
+      "persona": "dev"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Append-only invariant",
+      "description": "Never modify existing track entries - only append. This ensures auditability even after bugs."
+    }
+  ],
+  "how": {
+    "trigger": "Auto-started at session initialization by session-start.sh hook",
+    "steps_summary": [
+      "1. session-start.sh creates session dir at WAI-Spoke/sessions/session-{id}/",
+      "2. First track entry written: {event: session_start, session_id, timestamp, mode}",
+      "3. Each subsequent turn appends events as JSON lines",
+      "4. Closeout appends terminal entry: {event: closeout, completed: true}"
+    ],
+    "constraints": [
+      "One line per event (valid JSON)",
+      "Never rewrite existing lines",
+      "timestamp must be ISO-8601 UTC"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Every session start (automated via hook)"
+    ],
+    "not_when": [],
+    "frequency": "Once per session, entries appended throughout"
+  },
+  "schema": {
+    "inputs": [],
+    "outputs": [
+      "WAI-Spoke/sessions/session-{id}/track.jsonl - JSONL event log"
+    ],
+    "state_changes": [
+      "New session directory created",
+      "Events appended throughout session",
+      "Terminal closeout entry marks session complete"
+    ]
+  },
+  "constraints": [
+    "Track file must be valid JSONL (one JSON object per line)",
+    "session_id must match the directory name"
+  ],
+  "tests": [],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "session-track",
+  "body": "The session track system maintains two parallel records per session: track.jsonl (JSONL structural events, machine-readable) and wai_track_ledger.md (per-turn human-readable summary, historian input). Both live at WAI-Spoke/sessions/{session_id}/. The session_id matches the directory name and is formatted as session-YYYYMMDD-HHMM. The session-start.sh hook creates the session directory and writes the first track.jsonl entry (event: session_start) before the agent sees any prompt. The wai_track_ledger.md receives one row per user turn — appended before generating the response, never after. Ledger rows use the format: turn number, HH:MM UTC timestamp, phase (orient/build/review/closeout/(R)), and a 10-20 word summary with active verbs. The phase (R) marks rows that were reconstructed retroactively by the Historian's track_rebuild pass for sessions in the Apr 29-May 26 2026 dead zone. Signal rows are appended to the ledger's Signals table when a lug is created, a lug is completed, an anti-pattern fires, or a blocker is newly discovered — with throttling to prevent duplicate entries within a session. Asset rows are appended when a file is created, significantly modified, or a spec/lug/teaching is designed. The terminal track.jsonl entry is written at closeout: {event: closeout, completed: true}. The terminal ledger row is also written at closeout. The append-only invariant must never be violated — existing rows are never modified, only new rows added. Sessions over 40 turns insert a section break every 20 turns for readability after context compaction. If the ledger file is missing at turn start (hook did not fire), the agent creates it in degraded mode with a note and proceeds with normal append.",
+  "done_when": [
+    "WAI-Spoke/sessions/session-{id}/track.jsonl exists at session start with a valid session_start JSON event as the first line",
+    "WAI-Spoke/sessions/session-{id}/wai_track_ledger.md exists and gains exactly one new Turn Log row per user turn, appended before the response is generated",
+    "The closeout terminal row in wai_track_ledger.md reads 'closeout' in the phase column and includes a turn count and lug count",
+    "A lug creation event produces a Signals row in the ledger with category=lug_created only once per lug_id per session",
+    "When the ledger file is absent at turn start, the agent creates it with the full header template and a degraded-mode notice rather than skipping the append"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [
+    "spec-session-wakeup-v1"
+  ],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

@@ -1,0 +1,27 @@
+spoke_types:
+  framework:
+    critical_domains:
+      - code_quality
+      - continuity
+      - doc_quality
+      - lifecycle
+      - security
+      - config
+    optional_domains:
+      - performance
+      - dependency_audit
+    domain_owners:
+      code_quality: archie
+      continuity: archie
+      doc_quality: vera
+      lifecycle: vera
+      security: null
+      config: "archie (partial)"
+    coverage_notes: "security domain has no advisor — first Ozi proposal target"
+
+assessment:
+  trigger_every_n_commits: 5
+  phases_in_order:
+    - coverage
+    - confidence
+    - growth

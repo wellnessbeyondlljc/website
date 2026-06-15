@@ -1,0 +1,197 @@
+# Teaching: WAI-Signals.jsonl Retired — Migrate to WAI-Lugs.jsonl
+
+**Type:** Migration Signal
+**Version:** 1.0.0
+**Created:** 2026-03-22
+**Safe to Auto-Adopt:** false
+**Affects:** Signal storage, WAI-Signals.jsonl, WAI-Lugs.jsonl, all protocol files referencing signals
+**Requires Manual Review:** Yes — content audit needed before retiring your spoke's file
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone. However, it is `safe_to_auto_adopt: false` — manual review and content audit required before applying.
+
+## Batch Sequence
+
+**Batch:** canonical-evolution-v2
+**Apply order:** 2 of 6
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes — but must be applied manually, not automatically
+**Full batch order:** T-01 → T-05 → T-03 → T-04 → T-02 → T-06
+
+---
+
+## What This Teaching Announces
+
+`WAI-Signals.jsonl` is **retired** as a storage location. It was superseded by the canonical model where signals are high-impact lugs (impact >= 8) stored directly in `WAI-Lugs.jsonl`.
+
+This is marked `safe_to_auto_adopt: false` because each spoke must audit its own `WAI-Signals.jsonl` before retiring it — to ensure no signals are silently lost.
+
+---
+
+## Why Signals Moved to WAI-Lugs.jsonl
+
+Having two files (`WAI-Lugs.jsonl` and `WAI-Signals.jsonl`) created a competing source of truth. Agents had to check both files or miss signals. The canonical model unifies them:
+
+- A signal is a lug with `impact >= 8`
+- Stored in `WAI-Lugs.jsonl` like any other lug
+- Routed to hub bulletin at closeout if impact > 7
+- No separate file, no split read, no synchronization problem
+
+---
+
+## How to Apply This Teaching
+
+### Step 1 — Check if WAI-Signals.jsonl exists
+
+```bash
+ls WAI-Spoke/WAI-Signals.jsonl 2>/dev/null && echo "EXISTS — proceed with audit" || echo "Not present — skip"
+```
+
+If it does not exist, move directly to Step 5.
+
+### Step 2 — Audit for unrescued signals
+
+```bash
+python3 -c "
+import json
+
+signals = []
+with open('WAI-Spoke/WAI-Signals.jsonl') as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith('#') and not line.startswith('//'):
+            try: signals.append(json.loads(line))
+            except: pass
+
+lug_ids = set()
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try:
+            l = json.loads(line.strip())
+            lug_ids.add(l.get('id', l.get('i', '')))
+        except: pass
+
+missing = [s for s in signals if s.get('id', s.get('i', '')) not in lug_ids]
+print(f'Total signals in WAI-Signals.jsonl: {len(signals)}')
+print(f'Already in WAI-Lugs.jsonl: {len(signals) - len(missing)}')
+print(f'Need to migrate: {len(missing)}')
+for s in missing:
+    print(f'  MISSING: {s.get(\"id\", s.get(\"i\", \"?\"))} — {s.get(\"title\", s.get(\"t\", \"\"))[:60]}')
+"
+```
+
+### Step 3 — Migrate missing signals to WAI-Lugs.jsonl
+
+For each signal identified as missing in Step 2:
+
+```bash
+python3 -c "
+import json
+
+# Load existing lug IDs
+lug_ids = set()
+with open('WAI-Spoke/WAI-Lugs.jsonl') as f:
+    for line in f:
+        try:
+            l = json.loads(line.strip())
+            lug_ids.add(l.get('id', l.get('i', '')))
+        except: pass
+
+rescued = 0
+with open('WAI-Spoke/WAI-Signals.jsonl') as f:
+    signals = []
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith('#'):
+            try: signals.append(json.loads(line))
+            except: pass
+
+from datetime import datetime, timezone
+rescued_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+with open('WAI-Spoke/WAI-Lugs.jsonl', 'a') as out:
+    for s in signals:
+        sid = s.get('id', s.get('i', ''))
+        if sid not in lug_ids:
+            s['rescued_from_backup'] = True
+            s['rescued_at'] = rescued_at
+            if not s.get('impact'):
+                s['impact'] = 8  # Minimum signal threshold
+            out.write(json.dumps(s) + '\n')
+            rescued += 1
+            print(f'Rescued: {sid}')
+
+print(f'Total rescued: {rescued}')
+"
+```
+
+### Step 4 — Archive the file
+
+```bash
+mkdir -p WAI-Spoke/seed/ingest/processed/
+mv WAI-Spoke/WAI-Signals.jsonl WAI-Spoke/seed/ingest/processed/WAI-Signals-retired-$(date +%Y%m%d).jsonl
+echo "Archived to WAI-Spoke/seed/ingest/processed/"
+```
+
+### Step 4.5 — Append the retirement signal lug (even if WAI-Signals.jsonl was absent)
+
+Whether or not WAI-Signals.jsonl existed on your spoke, append the embedded signal lug (see below) to `WAI-Lugs.jsonl`. This records the retirement event locally. Use the idempotent script — it skips if already present.
+
+### Step 5 — Update any local references
+
+```bash
+# Find any files still referencing WAI-Signals.jsonl (WAI-Spoke/commands/ is the primary location)
+grep -r "WAI-Signals.jsonl" WAI-Spoke/commands/ 2>/dev/null
+# templates/ is optional — only present on the framework spoke itself
+grep -r "WAI-Signals.jsonl" templates/ 2>/dev/null || true
+# For each found: update to reference WAI-Lugs.jsonl with signal note
+```
+
+### Step 6 — Move teaching to processed
+
+```bash
+mv WAI-Spoke/seed/ingest/signal-wai-signals-retired-v1.md.teaching WAI-Spoke/seed/ingest/processed/
+```
+
+---
+
+## Embedded Signal Lug
+
+Append to `WAI-Lugs.jsonl` (idempotent — skip if id already present):
+
+```json
+{"id": "signal-wai-signals-retired-20260322", "type": "signal", "title": "WAI-Signals.jsonl retired — signals are now high-impact lugs in WAI-Lugs.jsonl", "description": "The separate WAI-Signals.jsonl file is retired. Signals are canonically stored as lugs with impact >= 8 in WAI-Lugs.jsonl. All protocol files updated. Signals with impact > 7 are routed to WAI-Hub/Signals/incoming/ at closeout for cross-spoke visibility.", "impact": 8, "created_by": "claude-sonnet-4-6", "created_at": "2026-03-22T00:00:00Z", "rationale": "Eliminates competing source of truth. Single append-only file is simpler, queryable, and consistent with the canonical lug model."}
+```
+
+---
+
+## Verification
+
+```bash
+# WAI-Signals.jsonl is gone from root
+ls WAI-Spoke/WAI-Signals.jsonl 2>/dev/null && echo "STILL PRESENT" || echo "Correctly retired"
+
+# Archived copy exists
+ls WAI-Spoke/seed/ingest/processed/WAI-Signals-retired-*.jsonl && echo "Archive present" || echo "No archive found"
+
+# No stale references remain
+grep -r "WAI-Signals.jsonl" WAI-Spoke/commands/ WAI-Spoke/WAI-Guide.md 2>/dev/null && echo "STALE REFS FOUND" || echo "Clean"
+```
+
+---
+
+## Backward Compatibility
+
+- Archive is preserved in `seed/ingest/processed/` — no data lost
+- All migrated signals carry `rescued_from_backup: true` for traceability
+- Existing lugs unaffected
+
+---
+
+**Teaching Package:** signal-wai-signals-retired-v1
+**Safe to Auto-Adopt:** No — requires manual audit before retiring your spoke's file
+**Impact:** Data safety — ensures no signals are lost in the migration

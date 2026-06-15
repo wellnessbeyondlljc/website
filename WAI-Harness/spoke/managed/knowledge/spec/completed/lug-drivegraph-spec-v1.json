@@ -1,0 +1,145 @@
+{
+  "id": "lug-drivegraph-spec-v1",
+  "type": "spec",
+  "subject_id": "DriveGraph",
+  "status": "completed",
+  "routed_to": "FRAMEWORK",
+  "originated_in": "wilbur/session-20260529-2107",
+  "created_at": "2026-05-30T00:00:00Z",
+  "authored_by": "wilbur",
+  "impact": 9,
+  "effort": "M",
+  "model_fit": "SONNET",
+  "title": "DriveGraph -- Spec: Hub+Spoke Drive Model with Horizons, Themes, and Richness",
+  "one_liner": "Define the DriveGraph schema: nested drives (hub->spoke) with horizon stages, richness floats, theme threading, achieved archiving, and a spoke-draft/user-confirm update protocol. Spread to whole Wheel.",
+  "why_this_matters": "WAI agents currently execute well but without knowing WHERE a spoke is going, HOW FAR along it is, or WHAT TYPE of work it represents over time. DriveGraph gives every spoke (and Wilbur) a shared vocabulary for intent, direction, and progress. Themes let the Wheel see how a category of work evolves across horizons. Wilbur reads DriveGraph across all spokes to build its performance view and surface the right information to Mario at the right time.",
+  "design_decisions": {
+    "name": "DriveGraph over GoalGraph -- 'drive' implies motivation and agency, not just target state.",
+    "horizon_plus_richness": "Drives have BOTH a horizon (named stage: now/soon/later/next_version/unscheduled -- infers timing) AND a richness float (0.0-1.0 -- priority within that stage). Horizon is coarse sort order. Richness is fine sort order within a horizon. A drive at horizon=soon richness=0.9 is nearly ready to promote to 'now'. A drive at horizon=soon richness=0.1 just entered the stage.",
+    "themes": "Themes are cross-cutting labels that let you view the evolution of a type of work. Hub DriveGraph defines canonical themes (shared Wheel-wide). Spokes define spoke-local themes. Each drive belongs to one or more theme IDs. Wilbur builds a theme thread: all drives tagged with a theme, sorted by horizon, showing the arc from now to unscheduled.",
+    "nesting": "parent_drive references a hub drive_id (prefix 'hub:' for clarity). override=false (default) means the spoke drive extends the hub drive. override=true means the spoke drive replaces the hub drive for that spoke's context. Hub drives with no spoke counterpart remain visible in Wilbur's Wheel view.",
+    "update_protocol": "Spoke agents draft milestone completions and richness updates. User verifies and confirms before they are committed to DriveGraph.json. This is the initial protocol -- can be relaxed per drive or per theme as trust is established.",
+    "achieved_archiving": "When status becomes 'achieved', the drive moves to the drive_archive array at the bottom of the file. Keeps the active drives list clean. Archive preserves history for theme threading.",
+    "wilbur_is_reader": "Wilbur reads DriveGraph across all spokes on nightly scan. Wilbur does not own or write DriveGraph -- it reads to build the performance view. Spoke agents (with user confirmation) are the writers. Exception: Wilbur may update richness on a drive if the user has granted auto-update permission for that drive or theme.",
+    "file_naming": "DriveGraph.json -- CamelCase as proper noun, consistent with PathGraph.json and TasteGraph.json. Hub: hub/WAI-Hub/DriveGraph.json. Spoke: {spoke}/WAI-Spoke/DriveGraph.json. Same filename, location determines scope. Wilbur loads hub first, spoke second."
+  },
+  "schema": {
+    "root": {
+      "schema_version": "string -- semver",
+      "scope": "enum: hub | spoke",
+      "inherits_from": "string -- 'hub' for spoke files; null for hub file",
+      "last_updated": "ISO date",
+      "themes": [
+        {
+          "theme_id": "string -- kebab-case",
+          "label": "string -- human display name",
+          "description": "string",
+          "arc": "string (optional) -- narrative summary of where this theme is headed"
+        }
+      ],
+      "drives": [
+        {
+          "drive_id": "string -- drive-{slug}-v{n}",
+          "title": "string",
+          "themes": [
+            "theme_id",
+            "..."
+          ],
+          "horizon": "enum: now | soon | later | next_version | unscheduled",
+          "status": "enum: draft | active | paused | achieved | abandoned",
+          "parent_drive": "string (optional) -- 'hub:{drive_id}' or null",
+          "override": "bool (default false)",
+          "activation": {
+            "trigger": "enum: manual | dependency | signal | time | condition",
+            "active_when": "string (optional) -- human-readable condition",
+            "dormant_when": "string (optional)"
+          },
+          "completion": {
+            "horizon": "same as top-level horizon -- source of truth here",
+            "richness": "float 0.0-1.0 -- priority within horizon; higher = closer to next horizon",
+            "milestones": [
+              {
+                "id": "string",
+                "title": "string",
+                "done": "bool",
+                "confirmed_by": "string (optional) -- 'user' | 'agent' | null (draft)"
+              }
+            ],
+            "gap": "string -- what is still missing",
+            "iterations_planned": "int (optional)"
+          },
+          "direction": {
+            "current_approach": "string (optional)",
+            "data_gathering": "string (optional)",
+            "next_step": "string",
+            "recommendations_for_user": [
+              "string",
+              "..."
+            ]
+          }
+        }
+      ],
+      "drive_archive": [
+        "...same shape as drives -- moved here when status=achieved or abandoned"
+      ]
+    }
+  },
+  "perceive": {
+    "current_state": "DriveGraph.json does not exist on any spoke or at hub. No shared schema, no canonical theme registry, no drive tracking. Spoke agents have no structured way to express intent, direction, or progress across horizons.",
+    "files": [
+      "hub/WAI-Hub/DriveGraph.json -- does not exist",
+      "framework/schemas/DriveGraph.schema.json -- does not exist",
+      "framework/docs/drivegraph-spec.md -- does not exist"
+    ]
+  },
+  "execute": {
+    "steps": [
+      "1. Write framework/schemas/DriveGraph.schema.json -- full JSON Schema (draft-07) for validation of both hub and spoke DriveGraph files",
+      "2. Write framework/docs/drivegraph-spec.md -- human-readable spec covering: purpose, schema reference, nesting rules, horizon semantics, richness semantics, theme threading, update protocol, achieved archiving, Wilbur read protocol",
+      "3. Write hub/WAI-Hub/DriveGraph.json -- hub-level seed with canonical theme registry (intelligence, signal-routing, quality, ux, infrastructure, autonomy) and 2-3 sample Wheel-level drives",
+      "4. Write WAI-Spoke/DriveGraph.json template -- spoke-level template with inherits_from=hub, empty themes/drives arrays, and inline comments explaining extension pattern",
+      "5. Add DriveGraph entry to WAI-SpecIndex.jsonl at framework root -- fields: subject_id, spec_file, schema_file, version, created_at",
+      "6. Update AGENTS.md at framework root -- add DriveGraph to the 'Key Data Structures' section with one-line description and file path pattern",
+      "7. Create a teaching: framework/teachings_repo/framework/current/teaching-drivegraph-adoption-v1.md -- instructs all spokes to create WAI-Spoke/DriveGraph.json from the template and seed with their current drives"
+    ]
+  },
+  "verify": {
+    "done_when": [
+      "framework/schemas/DriveGraph.schema.json validates a sample DriveGraph.json using: python3 -c \"import jsonschema, json; jsonschema.validate(json.load(open('sample.json')), json.load(open('schema.json')))\"",
+      "hub/WAI-Hub/DriveGraph.json is valid against the schema and contains at least 2 canonical themes and 1 hub-level drive",
+      "WAI-SpecIndex.jsonl contains a DriveGraph entry: grep 'DriveGraph' framework/WAI-SpecIndex.jsonl",
+      "framework/docs/drivegraph-spec.md exists and covers: horizons, richness, themes, nesting, update protocol",
+      "teaching file exists at framework/teachings_repo/framework/current/teaching-drivegraph-adoption-v1.md"
+    ]
+  },
+  "acceptance_criteria": [
+    "DriveGraph.schema.json validates both hub and spoke files -- scope field distinguishes them",
+    "Horizon enum is exactly: now, soon, later, next_version, unscheduled",
+    "Richness is float 0.0-1.0; schema enforces minimum/maximum",
+    "parent_drive supports 'hub:{drive_id}' prefix notation",
+    "drive_archive array present at root level for achieved/abandoned drives",
+    "Teaching instructs spokes to seed drives from their open lugs and epic children as starting point",
+    "Schema allows themes array to be empty at spoke level (inherits hub themes)",
+    "AGENTS.md update does not exceed 3 lines for the DriveGraph entry"
+  ],
+  "target_files": [
+    "framework/schemas/DriveGraph.schema.json -- NEW",
+    "framework/docs/drivegraph-spec.md -- NEW",
+    "hub/WAI-Hub/DriveGraph.json -- NEW",
+    "framework/WAI-Spoke/skills/drivegraph-template/DriveGraph.json -- NEW (spoke template)",
+    "framework/WAI-SpecIndex.jsonl -- MODIFY (add DriveGraph entry)",
+    "framework/AGENTS.md -- MODIFY (add DriveGraph to Key Data Structures)",
+    "framework/teachings_repo/framework/current/teaching-drivegraph-adoption-v1.md -- NEW"
+  ],
+  "tags": [
+    "drivegraph",
+    "framework",
+    "spec",
+    "wheel-wide",
+    "wilbur",
+    "intelligence"
+  ],
+  "completed_at": "2026-06-02T20:34:00Z",
+  "resolved_at": "2026-06-02T20:34:00Z",
+  "outcome": "DriveGraph spec fully implemented. schema (DriveGraph.schema.json), spec doc (drivegraph-spec.md), hub seed (hub/WAI-Hub/DriveGraph.json with 6 canonical themes + 3 Wheel-level drives), spoke template (drivegraph-template/DriveGraph.json), AGENTS.md Key Data Structures entry, WAI-SpecIndex.jsonl entry, and teaching (teaching-drivegraph-adoption-v1.md.teaching) all verified present. All 5 verify criteria and 8 acceptance criteria pass."
+}

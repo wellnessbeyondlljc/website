@@ -1,0 +1,104 @@
+# Teaching: Skill — wai-closeout Step 9d Spoke Health Report
+
+**Type:** skill
+**safe_to_auto_adopt:** true
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone. Recommended after `skill-wai-closeout-v2` (T-02) is applied, but not required.
+
+## Batch Sequence
+
+**Batch:** standalone
+**Apply order:** 1 of 1
+**Depends on:** none
+**Required before:** none
+**Parallel safe:** yes
+**Full batch order:** standalone
+
+---
+
+## What This Teaching Provides
+
+Adds Step 9d to `wai-closeout.md` — spoke self-health report sent to hub inbox at every closeout.
+
+At closeout, the spoke:
+1. Loads `health-check.jsonl` from the framework path
+2. Runs each machine-runnable PASS/FAIL check against itself
+3. Builds a `spoke-health` lug with score, failures, and status (healthy/degraded/critical)
+4. Writes the lug to `{hub_path}/WAI-Spoke/seed/ingest/spoke-health-{spoke_id}-{session_id}.json`
+
+The hub aggregates these at wakeup to build a fleet health snapshot without requiring manual spoke inspection.
+
+---
+
+## Resolving `{framework_path}`
+
+Read `wheel.framework_path` (or `wheelwright.framework_path` for v1 spokes) from `WAI-Spoke/WAI-State.json`.
+
+---
+
+## How to Apply
+
+1. Open `WAI-Spoke/commands/wai-closeout.md`
+2. Find the section ending with: `If no qualifying lugs found: log "Hub bulletin: no lugs with impact > 7 to publish"`
+3. After that line (before `### 10. Summary Generation`), insert the following block:
+
+```
+### 9d. Spoke Health Report (Auto)
+
+**Send a self-health snapshot to the hub registry at every closeout.**
+
+Read `hub_path` from `WAI-State.json` at `wheel.hub_path`.
+
+**If hub_path is null or hub not accessible:** Skip silently.
+
+**If hub is accessible:**
+
+1. Load `templates/health-check.jsonl` from the framework path. If not found, skip and log.
+2. Run each check from the questionnaire (shell command, capture stdout).
+3. Score: count PASS vs total checks. Compute percent.
+4. Build the health lug:
+{
+  "id": "spoke-health-{spoke_id}-{session_id}",
+  "type": "spoke-health",
+  "spoke_id": "{wheel.name}",
+  "session_id": "{session_id}",
+  "timestamp": "{ISO-8601}",
+  "score": "{passed}/{total}",
+  "percent": 95,
+  "failures": [
+    {"check_id": "hc-q-...", "title": "...", "fail_means": "..."}
+  ],
+  "status": "healthy | degraded | critical"
+}
+   Status thresholds: healthy = 100%, degraded = 80-99%, critical = <80%
+
+5. Write the lug to `{hub_path}/WAI-Spoke/seed/ingest/spoke-health-{spoke_id}-{session_id}.json`
+6. Log: "Spoke health: {score} ({status}) — sent to hub inbox"
+
+**Purpose:** Hub aggregates these at wakeup to build a fleet health snapshot. Spoke does not need to wait for hub response.
+```
+
+---
+
+## Verification
+
+After applying, confirm:
+```bash
+grep -q "9d. Spoke Health Report" WAI-Spoke/commands/wai-closeout.md && echo PASS || echo FAIL
+```
+
+---
+
+## Backward Compatibility
+
+Safe to apply to any spoke running closeout v1 or v2. The step silently skips if hub is unreachable.
+
+---
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

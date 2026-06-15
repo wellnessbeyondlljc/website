@@ -1,0 +1,158 @@
+{
+  "id": "spec-harness-operational-traces-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T18:00:00Z",
+  "updated_at": "2026-05-30T18:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.248",
+  "impact": 7,
+  "subject": {
+    "kind": "protocol",
+    "id": "harness-operational-traces",
+    "label": "Harness Operational Traces"
+  },
+  "title": "Harness Operational Traces \u2014 Ozi writes to PathGraph after every operation",
+  "what": "Every Ozi operation (lug pickup, teaching adoption, migration step, advisor creation, lug complete) appends a structured trace entry to WAI-Spoke/pathgraph/history.jsonl. The trace is the canonical self-documentation record \u2014 the system generates its own operational history without manual intervention. Each entry carries: ts (ISO timestamp), op_type (operation category), lug_id (the lug being executed), outcome (success|failure|partial), delta (what changed from plan), teaching_candidate (bool \u2014 did this surface a teaching candidate?). The append is mandatory: no trace means the operation did not happen from the system's perspective.",
+  "why": "Without traces, the system cannot observe its own operations. There is no way to detect recurring failure patterns, aspiration drift (planned X, got Y), or teaching candidates that arise from successful resolutions. PathGraph history.jsonl becomes the canonical self-documentation record that feeds three consumers: Navigator (fleet trace queries for desired-state decisions), Historian (aspiration drift extraction from delta fields), and Ozi itself (recurring delta detection triggers improvement lugs at threshold >= 3 fleet-wide occurrences). Without this protocol, self-improvement and goal alignment loops have no substrate to operate on.",
+  "audience": [
+    "ozi",
+    "historian",
+    "navigator"
+  ],
+  "use_cases": [
+    {
+      "title": "Ozi completing a lug",
+      "trigger": "Ozi marks any lug complete (success, failure, or partial)",
+      "outcome": "Trace entry appended to WAI-Spoke/pathgraph/history.jsonl before the lug status file is updated; entry includes outcome and delta describing any deviation from the lug's stated implementation_notes",
+      "persona": "ozi"
+    },
+    {
+      "title": "Historian querying fleet traces",
+      "trigger": "Historian advisor runs aspiration drift analysis across fleet PathGraphs",
+      "outcome": "Historian reads history.jsonl files across all spokes; extracts delta fields; identifies recurring patterns where planned behavior diverged from actual; surfaces summary to Navigator for desired-state recalibration",
+      "persona": "historian"
+    },
+    {
+      "title": "Navigator detecting recurring delta patterns",
+      "trigger": "Navigator reviews fleet traces at wakeup or consolidation",
+      "outcome": "Navigator identifies delta types appearing >= 3 times across fleet; generates improvement lug for each recurring pattern; improvement lug routed to the spoke or harness layer responsible for the root cause",
+      "persona": "navigator"
+    },
+    {
+      "title": "Teaching candidate surfaced from operation",
+      "trigger": "Ozi completes an operation with a non-empty delta and sets teaching_candidate = true",
+      "outcome": "Ozi writes a teaching candidate to WAI-Spoke/generate-teaching/candidates/ with source field set to the op_type that triggered it; candidate enters standard peer review queue",
+      "persona": "ozi"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Append-only trace log",
+      "description": "history.jsonl is append-only \u2014 never overwritten or truncated by Ozi. Each session produces zero or more new lines. The file is the durable operational record. Rotation (archiving lines older than N days) is a separate harness hygiene concern and must not be triggered by Ozi during normal operations."
+    },
+    {
+      "name": "Delta as teaching signal",
+      "description": "The delta field is the primary signal for self-improvement. An empty delta means the operation went exactly as planned. A non-empty delta means something diverged \u2014 the description of that divergence is the raw material for teaching candidates and improvement lugs. Ozi should write the delta in plain language: 'Expected to find X, found Y' or 'Step 3 skipped because condition Z was false'."
+    },
+    {
+      "name": "Trace before completion",
+      "description": "The trace entry is written before the lug is marked complete. This ordering guarantee means that if the session ends mid-operation, the incomplete trace (with outcome: partial) is the system's record that the operation started but did not finish cleanly. An agent picking up the lug next session will find the partial trace and know to re-audit before resuming."
+    }
+  ],
+  "how": {
+    "trigger": "Any Ozi operation reaches its completion point \u2014 success, failure, or partial abort",
+    "steps": [
+      "1. Ozi reaches the terminal state of any operation (lug complete, teaching adopted, migration step finished, advisor created)",
+      "2. Ozi constructs the trace entry: ts = now (ISO), op_type = one of lug_pickup|teaching_adoption|migration_step|advisor_creation|lug_complete, lug_id = active lug id, outcome = success|failure|partial, delta = plain-language description of divergence from plan (empty string if none), teaching_candidate = true if delta is non-empty and Ozi judges the divergence is generalizable",
+      "3. Ozi appends the JSON-serialized trace entry as a single line to WAI-Spoke/pathgraph/history.jsonl (create file if absent)",
+      "4. If teaching_candidate == true and delta is non-empty: Ozi writes a teaching candidate stub to WAI-Spoke/generate-teaching/candidates/{lug_id}-trace-candidate.json with fields: source (op_type), lug_id, delta, ts, status: draft",
+      "5. Ozi updates the lug status (marks complete / moves file) only after the trace write succeeds"
+    ],
+    "constraints": [
+      "Trace MUST be written before lug is marked complete \u2014 no exceptions",
+      "No trace = operation did not happen from the system's perspective; a subsequent agent will re-run the operation",
+      "delta field must be a plain string \u2014 no nested objects; encode structured data as a readable sentence",
+      "teaching_candidate may only be true if delta is non-empty; a clean operation cannot produce a teaching candidate via this mechanism",
+      "history.jsonl is append-only; Ozi never deletes, truncates, or rewrites lines"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "Lug pickup \u2014 Ozi reads and begins executing a lug from incoming/",
+      "Teaching adoption \u2014 Ozi applies a teaching to spoke skill files",
+      "Migration step \u2014 Ozi completes one step of a migration lug audit sequence",
+      "Advisor creation \u2014 Ozi spawns a specialized advisor for a Navigator-flagged concern",
+      "Lug complete \u2014 Ozi marks any lug done (success, failure, or partial)"
+    ],
+    "not_when": [
+      "Read-only wakeup scans that do not modify any file",
+      "Navigator query operations (reads fleet state but does not execute a lug)",
+      "Historian analysis passes (reads history.jsonl but does not write to it)",
+      "Session guard checks and hook validation \u2014 these are not Ozi lug operations"
+    ],
+    "frequency": "One trace entry per operation terminal event. A single session may produce zero (wakeup-only sessions) to many (batch impl sessions) trace entries."
+  },
+  "schema": {
+    "inputs": [
+      "Active lug being executed \u2014 provides lug_id and implementation_notes for delta comparison",
+      "Current timestamp \u2014 ts field",
+      "Ozi's assessment of outcome and divergence \u2014 outcome and delta fields"
+    ],
+    "outputs": [
+      "WAI-Spoke/pathgraph/history.jsonl \u2014 one appended line per operation: {ts, op_type, lug_id, outcome, delta, teaching_candidate}",
+      "WAI-Spoke/generate-teaching/candidates/{lug_id}-trace-candidate.json \u2014 written only when teaching_candidate == true"
+    ],
+    "state_changes": [
+      "history.jsonl line count increases by 1 per trace",
+      "Teaching candidate file created in generate-teaching/candidates/ when teaching_candidate == true",
+      "No changes to lug files until after trace write completes"
+    ]
+  },
+  "constraints": [
+    "Trace entry must be valid JSON serializable to a single line (no unescaped newlines in delta field)",
+    "op_type must be one of the five enumerated values: lug_pickup, teaching_adoption, migration_step, advisor_creation, lug_complete",
+    "outcome must be one of: success, failure, partial",
+    "teaching_candidate must be a boolean (not a string)",
+    "history.jsonl lives at WAI-Spoke/pathgraph/history.jsonl \u2014 not at any hub-relative or cross-spoke path; each node owns its own trace log"
+  ],
+  "tests": [
+    {
+      "id": "trace-written-before-complete",
+      "description": "Execute a test lug to completion; verify that history.jsonl contains an entry with matching lug_id and that the lug's status file was updated after the trace line's ts timestamp",
+      "acceptance": "history.jsonl has one new line with correct lug_id; lug file modification time is >= trace ts"
+    },
+    {
+      "id": "partial-trace-on-abort",
+      "description": "Simulate a session ending mid-lug; verify that history.jsonl contains an entry with outcome: partial and that a subsequent agent session finds the partial trace and re-audits before resuming",
+      "acceptance": "history.jsonl contains partial entry; next session agent log references the partial trace"
+    },
+    {
+      "id": "teaching-candidate-written",
+      "description": "Execute a lug where the implementation diverges from plan (non-empty delta); verify that a teaching candidate stub appears in generate-teaching/candidates/ with source matching the op_type",
+      "acceptance": "Candidate file exists at expected path; source field matches op_type; status is draft"
+    },
+    {
+      "id": "clean-op-no-candidate",
+      "description": "Execute a lug where outcome is success and delta is empty string; verify that no teaching candidate file is written",
+      "acceptance": "No new files in generate-teaching/candidates/ after clean operation"
+    }
+  ],
+  "impl_lugs": [],
+  "health": {
+    "test_coverage": "none",
+    "open_questions": [],
+    "spec_drift_risk": "low"
+  },
+  "related_specs": [
+    "spec-harness-self-maintaining-wheel-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec (spec-harness-operational-traces-v1). Read the parent harness spec (spec-harness-self-maintaining-wheel-v1) for architectural context. Review WAI-Spoke/pathgraph/ to understand current PathGraph structure. Read spec-harness-goal-affinity-v1 for how Navigator consumes trace data. Read spec-harness-kb-v1 for how KB entries interact with trace-based teaching candidates.",
+  "execute": "ROUTING: Ozi implementation lives in tools/ozi_autopilot.py which is Basher-owned. NEVER edit tools/ directly (CLAUDE.md anti-pattern). Implementation path: create an impl lug (routed_to: BASHER) and deliver it to basher/WAI-Spoke/lugs/incoming/. The lug's implementation_notes must describe the full change: (1) locate the lug-complete handler in tools/ozi_autopilot.py; (2) add trace construction logic after outcome is determined \u2014 build dict {ts: ISO now, op_type: from enum, lug_id: active lug id, outcome: success|failure|partial, delta: plain string, teaching_candidate: bool}; (3) append using python3 json.dumps to history.jsonl (open append mode); (4) if teaching_candidate == true and delta non-empty: write candidate stub to WAI-Spoke/generate-teaching/candidates/{lug_id}-trace-candidate.json; (5) only update lug status file after trace write succeeds. Create the Basher impl lug first \u2014 do not make any direct edits to tools/.",
+  "verify": "history.jsonl grows by one line per Ozi operation. Partial-outcome entries appear when a lug is abandoned mid-session. Teaching candidate files appear in generate-teaching/candidates/ only when delta is non-empty. No operation completes without a trace entry. Navigator can read history.jsonl and extract op_type distribution without error.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

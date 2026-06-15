@@ -1,0 +1,34 @@
+# Wheelwright Framework - Cursor Integration
+
+## Core Directive
+This project uses **Wheelwright** for persistent AI context and governed collaboration.
+
+**CRITICAL:** Read `.WAI/WAI-Guide.md` BEFORE making any changes. It contains:
+- Token efficiency protocols (ADAPTIVE workflow: Discussion → Planning → Implementation)
+- Standardized plan templates
+- Checkpointing rules for large implementations
+- Context hygiene requirements
+- Session continuity commands (Time, Rules, Closeout, Shipit, Compact)
+
+## Quick Start
+1. Read `.WAI/WAI-State.json` - Project foundation, decisions, constraints
+2. Read `.WAI/WAI-State.md` - Strategic vision, evolution history
+3. Follow `.WAI/WAI-Guide.md` - Comprehensive AI protocols
+
+## Session Start Protocol
+- Check `_session_state.protocol_completed` in WAI-State.json
+- If false: Brief user on recent activity (last session, key decisions, next actions)
+- Check git status for uncommitted work
+- Update protocol_completed to true
+
+## Workflow Mode (ADAPTIVE)
+- **Complex tasks** (multi-file OR >5 steps): STRICT gates (Discussion → READY TO PLAN → PLAN ACCEPTED → Implementation)
+- **Simple tasks** (single file AND <=5 steps): YOLO autonomy, log phase retroactively
+
+## Key Commands
+- `'Time'` - Token usage estimate
+- `'Compact'` - Compress context, balance WAI files
+- `'Closeout'` - Process session, extract learnings
+- `'Shipit'` - Closeout + git commit
+
+**Full documentation:** `.WAI/WAI-Guide.md`

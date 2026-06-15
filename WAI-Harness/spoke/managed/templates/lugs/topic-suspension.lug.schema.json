@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Topic Suspension Lug",
+  "description": "Captures session state to pause work on one topic and resume later",
+  "type": "object",
+  "required": [
+    "lug_type",
+    "topic_id",
+    "topic_title",
+    "suspended_at",
+    "session_context",
+    "work_state"
+  ],
+  "properties": {
+    "lug_type": {
+      "type": "string",
+      "const": "topic-suspension",
+      "description": "Identifies this as a topic suspension lug"
+    },
+    "topic_id": {
+      "type": "string",
+      "pattern": "^TOPIC-[0-9]{8}-[A-Z0-9]{6}$",
+      "description": "Unique topic identifier (TOPIC-YYYYMMDD-HASH6)"
+    },
+    "topic_title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 100,
+      "description": "Human-readable topic title"
+    },
+    "suspended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when topic was suspended"
+    },
+    "session_context": {
+      "type": "object",
+      "required": ["project", "machine", "agent"],
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project/wheel name"
+        },
+        "machine": {
+          "type": "string",
+          "description": "Machine hostname"
+        },
+        "agent": {
+          "type": "string",
+          "description": "AI agent type (claude-code, copilot, antigravity, etc)"
+        },
+        "git_branch": {
+          "type": "string",
+          "description": "Active git branch at suspension"
+        },
+        "git_commit": {
+          "type": "string",
+          "description": "Last commit hash"
+        }
+      }
+    },
+    "work_state": {
+      "type": "object",
+      "required": ["status", "summary", "deliverables"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["not-started", "in-progress", "blocked", "ready-for-review", "complete"],
+          "description": "Current work status"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Brief summary of work done so far"
+        },
+        "blocking_issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["issue", "priority"],
+            "properties": {
+              "issue": {
+                "type": "string",
+                "description": "Description of blocking issue"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"]
+              },
+              "remediation": {
+                "type": "string",
+                "description": "Suggested fix or next steps"
+              }
+            }
+          },
+          "description": "Issues preventing progress"
+        },
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "status"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative file path"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["created", "modified", "deleted", "planned"]
+              },
+              "size_kb": {
+                "type": "number"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Files created/modified in this topic"
+        },
+        "next_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action", "priority"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "description": "Next step to take"
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Execution order (1 = first)"
+              },
+              "estimated_time": {
+                "type": "string",
+                "pattern": "^[0-9]+(m|h|d)$",
+                "description": "Estimated time (e.g., 30m, 2h, 1d)"
+              }
+            }
+          },
+          "description": "Ordered list of next steps"
+        }
+      }
+    },
+    "resume_instructions": {
+      "type": "object",
+      "properties": {
+        "files_to_read": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Files to read on resumption"
+        },
+        "context_summary": {
+          "type": "string",
+          "description": "Quick context for resuming agent"
+        },
+        "commands_to_run": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["command", "purpose"],
+            "properties": {
+              "command": {"type": "string"},
+              "purpose": {"type": "string"}
+            }
+          },
+          "description": "Commands to verify state on resume"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "created_by": {
+          "type": "string",
+          "description": "Agent that created suspension"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Topic tags for categorization"
+        },
+        "related_topics": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Related topic IDs"
+        },
+        "estimated_completion": {
+          "type": "string",
+          "pattern": "^[0-9]+(m|h|d)$",
+          "description": "Estimated time to complete topic"
+        }
+      }
+    }
+  }
+}

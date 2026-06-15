@@ -1,0 +1,138 @@
+{
+  "id": "spec-toolgraph-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:00:00Z",
+  "updated_at": "2026-05-30T17:00:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 8,
+  "subject": "ToolGraph \u2014 resource and provider intelligence graph (third memory graph)",
+  "title": "ToolGraph \u2014 Spoke and Hub Provider/Account/Cost Intelligence",
+  "what": "Defines ToolGraph as the third intelligence graph alongside PathGraph (history/drift) and TasteGraph (identity/preferences). ToolGraph maps every tool, API, model, and service a spoke or the hub accesses: provider, account_id (supports multiple accounts per provider), available models, monthly cost, current standing, and access method. At the hub level, fleet synthesis aggregates across all spokes and surfaces optimization opportunities (cost arbitrage, underused capacity, lower-cost provider alternatives). ToolGraph also serves as the gate for VectorLibrary adoption: a spoke's access_matrix must contain all requires_tools declared by a vector before adoption is permitted.",
+  "why": "Agents currently have no structured awareness of what tools they work with, which accounts fund them, or what they cost. This blindness causes: (1) suboptimal model routing \u2014 Navigator picks without knowing what's accessible; (2) invisible cost accumulation \u2014 no fleet-wide view of monthly spend; (3) unsafe vector adoption \u2014 spokes adopt patterns requiring tools they don't have. ToolGraph closes all three gaps. It also enables the hub to detect fleet-wide optimization opportunities, e.g. 30 spokes paying for Haiku when a local Ollama equivalent is free.",
+  "audience": [
+    "Navigator \u2014 reads spoke ToolGraph to route to the best available model within the spoke's access matrix",
+    "Sentinel \u2014 reads ToolGraph to know which provider account each tool call routes through; alerts on rate limit or cost spike",
+    "AP \u2014 reads ToolGraph to budget-aware plan (goal value must exceed tool cost)",
+    "Hub Gardener \u2014 aggregates spoke ToolGraphs into fleet synthesis nightly",
+    "VectorLibrary adoption gate \u2014 checks access_matrix before recording adoption"
+  ],
+  "use_cases": [
+    "Model routing: Navigator reads WAI-Spoke/ToolGraph.json access_matrix to pick the highest-quality model within this spoke's subscriptions",
+    "Cost optimization: hub ToolGraph-fleet.json shows 30 spokes using anthropic-haiku at $X/month; generates recommendation to evaluate Ollama local alternative with adoption impact analysis",
+    "Vector adoption gate: spoke wants to adopt vector requiring [supabase-rest, haiku]; ToolGraph access_matrix confirms both present \u2014 adoption proceeds",
+    "Multi-account awareness: spoke has two Anthropic accounts (personal at $50/mo, client at $200/mo); ToolGraph tracks both with separate monthly_cost and current_standing",
+    "Sentinel monitoring: Sentinel reads ToolGraph to know which account a tool call routes through; fires alert when account hits rate limit or cost spike"
+  ],
+  "patterns": [
+    "Spoke-local: WAI-Spoke/ToolGraph.json; agent-maintained \u2014 updated when new tools are discovered or account details change",
+    "Hub fleet synthesis: hub/WAI-Hub/ToolGraph-fleet.json aggregated from all spoke ToolGraph.json files on nightly run",
+    "access_matrix: flat list of {tool_id, provider, account_id} tuples \u2014 the authoritative gate for VectorLibrary adoption checks",
+    "optimization_opportunities[]: hub-level actionable list with estimated_savings_usd and adoption_impact narrative",
+    "Account-aware tracking: tool_id alone is not sufficient \u2014 (tool_id, account_id) is the unique spoke access record when multiple accounts exist"
+  ],
+  "schema": {
+    "spoke_toolgraph_file": "WAI-Spoke/ToolGraph.json",
+    "spoke_toolgraph": {
+      "wheel_id": "string",
+      "generated_at": "ISO-8601",
+      "components": [
+        {
+          "tool_id": "string \u2014 canonical slug e.g. anthropic-haiku, supabase-rest, github-api, ollama-local",
+          "category": "model | database | api | runtime | storage | identity",
+          "provider": "string \u2014 e.g. anthropic, supabase, github, local, openai",
+          "account_id": "string \u2014 which account/org is in use; required when provider has multiple accounts",
+          "account_label": "string \u2014 human label e.g. personal, work, client-x",
+          "models": [
+            "string \u2014 for model providers: list of accessible model_ids"
+          ],
+          "monthly_cost_usd": "float | null \u2014 last billing cycle spend; null if unknown",
+          "current_standing": "active | degraded | suspended | unknown",
+          "access": "direct | via_mcp | via_cli | via_sdk | via_rest",
+          "last_verified": "ISO-8601 | null \u2014 when standing was last confirmed"
+        }
+      ],
+      "access_matrix": [
+        {
+          "tool_id": "string",
+          "provider": "string",
+          "account_id": "string"
+        }
+      ]
+    },
+    "hub_fleet_file": "hub/WAI-Hub/ToolGraph-fleet.json",
+    "hub_toolgraph_fleet": {
+      "generated_at": "ISO-8601",
+      "spoke_count": "int \u2014 number of spokes included in this synthesis",
+      "provider_summary": {
+        "<provider_id>": {
+          "spoke_count": "int \u2014 how many spokes use this provider",
+          "total_monthly_cost_usd": "float | null",
+          "models_in_use": [
+            "string"
+          ],
+          "accounts": [
+            "account_id strings \u2014 unique accounts across fleet"
+          ]
+        }
+      },
+      "optimization_opportunities": [
+        {
+          "opportunity_id": "string",
+          "type": "cost_arbitrage | consolidation | local_alternative | capacity_rebalance",
+          "description": "string \u2014 human-readable opportunity summary",
+          "affected_spokes": [
+            "wheel_id"
+          ],
+          "affected_spoke_count": "int",
+          "estimated_savings_usd": "float | null",
+          "adoption_impact": "string \u2014 what changes when spokes adopt this recommendation",
+          "recommendation": "string \u2014 concrete action e.g. 'Run Haiku workloads via ollama-local instead; free after setup'"
+        }
+      ]
+    }
+  },
+  "constraints": [
+    "account_id is required when the same provider appears more than once in components[] \u2014 never collapse two accounts to one tool_id entry",
+    "monthly_cost_usd is best-effort and may be null; agents must never fabricate cost figures",
+    "Hub ToolGraph-fleet.json is read-only from spoke perspective \u2014 spokes never write directly to the hub file",
+    "access_matrix is the authoritative gate: if a tool_id is not listed there, it is not available in this spoke regardless of what components[] says",
+    "Fleet synthesis runs on hub nightly only; spokes must not trigger hub synthesis directly",
+    "ToolGraph.json is an agent-maintained file: agents update it when discovering new tools or observing account changes, not just on spec install"
+  ],
+  "tests": [
+    "Schema validation: ToolGraph.json with duplicate provider but missing account_id on one entry fails validation",
+    "Access gate: spoke access_matrix missing supabase-rest; attempt vector adoption with requires_tools=[supabase-rest] \u2014 blocked with clear reason",
+    "Access gate pass: all requires_tools present in access_matrix \u2014 adoption proceeds",
+    "Fleet synthesis: two spoke ToolGraphs submitted; hub synthesizes provider_summary with correct spoke_count and summed monthly_cost_usd",
+    "Optimization detection: 3 spokes use anthropic-haiku; hub generates an optimization_opportunity entry of type cost_arbitrage or local_alternative",
+    "current_standing: a component with current_standing=degraded appears in Sentinel watch list on next startup"
+  ],
+  "impl_lugs": [
+    "impl-toolgraph-framework-seed-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-05-31T08:00:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "ToolGraph.json maintenance: agent-maintained on discovery vs. automated scan from MCP tool list on session start \u2014 which is primary?",
+      "Should access_matrix be auto-populated from MCP tool introspection at session start, or manually curated?",
+      "Fleet synthesis frequency: nightly only, or on-demand via hub query endpoint?"
+    ]
+  },
+  "related_specs": [
+    "spec-vector-library-v1",
+    "spec-sentinel-advisor-v1",
+    "spec-evolution-lifecycle-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec fully. Check if WAI-Spoke/ToolGraph.json already exists. Read WAI-Spoke/advisors/navigator/recommendations-current.json for current model routing to understand what tool access is assumed. Read spec-vector-library-v1 for adoption gate integration points.",
+  "execute": "1. Create WAI-Spoke/ToolGraph.json seeding it with all tools currently known in use (Anthropic models, Supabase REST, GitHub API, GitNexus MCP). 2. Add access_matrix population step to session startup. 3. Add ToolGraph adoption gate check to vector adoption workflow (spec-vector-library-v1 integration). 4. Add ToolGraph.json update checkpoint to session closeout checklist. 5. Create hub/WAI-Hub/ToolGraph-fleet.json scaffold with empty optimization_opportunities[]. 6. Deliver impl-toolgraph-framework-seed-v1 lug to own incoming if not already present.",
+  "verify": "1. WAI-Spoke/ToolGraph.json parses against schema with no missing required fields. 2. access_matrix contains at least: anthropic-haiku, anthropic-sonnet, supabase-rest. 3. Attempt vector adoption with a tool missing from access_matrix \u2014 blocked with clear error. 4. Hub ToolGraph-fleet.json scaffold exists and is valid JSON. 5. Sentinel startup reads ToolGraph and flags any degraded components.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

@@ -1,0 +1,142 @@
+{
+  "id": "spec-sentinel-advisor-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:20:00Z",
+  "updated_at": "2026-05-30T17:20:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 9,
+  "subject": "Sentinel advisor \u2014 tool contract monitoring, KPI health tracking, and self-healing escalation",
+  "title": "Sentinel Advisor \u2014 Tool Contracts, KPI Monitoring, Dynamic Frequency, and Escalation Path",
+  "what": "Defines the Sentinel advisor: the tool health and system integrity monitor for the Wheel. Sentinel maintains contracts for every tool in the spoke's ToolGraph \u2014 each contract declares expected latency, success_rate, and output_shape. Sentinel measures KPIs on every tool call, adjusts monitoring frequency dynamically (increases after recent events, reduces when stable), and dispatches remediation via a typed escalation path: software defects create bug lugs dispatched to AP; configuration issues create task lugs; issues outside agent authority are escalated to Mario as Wilbur proposals. Sentinel + the evolution mechanism form a closed self-improvement loop: the Wheel monitors itself, identifies degradation, and routes fixes without human triage.",
+  "why": "Without Sentinel, tool failures are discovered reactively \u2014 a session fails and the user notices. With Sentinel, degradation is detected proactively via KPI drift before sessions fail. The escalation path (software \u2192 impl lug, config \u2192 task lug, hardware/external \u2192 Mario proposal) maps every failure mode to an appropriate response. The dynamic monitoring frequency prevents Sentinel from burning tokens on stable tools while increasing vigilance when anomalies appear. Sentinel + Assessor + Navigator together give the Wheel a complete observability stack: Assessor tracks model quality, Navigator tracks resource/cost, Sentinel tracks tool health.",
+  "audience": [
+    "Sentinel advisor process \u2014 runs at session startup and on tool call completion",
+    "AP \u2014 receives Sentinel alerts as impl/task lugs; decides whether to immediately act or queue",
+    "Mario \u2014 receives escalations for issues outside agent authority (external provider outages, hardware bounds)",
+    "Navigator \u2014 reads Sentinel ToolGraph health annotations to avoid routing work to degraded tools",
+    "Herald daemon \u2014 Sentinel monitors Herald's poll health (last_poll_at, consecutive_failures)"
+  ],
+  "use_cases": [
+    "Proactive degradation detection: anthropic-sonnet latency climbs from 2s to 8s over 3 sessions; Sentinel detects drift before a session timeout; creates task lug 'Investigate Anthropic latency spike'",
+    "Success rate breach: Supabase REST success_rate drops to 60% (contract says >=95%); Sentinel creates bug lug dispatched to AP; AP diagnoses and fixes connection pooling",
+    "Output shape drift: a tool that previously returned {status, data} now returns {status, payload}; Sentinel detects schema mismatch; creates impl lug to update callers",
+    "External provider outage: Anthropic API returns 503 for 15 minutes; issue is outside agent authority; Sentinel creates Wilbur proposal 'Anthropic outage \u2014 consider switching to local Ollama temporarily'",
+    "Dynamic frequency: supabase-rest had 3 failures in last hour; Sentinel increases monitoring from every-5th-call to every-call; reverts after 30 stable calls",
+    "Herald health: Herald has not polled for 5 minutes (2x its 30s interval); Sentinel alerts; creates task lug 'Herald daemon appears stalled'"
+  ],
+  "patterns": [
+    "Contract-per-tool: every entry in ToolGraph.json access_matrix has a matching Sentinel contract in sentinel-contracts.json",
+    "KPI measurement on completion: after every tool call, Sentinel records latency, success/failure, and output schema fingerprint",
+    "Dynamic frequency: base_frequency (default: every 5th call); increases to every call when consecutive_failures > 0 or recent anomaly; reverts after stability_window stable calls",
+    "Escalation decision tree: is the fix code? \u2192 bug lug. Is it config? \u2192 task lug. Is it outside agent authority (provider outage, hardware, billing)? \u2192 Wilbur proposal",
+    "Sentinel is non-blocking: measurement and alerting are asynchronous; Sentinel never blocks a tool call; it observes after the call completes",
+    "Stability window: Sentinel reduces frequency only after stability_window consecutive calls succeed with KPIs within contract bounds"
+  ],
+  "schema": {
+    "sentinel_contracts_file": "WAI-Spoke/advisors/sentinel/sentinel-contracts.json",
+    "tool_contract": {
+      "tool_id": "string \u2014 matches ToolGraph component tool_id",
+      "contract_version": "semver",
+      "kpis": {
+        "max_latency_ms": "int \u2014 p95 latency ceiling; breach triggers alert",
+        "min_success_rate": "float 0-1 \u2014 fraction of calls that must succeed over window_calls",
+        "output_schema_fingerprint": "string | null \u2014 SHA of expected output JSON schema; null if output is variable"
+      },
+      "measurement_window_calls": "int default 20 \u2014 rolling window for success_rate calculation",
+      "base_monitoring_frequency": "int default 5 \u2014 measure every Nth call",
+      "current_monitoring_frequency": "int \u2014 dynamically adjusted",
+      "stability_window_calls": "int default 30 \u2014 consecutive successes needed to reduce frequency",
+      "consecutive_failures": "int default 0",
+      "last_measured_at": "ISO-8601 | null",
+      "current_health": "healthy | degraded | critical | unknown"
+    },
+    "sentinel_kpi_record": {
+      "storage": "WAI-Spoke/advisors/sentinel/kpi-log.jsonl (rolling, max 500 records)",
+      "fields": {
+        "ts": "ISO-8601",
+        "tool_id": "string",
+        "session_id": "string",
+        "latency_ms": "int",
+        "success": "bool",
+        "error_type": "string | null",
+        "output_schema_fingerprint": "string | null"
+      }
+    },
+    "escalation_decision_tree": {
+      "software_defect": {
+        "condition": "output schema mismatch, logic error in caller code, unexpected error type from agent code",
+        "action": "create bug lug",
+        "lug_type": "bug",
+        "dispatch_to": "AP session via work queue",
+        "auto_create": true
+      },
+      "configuration_issue": {
+        "condition": "wrong endpoint, missing env var, misconfigured connection pool, wrong model_id",
+        "action": "create task lug",
+        "lug_type": "task",
+        "dispatch_to": "AP session via work queue",
+        "auto_create": true
+      },
+      "external_provider_issue": {
+        "condition": "provider 5xx, rate limit from provider, billing suspension, hardware-bound latency",
+        "action": "create Wilbur proposal",
+        "lug_type": "task",
+        "routed_to": "WILBUR",
+        "auto_create": true,
+        "proposal_fields": {
+          "recommended_action": "string",
+          "alternatives": [
+            "string"
+          ],
+          "estimated_impact": "string"
+        }
+      }
+    }
+  },
+  "constraints": [
+    "Sentinel is non-blocking: it MUST NOT add latency to tool calls; measurement happens post-call in async context",
+    "Sentinel MUST have a contract for every tool in ToolGraph.json access_matrix; tools without contracts are flagged as unknown health",
+    "Auto-created bug/task lugs from Sentinel must include: tool_id, contract_kpi_violated, observed_value, window_data snapshot, and a suggested perceive section",
+    "Sentinel must not create duplicate lugs for the same tool and same breach within a single session \u2014 deduplicate by (tool_id, kpi_type, session_id)",
+    "Dynamic frequency adjustments persist across session restarts via sentinel-contracts.json current_monitoring_frequency",
+    "Wilbur proposals from Sentinel require at least 3 consecutive breach measurements before auto-creation \u2014 prevents false alarms from transient spikes"
+  ],
+  "tests": [
+    "Contract breach detection: inject tool call with latency 3x max_latency_ms; verify Sentinel records breach and creates a lug",
+    "Success rate breach: inject 5 failures in a 20-call window (25%); min_success_rate=0.95; verify breach detected, lug created",
+    "Output schema drift: tool starts returning {payload:...} instead of {data:...}; verify fingerprint mismatch detected",
+    "Dynamic frequency increase: 2 consecutive failures; verify current_monitoring_frequency reset to 1 (every call)",
+    "Dynamic frequency decrease: 30 consecutive successes after frequency increase; verify frequency reverts to base_monitoring_frequency",
+    "Escalation routing: external provider 503 error; verify lug type=task with routed_to=WILBUR created, not a bug lug",
+    "Deduplication: same tool breaches twice in one session; verify only one lug created",
+    "Wilbur proposal threshold: only 2 consecutive breaches; verify no Wilbur proposal yet; third breach triggers creation"
+  ],
+  "impl_lugs": [
+    "impl-sentinel-contracts-seed-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-06-02T20:34:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "How does Sentinel intercept tool calls in Claude Code? No hook exists for post-tool-call measurement today. Does this require a new hook type (PostToolUse), or does Sentinel scan session transcripts retroactively?",
+      "output_schema_fingerprint: SHA of JSON schema requires Sentinel to know the schema upfront. For tools with variable output, what is the practical measurement?",
+      "Wilbur proposals: 'WILBUR' is not a current routed_to value. Does this need a new routing target, or does it route to Mario via a different mechanism (notification, lug delivered to user inbox)?"
+    ]
+  },
+  "related_specs": [
+    "spec-toolgraph-v1",
+    "spec-herald-daemon-v1",
+    "spec-evolution-lifecycle-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec. Read WAI-Spoke/advisors/sentinel/ directory if it exists. Read WAI-Spoke/ToolGraph.json for the access_matrix of tools that need contracts. Read spec-toolgraph-v1 for tool_id schema. Check .claude/hooks/ for any existing PostToolUse hook that could carry KPI measurement.",
+  "execute": "1. Create WAI-Spoke/advisors/sentinel/ directory. 2. Create sentinel-contracts.json with initial contracts for all tools in ToolGraph.json access_matrix. 3. Implement kpi_record() function: called post-tool-use, appends to kpi-log.jsonl, checks against contract, adjusts frequency, creates escalation lugs on breach. 4. Wire kpi_record() to PostToolUse hook (or retroactive scan at session end if hook not available). 5. Implement Wilbur proposal creation (define WILBUR routing or use task lug with tag=wilbur-proposal). 6. Add Sentinel startup check: load contracts, report current_health for all tools in ToolGraph.",
+  "verify": "1. sentinel-contracts.json exists with at least one contract per ToolGraph access_matrix entry. 2. Inject a latency breach; verify kpi-log.jsonl records it. 3. Verify bug lug auto-created on code-level breach. 4. Verify Wilbur proposal on external provider breach. 5. Frequency correctly increases after failure, decreases after stability window.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

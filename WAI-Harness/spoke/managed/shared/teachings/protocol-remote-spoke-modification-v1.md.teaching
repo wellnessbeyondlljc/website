@@ -1,0 +1,168 @@
+# Teaching: Remote-Spoke-Modification Protocol v1
+
+**Type:** Protocol Definition
+**Version:** 1.0.0
+**Created:** 2026-06-03
+**Safe to Auto-Adopt:** true
+**Affects:** Cross-spoke coordination, lug routing, closeout ceremony
+**Spec Reference:** spec-remote-spoke-modification-protocol-v1
+
+---
+
+## Prerequisites
+
+None — this teaching is standalone. All spokes using the framework need this protocol.
+
+## Batch Sequence
+
+**Batch:** remote-spoke-coordination-v1
+**Apply order:** 1 of 1
+**Depends on:** none
+**Parallel safe:** yes
+
+---
+
+## What This Teaching Provides
+
+A formal protocol for safely modifying files in another spoke remotely. Without this protocol, changes cause silent spec drift — the target spoke has no visibility into what happened or why.
+
+### Policy
+
+**Preference:** Every spoke does its own work. Route a lug to the target spoke and wait for its session to execute it.
+
+**When remote modification is acceptable:**
+- Emergency fix during an active session in a different spoke
+- The change is in basher-owned infrastructure (Caddyfile, hub-registry.json, shared tool config)
+- The spoke has no active session and the change is time-sensitive
+
+**Required:** After ANY remote modification of another spoke's files, send a **notice lug** to that spoke documenting:
+- What was changed
+- Why it was done remotely
+- What the spoke must own going forward
+- Files changed
+- Git commit SHA
+
+### Notice Lug Schema
+
+```json
+{
+  "id": "notice-{source_wheel_id}-{destination_wheel_id}-{timestamp}",
+  "type": "notice",
+  "source_wheel_id": "basher",
+  "destination_wheel_id": "track-prompt-lab",
+  "what_was_done": "Created .claude/hooks/track-hook.sh to capture track events",
+  "why_done_remotely": "Emergency integration fix during basher session while track-prompt-lab had no active session",
+  "what_spoke_should_own": "Review the hook behavior, test it locally, and move it to version control if acceptable",
+  "files_changed": [".claude/hooks/track-hook.sh"],
+  "git_commit": "a1b2c3d",
+  "created_at": "ISO-8601-timestamp",
+  "created_by": "basher:session-{id}"
+}
+```
+
+## Why This Matters
+
+**Silent spec drift:** Without notice lugs, remote changes are invisible to the target spoke. The spoke does not know:
+- What files were touched
+- Who changed them and when
+- Why the change was made remotely instead of locally
+- What the spoke needs to verify or maintain
+
+This is worse than active problems — it's invisible. The next agent reading stale documentation will not know the change happened.
+
+**Accountability:** Notice lugs create an audit trail. When a basher session fixes a hook in track-prompt-lab, track-prompt-lab's inbox shows exactly what was done and why, with the git commit ready to inspect.
+
+**Spoke sovereignty:** Spokes must be able to validate cross-spoke changes. Notice lugs enable that. Without them, a spoke cannot tell if a file is genuinely its responsibility or a remote modification it should override at next wakeup.
+
+---
+
+## What Changed
+
+### In templates/spoke/AGENTS.md
+
+Add the "Remote Spoke Modifications" section (lines 260–312 in framework/AGENTS.md):
+
+```markdown
+## Remote Spoke Modifications
+
+Cross-spoke changes must follow a strict protocol to prevent silent spec drift and maintain spoke sovereignty.
+
+### Policy
+
+**Preference:** Every spoke does its own work. Route a lug to the target spoke and wait for its session to execute it.
+
+**When remote modification is acceptable:**
+- Emergency fix during an active session in a different spoke
+- The change is in basher-owned infrastructure (Caddyfile, hub-registry.json, shared tool config)
+- The spoke has no active session and the change is time-sensitive
+
+**Required:** After ANY remote modification of another spoke's files, send a **notice lug** to that spoke before closing out.
+
+### Notice Lug Schema
+
+Notice lugs document remote modifications and are routed to the target spoke's incoming folder. Required fields:
+- `id`: notice-{source_wheel_id}-{destination_wheel_id}-{timestamp}
+- `type`: "notice"
+- `source_wheel_id`: basher (or originating wheel)
+- `destination_wheel_id`: target spoke
+- `what_was_done`: clear description of changes
+- `why_done_remotely`: justification
+- `what_spoke_should_own`: action items for the target spoke
+- `files_changed`: list of file paths
+- `git_commit`: the commit SHA
+
+**Delivery:** Write the notice lug to `{target_spoke_path}/WAI-Spoke/lugs/incoming/notice-{id}.json` immediately after making the remote change.
+
+### Cross-Spoke Change Sovereignty
+
+An agent operating in Spoke A must NEVER directly write files in another spoke's directory tree. All cross-spoke changes travel as:
+1. Lugs delivered to the target spoke's incoming folder (preferred)
+2. Notice lugs (when remote modification was necessary)
+
+Reading files in other spokes for context is permitted; writing is never permitted.
+```
+
+### In CLAUDE.md (all spokes)
+
+Add anti-pattern entry:
+
+```markdown
+- **Silent remote modification:** Never modify another spoke's files without sending a notice lug. Spec drift is invisible until the next session reads stale docs.
+```
+
+### In templates/commands/wai-closeout.md
+
+Add Step 9a (Remote Spoke Modification Verification) to closeout ceremony:
+
+```markdown
+### 9a. Remote Spoke Modification Verification
+
+Before scanning outgoing lugs, check if any remote spoke files were modified this session.
+If remote modifications exist, verify that a notice lug was created and delivered for EACH remote change.
+Required fields: what_was_done, why_done_remotely, what_spoke_should_own, files_changed, git_commit.
+If any remote modification lacks a notice lug, create one immediately before closing out.
+```
+
+---
+
+## Adoption Steps for Each Spoke
+
+1. **Sync templates** — Pull latest `framework/AGENTS.md` and `framework/templates/commands/wai-closeout.md`
+2. **Update CLAUDE.md** — Add the "Silent remote modification" anti-pattern
+3. **Enable closeout check** — Next session's closeout will include Step 9a verification
+4. **Test:** Next time a remote modification is needed, send a notice lug and verify it appears in the target spoke's inbox
+
+---
+
+## Compatibility
+
+- **Backward compatible:** Spokes without this teaching will not enforce the protocol, but can still receive and read notice lugs.
+- **Forward compatible:** Once adopted, all agents will send notice lugs, creating a consistent fleet-wide standard.
+- **No migration:** No existing lugs need reprocessing. New protocol applies to future remote modifications.
+
+---
+
+## Related Specifications
+
+- **spec-remote-spoke-modification-protocol-v1:** The full specification this teaching implements
+- **spec-cross-spoke-sovereignty-v1:** The underlying principle about spoke boundaries

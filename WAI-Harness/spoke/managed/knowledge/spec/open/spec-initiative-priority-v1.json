@@ -1,0 +1,98 @@
+{
+  "id": "spec-initiative-priority-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-31T00:00:00Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.249",
+  "impact": 8,
+  "subject": {
+    "kind": "rule",
+    "id": "initiative-priority",
+    "label": "Initiative & Goal Priority Tier \u2014 time-sensitive gate before backlog"
+  },
+  "title": "Initiative & Goal Priority Tier \u2014 time-sensitive gate before backlog",
+  "what": "Defines a two-tier dispatch priority system. Tier 0 (initiative and goal work) is exhausted before Tier 1 (backlog). Any lug affiliated with an initiative in an active lifecycle state is Tier 0. Pure backlog lugs are Tier 1. Sort key across all dispatch paths: (priority_tier, urgency_tier, -roi, wave). This spec doubles as the runtime config \u2014 tools read the config block to determine which lifecycle states qualify for Tier 0. To tune the system, edit this file.",
+  "why": "Without this gate, a high-ROI backlog task can silently outrank approved initiative work. The 3x focus_lock multiplier only helps within a single focus-locked initiative; it provides no hard ordering guarantee over backlog as a class. Initiatives represent the user's strategic commitments \u2014 their lugs should complete ASAP, not compete on ROI alone.",
+  "config": {
+    "_note": "Tools read this block at runtime. To tune the tier model: edit these fields. Do not edit the Python constants.",
+    "tier0_lifecycle_states": [
+      "approved",
+      "active",
+      "measuring"
+    ],
+    "tier_sort_weight": {
+      "0": 0,
+      "1": 1
+    },
+    "fallback_tier": 1,
+    "goal_chain_tier": 0,
+    "config_path": "WAI-Spoke/lugs/bytype/spec/open/spec-initiative-priority-v1.json"
+  },
+  "how": {
+    "lookup_chain": "lug.parent_epic \u2192 epic.initiative_id \u2192 initiative.lifecycle_state \u2192 config.tier0_lifecycle_states",
+    "steps_summary": [
+      "1. Load config.tier0_lifecycle_states from this spec lug at scoring startup (fallback: ['approved','active','measuring'] if lug missing)",
+      "2. Build affiliation_map {epic_id: initiative_id} \u2014 one pass over initiatives/index.json, filtered to initiatives whose lifecycle_state is in tier0_lifecycle_states",
+      "3. Per lug: priority_tier=0 if lug.parent_epic (or lug.epic_id) is in affiliation_map, else fallback_tier (1)",
+      "4. Lugs with no parent_epic field: priority_tier = fallback_tier",
+      "5. Sort key across all dispatch paths: (priority_tier, urgency_tier, -roi, wave)",
+      "6. When all Tier 0 lugs are blocked/stalled: Ozi falls through to Tier 1 automatically \u2014 no special flag needed",
+      "7. focus_lock 3x ROI boost is preserved unchanged \u2014 it controls ordering within Tier 0"
+    ],
+    "tier0_qualification": {
+      "approved": "Committed initiative \u2014 user has approved this work, do ASAP",
+      "active": "In-flight initiative \u2014 actively being worked, do ASAP",
+      "measuring": "Epics complete, in measurement window \u2014 still time-sensitive until hypothesis confirmed"
+    },
+    "tier0_exclusions": {
+      "proposed": "Not yet committed \u2014 backlog treatment appropriate",
+      "complete": "Done \u2014 no remaining work"
+    },
+    "goal_chains": "When spec-goal-chain-v1 is implemented, goal chain lugs are assigned priority_tier = config.goal_chain_tier (0) directly, bypassing the epic\u2192initiative lookup."
+  },
+  "constraints": [
+    "Lugs without parent_epic default to fallback_tier (1) \u2014 never false-promote to Tier 0",
+    "initiative_id must be set on epic lugs for the lookup chain to work \u2014 epics missing initiative_id land in Tier 1",
+    "affiliation_map is built once per scoring run, not per-lug \u2014 O(n) total cost",
+    "If initiatives/index.json is malformed JSON: return {} and continue \u2014 scoring still runs, all lugs land in Tier 1",
+    "If this spec lug file is missing or malformed: tools fall back to hardcoded defaults (no crash)"
+  ],
+  "audience": [
+    "ozi",
+    "agent",
+    "dev",
+    "admin"
+  ],
+  "impl_lugs": [
+    "impl-initiative-priority-tier-score-backlog-v1",
+    "impl-initiative-priority-tier-expediter-v1",
+    "impl-initiative-priority-tier-dispatch-sort-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "corpus_tests": [],
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": [],
+    "verified_at": null,
+    "verification_note": null
+  },
+  "related_specs": [
+    "spec-score-backlog-v1",
+    "spec-ozi-queue-v1",
+    "spec-goal-chain-v1",
+    "spec-harness-goal-affinity-v1"
+  ],
+  "execution_mode": "gastown",
+  "perceive": "Read this spec. Read WAI-Spoke/initiatives/index.json \u2014 confirm valid JSON and all initiative lifecycle_states. Check each epic in each initiative for initiative_id field. Read tools/score_backlog.py, tools/spoke_expediter.py, tools/ozi_headless.py, tools/ozi_autopilot.py to understand current sort key implementations before patching.",
+  "execute": "Deliver impl lugs to /home/mario/projects/basher/WAI-Spoke/lugs/incoming/. Ensure all harness epics have initiative_id: harness-fleet-migration. Update templates/commands/wai-initiative.md with Priority Contract section.",
+  "verify": "python3 -c \"import json; json.load(open('WAI-Spoke/initiatives/index.json'))\" passes. Each open/in_progress epic referenced by an approved/active initiative has initiative_id set. After score_backlog.py runs: WAI-State.json _work_queue.items contain priority_tier field and tier0_count > 0. Output shows INITIATIVE (Tier 0) / BACKLOG (Tier 1) band headers.",
+  "supersedes": null,
+  "superseded_by": null,
+  "outcome": null,
+  "gitnexus_symbols": [],
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

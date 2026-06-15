@@ -1,0 +1,176 @@
+name: session-observer
+role: watcher
+model: lightweight
+status: superseded
+superseded_by: "track-encapsulation.yaml + historian.yaml"
+superseded_at: "2026-03-12"
+superseded_reason: >
+  Track encapsulation captures everything the observer did (events, session
+  synthesis) plus per-turn telemetry with richer schema. The Historian advisor
+  handles periodic review that the observer's synthesis_pattern attempted.
+  observations.jsonl (the observer's output file) contained only test scaffold
+  data and is being discarded.
+description: "SUPERSEDED. Event recording and session synthesis - captures what happened for next session"
+
+trigger:
+  events:
+    - significant_event
+    - session_end
+    - pre_closeout
+  conditions:
+    - "impact >= 6 event occurs OR"
+    - "session ending (closeout initiated)"
+
+scope:
+  reads:
+    - "session events log"
+    - "WAI-Lugs.jsonl (Lugs created this session)"
+    - "WAI-Ledger.jsonl (commitments tracking)"
+    - "git log (commits made this session)"
+  writes:
+    - "observations.jsonl (event records)"
+    - "WAI-Ledger.jsonl (ledger entries)"
+    - "session summary Lug (on closeout)"
+
+prerequisites:
+  - "observations.jsonl writable"
+  - "session start timestamp tracked"
+
+behavior:
+  on_significant_event: |
+    1. Detect event type (code change, decision, error, user feedback)
+    2. Extract context:
+       - What happened
+       - Why it matters (impact)
+       - What changed (files, state)
+    3. Write observation to observations.jsonl:
+       {
+         timestamp, event_type, impact, summary, context, artifacts
+       }
+
+  on_session_end: |
+    1. **Ledger Reconciliation:**
+       - Read WAI-Ledger.jsonl
+       - Filter entries with status: "open"
+       - For each open entry:
+         * If type: "request" or "agreement", check if delivered this session
+         * If delivered (matching commit exists), create delivery entry
+         * If not delivered, flag as unfulfilled commitment
+       - Surface unfulfilled commitments in session summary
+    2. **Documentation Check:**
+       - If commits modified framework files (hub/BRIEF.md, *-Spec.md, templates/*)
+       - AND docs/ directory exists
+       - Flag: "Documentation may need updates"
+       - List: files changed that affect docs (specs, BRIEF, templates)
+       - Suggest: "Update README, regenerate llms-full.txt, update relevant guides"
+    3. Read all observations from current session
+    4. Read Lugs created this session
+    5. Read commits made this session (git log since session start)
+    6. Synthesize session summary:
+       - High-impact events (impact >= 8)
+       - New Lugs created (count by type)
+       - Commits made (count, summary)
+       - Incomplete work (Lugs still in-progress)
+       - **Unfulfilled commitments (from ledger)**
+       - **Documentation updates needed (if applicable)**
+    7. Create session summary Lug (type: observation)
+
+  synthesis_pattern: |
+    Session summary includes:
+    - **What shipped:** Commits pushed, features completed
+    - **What's pending:** In-progress Lugs, uncommitted work
+    - **Learnings:** High-impact observations from session
+    - **Next session:** Recommended starting point
+
+output:
+  observation_recorded:
+    type: "event_logged"
+    data:
+      event_type: "refactor_completed"
+      impact: 7
+      timestamp: "2026-02-12T08:00:00Z"
+  session_summary:
+    type: "session_synthesized"
+    data:
+      commits: 3
+      lugs_created: 5
+      high_impact_events: 2
+      incomplete_work: ["Lug abc123: Feature X implementation"]
+
+use_cases:
+  - scenario: "Agent completes a major refactor (impact: 8)"
+    what_happens: "session-observer logs event to observations.jsonl"
+    why_it_matters: "Next session can see 'Last session: Completed auth refactor'"
+    user_trigger: "Automatic on high-impact event"
+
+  - scenario: "Session ends with closeout, 3 commits made, 2 Lugs created"
+    what_happens: "session-observer synthesizes summary, creates session Lug"
+    why_it_matters: "Briefing on next session shows 'Last session progress'"
+    user_trigger: "Automatic on pre_closeout event"
+
+  - scenario: "Error encountered during build, impact: 7"
+    what_happens: "session-observer records error observation with context"
+    why_it_matters: "Error patterns visible across sessions - can detect recurring issues"
+    user_trigger: "Automatic on error event"
+
+  - scenario: "User provides explicit feedback: 'This approach worked well'"
+    what_happens: "session-observer creates user_feedback observation"
+    why_it_matters: "Positive/negative signals captured for learning"
+    user_trigger: "Agent detects user feedback in conversation"
+
+  - scenario: "Work left incomplete (in-progress Lugs at session end)"
+    what_happens: "session-observer flags incomplete work in summary"
+    why_it_matters: "Next session briefing shows 'Resume: Feature X implementation'"
+    reference: "Briefing 'Incomplete Work' section"
+
+  - scenario: "Session with zero high-impact events"
+    what_happens: "session-observer creates minimal summary: 'Maintenance session'"
+    why_it_matters: "Not every session needs detailed tracking - quiet when uneventful"
+    user_trigger: "Automatic session synthesis"
+
+  - scenario: "Agent lost context mid-migration and renamed core concepts"
+    what_happens: "On resume, ledger shows agreement to use 'perceive/execute/verify' — agent detects 'perspective/evidence/verdict' in code — creates diagnosis Lug"
+    why_it_matters: "This actually happened during WAI v2 migration. This pattern exists because of it."
+    origin: "WAI v2 migration, 2026-02-12 — context loss incident"
+
+  - scenario: "Conductor asks for 9 phases, agent delivers 7 and says 'complete'"
+    what_happens: "Ledger has 9 request entries. Only 7 have delivery entries. Closeout flags: 2 open commitments remain."
+    why_it_matters: "Premature completion is caught by the system, not by the conductor noticing."
+    origin: "WAI v2 migration, 2026-02-12 — phases 8-9 skipped"
+
+  - scenario: "Session ends normally, all work delivered"
+    what_happens: "Closeout reconciles ledger — all requests have matching deliveries — clean session."
+    why_it_matters: "Confidence that nothing was dropped. The ledger is the parity check."
+
+tests:
+  - name: "Logs high-impact events to observations.jsonl"
+    setup: "Trigger event with impact: 8"
+    action: "session-observer fires"
+    expected: "Event appended to observations.jsonl"
+
+  - name: "Synthesizes session summary on closeout"
+    setup: "Session with 2 commits, 3 Lugs created"
+    action: "Trigger session_end"
+    expected: "Session summary Lug created with counts"
+
+  - name: "Flags incomplete work"
+    setup: "2 Lugs in status: in_progress at session end"
+    action: "Synthesize session"
+    expected: "Summary includes incomplete_work: [Lug titles]"
+
+  - name: "Handles quiet sessions gracefully"
+    setup: "Session with no high-impact events, no commits"
+    action: "Trigger session_end"
+    expected: "Minimal summary: 'Quiet session, no major changes'"
+
+notes: |
+  Lightweight model is sufficient - event logging and counting.
+
+  observations.jsonl vs WAI-Lugs.jsonl:
+  - observations.jsonl: Stream of events (append-only log)
+  - WAI-Lugs.jsonl: Structured work items (Lugs)
+  - Session synthesis converts observations → summary Lug
+
+  Works with briefing system:
+  - Briefing reads latest session summary Lug
+  - Shows "Last session: {summary}" on wakeup

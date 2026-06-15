@@ -1,0 +1,213 @@
+id: self-registry
+name: "Self-Registry Maintainer"
+role: guardian
+model_tier: lightweight
+
+trigger: "on_demand"  # Spoke runs manually when metadata changes
+                      # OR automatically after major changes
+
+description: >
+  Each spoke maintains its own metadata declaring what it is, what it does,
+  and what expertise it offers. This skill ensures the metadata is current
+  and well-formed. Hub aggregates all spoke metadata into the live registry
+  on wakeup.
+
+scope:
+  reads:
+    - "EXTENSION.md (spoke identity)"
+    - "BRIEF.md (operational rules)"
+    - "WAI-Guide.md (project vision)"
+    - "WAI-Manifest.yaml (framework state)"
+    - "{spoke}/.spoke-metadata.yaml (local declaration)"
+
+  writes:
+    - "{spoke}/.spoke-metadata.yaml (update local metadata)"
+    - "WAI-Spoke/lugs/ (create metadata-updated lug if changed)"
+
+prerequisites:
+  - "EXTENSION.md must exist (spoke identity)"
+  - "Spoke must have clear scope and mission"
+
+output:
+  on_success: "Metadata file updated and current"
+  on_validation_error: "Metadata schema violation flagged"
+
+algorithm:
+  step_1_validate_local_metadata:
+    description: "Check if .spoke-metadata.yaml exists and is valid"
+
+    if_not_exists:
+      action: "Create from template"
+      source: "framework/templates/spoke-metadata.yaml.template"
+
+    if_exists:
+      action: "Validate against schema"
+      schema_fields:
+        - "path" (string, required)
+        - "type" (spoke|hub|archive, required)
+        - "status" (active|archived|suspended, required)
+        - "mission" (string, required)
+        - "scope" (list of domains, required)
+        - "boundaries" (list of what we don't do, required)
+        - "offers" (list of expertise, required)
+        - "stack" (list of tech/tools used)
+        - "team_model" (how agents collaborate)
+        - "activity" (created_at, last_modified, commits_30d, lugs_created)
+
+  step_2_gather_metadata_from_files:
+    description: "Extract current state from EXTENSION, BRIEF, WAI-Guide, manifest"
+
+    from_extension_md:
+      extract: "role, lens, behaviors, skills_loaded"
+      populate: "offers section"
+
+    from_brief_md:
+      extract: "operational rules, scope boundaries"
+      populate: "boundaries section"
+
+    from_wai_guide_md:
+      extract: "project purpose, vision, mission"
+      populate: "mission, scope"
+
+    from_manifest:
+      extract: "framework_version, skills_loaded, last_session"
+      populate: "framework_version, current_skills"
+
+  step_3_gather_activity_metrics:
+    description: "Collect business intelligence data for hub"
+
+    git_metrics:
+      - commits_last_30_days: "git log --since='30 days ago' --oneline | wc -l"
+      - last_commit_date: "git log -1 --format=%ai"
+      - active_branches: "git branch -a | grep -v '\*' | wc -l"
+
+    lug_metrics:
+      - lugs_created_30d: "count type in WAI-Lugs.jsonl with created_at >= 30d ago"
+      - open_lugs: "count status = 'open' or 'published'"
+      - decisions_made: "count type = 'decision'"
+
+    teaching_metrics:
+      - teaching_files_count: "ls seed/ingest/processed/ | wc -l"
+      - latest_teaching: "most recent .teaching file date"
+
+    session_metrics:
+      - last_session: "from WAI-State.json"
+      - session_count: "from WAI-State.json"
+      - days_since_last_session: "calculated"
+
+  step_4_update_metadata_file:
+    description: "Write validated metadata with current state"
+
+    file_path: "{spoke}/.spoke-metadata.yaml"
+
+    structure:
+      metadata_version: "2.0"
+      last_updated: "ISO-8601 timestamp"
+      last_updated_by: "spoke-name (agent name)"
+
+      identity:
+        path: "project/spoke"
+        type: "spoke|hub|archive"
+        status: "active|archived|suspended"
+        mission: "one sentence: why does this spoke exist"
+
+      scope:
+        domains: ["domain1", "domain2"]
+        boundaries: ["what we don't do"]
+
+      expertise:
+        offers: ["capability1", "capability2"]
+        stack: ["tech1", "tech2"]
+        team_model: "how agents collaborate"
+
+      framework:
+        version: "2.0.0"
+        skills_loaded: ["list of loaded skills"]
+
+      activity:
+        created_at: "ISO-8601"
+        last_modified: "ISO-8601"
+        commits_30d: "number"
+        lugs_created_30d: "number"
+        open_lugs: "number"
+        last_session: "ISO-8601"
+        session_count: "number"
+        days_since_activity: "number"
+
+  step_5_validate_and_sign:
+    description: "Ensure metadata is well-formed and sign with timestamp"
+
+    validation_checks:
+      - mission is not empty
+      - scope domains are specific (not vague)
+      - boundaries clearly state what we don't do
+      - offers match EXTENSION.md
+      - stack is current
+      - activity metrics are recent (not stale)
+
+    if_validation_fails:
+      action: "Flag warning lug for spoke to fix"
+      create_lug:
+        type: "diagnostic"
+        title: "Metadata validation warning"
+        description: "Spoke metadata failed validation check: {reason}"
+
+  step_6_create_metadata_updated_lug:
+    description: "If metadata changed, create a lug for audit trail"
+
+    only_if: "metadata file was modified"
+
+    create_lug:
+      id: "metadata-update-{spoke-name}-{timestamp}"
+      type: "metadata"
+      title: "Spoke metadata updated: {spoke-name}"
+      description: "Self-registry updated with current state and activity metrics"
+      status: "published"
+      impact: "2"  # Low — administrative
+      perceive: "Spoke reviewed its own metadata for accuracy"
+      execute: "Updated .spoke-metadata.yaml with current state"
+      verify: "Metadata passed validation, hub will read this on next wakeup"
+
+use_cases:
+  - scenario: "Spoke adds new capability/skill"
+    action: "Run self-registry to update metadata"
+    result: ".spoke-metadata.yaml now lists new skill in 'offers'. Hub reads it next wakeup. Registry updated."
+
+  - scenario: "Spoke reaches a major milestone"
+    action: "Run self-registry to update activity metrics"
+    result: "Activity metrics show 50 commits in 30d, hub sees spoke is active and healthy"
+
+  - scenario: "Spoke is archived"
+    action: "Run self-registry with status: archived"
+    result: ".spoke-metadata.yaml marked archived. Hub removes from active registry but keeps historical record."
+
+  - scenario: "Hub wakeup"
+    action: "Hub's registry-refresh skill queries all spokes' metadata files"
+    result: "Registry aggregated from current spoke declarations. Always reflects reality."
+
+tests:
+  - name: "Metadata file created if missing"
+    input: "Spoke with no .spoke-metadata.yaml"
+    expected: "File created from template, validated, populated with current state"
+
+  - name: "Activity metrics collected"
+    input: "Run self-registry on active spoke"
+    expected: "Activity section populated: commits_30d, lugs_created_30d, last_session, etc."
+
+  - name: "Validation catches missing mission"
+    input: "Metadata file with empty mission field"
+    expected: "Validation fails, diagnostic lug created flagging the issue"
+
+  - name: "Metadata-updated lug created on change"
+    input: "Spoke updates its EXTENSION.md (new skills)"
+    expected: "self-registry detects change, creates metadata-update lug"
+
+  - name: "Hub can read and aggregate"
+    input: "Hub runs registry-refresh, reads all spoke .spoke-metadata.yaml files"
+    expected: "Hub aggregates into single registry with all spoke declarations"
+
+notes:
+  - "Each spoke is source of truth about itself. Hub never manually edits registry."
+  - "Activity metrics provide BI on spoke health: commits, lugs, sessions"
+  - "Metadata file is YAML for easy hub parsing"
+  - "Spoke can run this manually when things change, or hub triggers it on wakeup request"

@@ -1,0 +1,37 @@
+{
+  "id": "sshconfig-{WHEEL_ID}",
+  "type": "sshconfig",
+  "wheel_id": "{WHEEL_ID}",
+  "version": "1.0.0",
+  "created": "{TIMESTAMP}",
+  "description": "SSH and Git authentication configuration for this wheel",
+  "ssh": {
+    "key_path": "~/.ssh/id_ed25519",
+    "key_type": "ed25519",
+    "key_passphrase": null,
+    "verify_command": "ssh -T git@github.com"
+  },
+  "git": {
+    "user": "{GIT_USER}",
+    "email": "{GIT_EMAIL}",
+    "author_format": "{GIT_USER} <{GIT_EMAIL}>",
+    "default_remote": "origin",
+    "default_branch": "main"
+  },
+  "github": {
+    "host": "github.com",
+    "api_endpoint": "https://api.github.com",
+    "remote_format": "git@github.com:{owner}/{repo}.git"
+  },
+  "verification": {
+    "last_ssh_test": null,
+    "last_ssh_success": false,
+    "git_config_valid": false
+  },
+  "tags": [
+    "ssh",
+    "git",
+    "authentication",
+    "wheel-wide"
+  ]
+}

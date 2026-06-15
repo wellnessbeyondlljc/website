@@ -1,0 +1,56 @@
+---
+id: cartographer-closeout-observation-v1
+title: "Cartographer: session observation recording at closeout"
+version: 1.0.0
+fw_ver: "2.0.175"
+safe_to_auto_adopt: true
+target: spokes
+---
+
+## What Changed
+
+`templates/commands/wai-closeout.md` now includes **step 6b — Cartographer Observation**, inserted after step 6 (Finalize Session Track). This step records a structured usage observation at every session closeout so the fleet-chart aggregator can build local model performance history for Navigator.
+
+## Why
+
+Navigator needs local evidence — not just provider specs — to advise on model selection. Cartographer is the sensor array. Without session observations, Navigator can only recommend based on external specs. With them, it can say "this model has a 0.12 rework rate on coding tasks in your fleet."
+
+## Prerequisites
+
+- `WAI-Spoke/cartographer/observations/` directory must exist (step 6b creates it with `os.makedirs`)
+- `WAI-Spoke/WAI-State.json` must be readable (always true for healthy spokes)
+- No external dependencies
+
+## Batch Sequence
+
+This teaching is standalone. Apply after any other wai-closeout updates already adopted.
+
+## What to Apply
+
+In `templates/commands/wai-closeout.md`, after the `### 6. Finalize Session Track` section and before `### 7. Documentation Updates`, insert:
+
+```
+### 6b. Cartographer Observation
+
+After the session track is finalized, record a structured usage observation so Navigator can build local model performance history.
+
+[Python inline block — see source teaching for full code]
+```
+
+The full Python block reads track.jsonl for rework events and lug transitions, reads WAI-State.json for model/vibe/spoke_id, infers dominant_work_type from active lug types + vibe (priority rules), and writes to `WAI-Spoke/cartographer/observations/session-{id}-obs.json`.
+
+**Observation record fields (all required, quality_score/rework_rate always null at write time):**
+`session_id`, `spoke_id`, `date`, `model_id`, `provider`, `dominant_work_type`, `work_type_distribution`, `task_complexity_mode`, `session_vibe`, `turn_count`, `tokens_in`, `tokens_out`, `rework_event_count`, `lug_reversions`, `lug_progression`, `quality_score`, `rework_rate`, `scoring_method`, `recorded_at`
+
+## Verify
+
+```bash
+grep -n "6b\|Cartographer Observation" templates/commands/wai-closeout.md
+ls WAI-Spoke/cartographer/observations/ 2>/dev/null && echo "obs dir exists"
+```
+
+After next closeout:
+```bash
+ls WAI-Spoke/cartographer/observations/
+python3 -c "import json; d=json.load(open('WAI-Spoke/cartographer/observations/$(ls WAI-Spoke/cartographer/observations/ | head -1)')); print('rework:', d.get('rework_event_count'), '| quality:', d.get('quality_score'))"
+```

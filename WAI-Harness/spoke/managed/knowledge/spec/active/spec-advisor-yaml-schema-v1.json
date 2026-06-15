@@ -1,0 +1,24 @@
+{
+  "id": "spec-advisor-yaml-schema-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-28T09:20:00Z",
+  "updated_at": "2026-05-28T09:20:00Z",
+  "routed_to": "FRAMEWORK",
+  "impact": 8,
+  "subject": {
+    "kind": "schema",
+    "id": "advisor-yaml-schema",
+    "label": "Advisor YAML Schema"
+  },
+  "title": "Advisor YAML Schema \u2014 canonical three-file contract for all spoke advisors",
+  "what": "Every spoke advisor must have three files: (1) v1.0.0.yaml \u2014 versioned definition with mission, pilot_contract, and patterns; (2) active.yaml \u2014 version pointer read by AdvisorManager; (3) schedule.yaml \u2014 run cadence with run_budget_seconds and time_request block. The authoritative field reference is WAI-Spoke/advisors/schema/advisor-schema-v1.yaml.",
+  "why": "Without this contract, advisors are directories \u2014 invisible to AdvisorManager and unschedulable by Ozi. The three-file contract makes advisors discoverable, activatable, and budget-aware across the fleet.",
+  "reference_implementation": "WAI-Spoke/advisors/vera/",
+  "schema_file": "WAI-Spoke/advisors/schema/advisor-schema-v1.yaml",
+  "teaching": "hub/teachings/advisor-yaml-schema-init-sop-v1.teaching",
+  "impl_lugs": [
+    "impl-ozi-advisor-init-routine-v1"
+  ]
+}

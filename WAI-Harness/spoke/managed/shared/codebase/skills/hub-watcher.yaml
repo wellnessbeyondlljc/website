@@ -1,0 +1,135 @@
+name: hub-watcher
+role: watcher
+model: lightweight
+description: "Monitors Hub for framework updates, cross-node signals, and health status"
+
+trigger:
+  events:
+    - session_start
+    - on_demand
+  conditions:
+    - "node_type == 'spoke' (from WAI-Manifest.yaml)"
+    - "spoke has hub_path configured in WAI-State.json"
+    - "Skip if node_type == 'hub' (hub doesn't check itself for updates)"
+
+scope:
+  reads:
+    - "hub/registry.yaml"
+    - "hub/health.yaml"
+    - "hub/intake/*.lug.json (pending signals)"
+    - "hub/WAI-Manifest.yaml (framework version)"
+  writes:
+    - "session log (update notifications)"
+    - "spoke WAI-Manifest.yaml (update hub_lug_cursor)"
+
+prerequisites:
+  - "hub_path exists and is accessible"
+  - "hub/registry.yaml exists"
+
+behavior:
+  on_trigger: |
+    0. **Check node_type from WAI-Manifest.yaml:**
+       - If node_type == "hub": SKIP (hub doesn't check itself)
+       - If node_type == "spoke": CONTINUE
+    1. Read hub/registry.yaml - get hub framework_version
+    2. Compare with spoke framework_version in WAI-Manifest.yaml
+    3. Check hub/health.yaml for:
+       - intake_pending > 0 (cross-node signals for this spoke)
+       - framework_update_available: true
+       - oldest_pending timestamp
+    4. Check hub/intake/ for unprocessed signals addressed to this spoke
+    5. Report findings to session
+
+  on_findings: |
+    Framework update available:
+      - Check hub/CHANGELOG.md or hub/WAI-Lugs.jsonl for update type
+      - If patch update (2.0.0 → 2.0.1) AND no breaking changes:
+        * Auto-apply: Update spoke WAI-Manifest.yaml framework_version
+        * Pull new templates from framework/templates/
+        * Create update Lug documenting what changed
+        * Report: "Auto-upgraded to v{X} (patch update)"
+      - If minor/major update (2.0.0 → 2.1.0 or 3.0.0):
+        * Notify agent: "Hub has framework v{X}, you're on v{Y}"
+        * Read hub update Lugs to show what changed
+        * Suggest: "Review changes and run /framework-update when ready"
+        * Flag: Breaking changes require review
+
+    Pending signals:
+      - Notify agent: "{N} high-impact signals in hub/intake/"
+      - List: Signal titles and impact scores
+      - Auto-pull signals relevant to this spoke (matching subscription patterns)
+      - Create local Lugs with source_id pointing to hub signals
+      - Suggest: "Review and acknowledge signals"
+
+    Hub health issues:
+      - Report: Stale intake (oldest_pending > 7 days)
+      - Suggest: "Run hub maintenance"
+
+output:
+  success:
+    type: "hub_status"
+    data:
+      framework_version_match: true/false
+      pending_signals: 0
+      health: "ok"
+      recommendations: []
+  findings:
+    type: "hub_updates_available"
+    data:
+      framework_update: "2.1.0 available (current: 2.0.0)"
+      pending_signals: ["High-impact pattern: authentication refactor"]
+      recommendations: ["/framework-update", "Review intake signals"]
+
+use_cases:
+  - scenario: "Session starts, hub has new framework version 2.1.0"
+    what_happens: "hub-watcher detects version mismatch, notifies agent"
+    why_it_matters: "Agent knows newer templates/patterns are available"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Another spoke published high-impact decision (impact: 9)"
+    what_happens: "hub-watcher finds signal in hub/intake/, lists it for agent"
+    why_it_matters: "Cross-node learning - patterns discovered elsewhere become available"
+    reference: "Phase 6 - cross-node communication test"
+
+  - scenario: "Hub health.yaml shows oldest_pending: 30 days ago"
+    what_happens: "hub-watcher warns about stale intake, suggests maintenance"
+    why_it_matters: "Hub intake shouldn't accumulate indefinitely"
+    user_trigger: "Automatic health check on session_start"
+
+  - scenario: "Spoke is up-to-date, no pending signals"
+    what_happens: "hub-watcher reports 'all clear', no action needed"
+    why_it_matters: "No false alarms - quiet when everything is current"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "hub_path in WAI-State.json is invalid or inaccessible"
+    what_happens: "hub-watcher reports failure, suggests checking configuration"
+    why_it_matters: "Broken hub connection should be obvious"
+    user_trigger: "Automatic on session_start"
+
+tests:
+  - name: "Detects framework version mismatch"
+    setup: "Hub v2.1.0, spoke v2.0.0"
+    action: "Trigger hub-watcher"
+    expected: "Version mismatch reported, update recommended"
+
+  - name: "Finds pending signals in hub/intake/"
+    setup: "Create signal file in hub/intake/ for this spoke"
+    action: "Trigger hub-watcher"
+    expected: "Signal count and titles reported"
+
+  - name: "Reports hub health issues"
+    setup: "Set hub/health.yaml oldest_pending to 30 days ago"
+    action: "Trigger hub-watcher"
+    expected: "Stale intake warning issued"
+
+  - name: "Handles missing hub gracefully"
+    setup: "Invalid hub_path in WAI-State.json"
+    action: "Trigger hub-watcher"
+    expected: "Connection failure reported, not a crash"
+
+notes: |
+  Runs on every session start to keep spoke aware of hub ecosystem.
+
+  Lightweight model is sufficient - file reads and version comparison.
+
+  Herald pattern: Hub writes health.yaml, spokes read and react.

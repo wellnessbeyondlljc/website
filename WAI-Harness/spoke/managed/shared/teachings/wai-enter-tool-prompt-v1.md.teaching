@@ -1,0 +1,53 @@
+---
+id: wai-enter-tool-prompt-v1
+title: "wai-enter.sh: prompt for tool name when no arg passed"
+version: 1
+safe_to_auto_adopt: true
+target_files:
+  - wai-enter.sh
+---
+
+## Problem
+
+`wai-enter.sh` previously defaulted to launching `claude` when called with no argument:
+
+```bash
+TOOL="${1:-claude}"
+```
+
+This broke the intended workflow for users who want to choose their tool interactively after the prep steps run. It also made it impossible to use `wai-enter.sh` as a general pre-launch wrapper without committing to a specific tool upfront.
+
+## Fix
+
+Prompt interactively when no tool is specified, so `wai-exit.sh` still runs after the session:
+
+```bash
+TOOL="${1:-}"
+if [[ -n "$TOOL" ]]; then
+    shift
+fi
+
+if [[ -z "$TOOL" ]]; then
+    read -r -p "[wai-enter] Tool to launch (claude/gemini/codex/uvx): " TOOL
+fi
+```
+
+Also pass remaining `"$@"` args to the tool to support patterns like:
+```bash
+./wai-enter.sh uvx code-puppy -i
+```
+
+## Prerequisites
+
+- `wai-enter.sh` must exist in spoke root
+- Must contain the old `TOOL="${1:-claude}"` pattern
+
+## Batch Sequence
+
+1. Replace `TOOL="${1:-claude}"` with the new prompt block above
+2. Ensure `"$TOOL" "$@"` is used at launch (not just `"$TOOL"`)
+3. Test: `./wai-enter.sh` — should prompt, not auto-launch
+
+## Notes
+
+GUI tools (VS Code, Cursor) still work with this pattern for the prep steps, but `wai-exit.sh` fires immediately after the GUI launcher returns. This is expected — GUI tools are not interactive CLI sessions.

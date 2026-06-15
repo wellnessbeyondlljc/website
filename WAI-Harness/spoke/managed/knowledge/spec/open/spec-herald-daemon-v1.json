@@ -1,0 +1,109 @@
+{
+  "id": "spec-herald-daemon-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.0.0",
+  "created_at": "2026-05-30T17:12:00Z",
+  "updated_at": "2026-05-30T17:12:00Z",
+  "gb": "wheel-intelligence-layer",
+  "fw_ver": "v2.0.248",
+  "impact": 9,
+  "subject": "Herald daemon \u2014 the process that bridges intra-agent messages to live Claude Code sessions",
+  "title": "Herald Daemon \u2014 agent_messages Poller and Headless CC Spawner",
+  "what": "Defines the Herald daemon: a long-running (or cron-triggered) process that polls the agent_messages Supabase table for pending messages addressed to this spoke, spawns a headless Claude Code session in the correct spoke directory to respond, waits for it to exit, and marks the message row as responded. Herald is the mechanism that gives agent_messages table its value \u2014 without Herald, messages sit unanswered. Herald also handles lifecycle: spawned sessions are short-lived (respond and exit), TTL-expired messages are marked expired and not spawned, and Herald writes a structured spawned_by=herald flag into session-guard.json before each spawn.",
+  "why": "The agent_messages table (spec-intra-agent-comms-v1) is inert without a polling mechanism. Herald is that mechanism. It must run in the target spoke's environment (not the sender's) because the responding session needs access to that spoke's files, WAI-State, and tooling. Herald cannot run as part of a normal user session \u2014 it must be an independent background process so it can respond to messages that arrive while the user session is doing other work. The spawned_by=herald flag is critical: without it, every Herald-spawned session would enter full wakeup and potentially claim chains, burning tokens and causing unintended side effects.",
+  "audience": [
+    "Infrastructure/ops \u2014 runs and monitors Herald processes per spoke",
+    "Session startup \u2014 reads spawned_by=herald flag to configure auto-exit behavior",
+    "spec-intra-agent-comms-v1 implementers \u2014 Herald is the runtime for that spec's communication patterns",
+    "Ozi \u2014 relies on Herald being operational for consult-before-deliver and handoff patterns"
+  ],
+  "use_cases": [
+    "Consult response: session A sends consult to spoke B; Herald in spoke B detects it, spawns headless CC, CC reads the question and responds, Herald marks responded",
+    "Handoff receipt: session A sends handoff message to spoke B with chain context; Herald spawns CC in spoke B; CC reads handoff, claims the chain, sends ack",
+    "Multi-spoke coordination: Hub session asks 3 spokes a question simultaneously; 3 Herald instances each spawn a responder; all respond within minutes",
+    "Herald health monitoring: Sentinel tracks Herald last_poll_at and poll_success_rate; alerts when Herald has not polled for 2x its configured interval"
+  ],
+  "patterns": [
+    "Poll-spawn-wait-mark cycle: Herald polls \u2192 finds pending message \u2192 spawns CC \u2192 waits for CC exit \u2192 marks responded/failed",
+    "spawned_by=herald flag: written to WAI-Spoke/runtime/session-guard.json BEFORE spawning CC; session startup reads it and sets auto_exit_after_response=true",
+    "One spawn per message: Herald does not batch-spawn; each pending message gets its own CC session in sequence (or in parallel up to max_concurrent_spawns)",
+    "TTL check before spawn: if message expires_at < now(), mark expired, do not spawn \u2014 avoids wasting a CC session on a stale request",
+    "Idempotent poll: if Herald crashes mid-spawn, the message remains status=pending; on next poll Herald will re-spawn (the responder session must handle duplicate spawn gracefully by checking thread for existing response)"
+  ],
+  "schema": {
+    "herald_config_file": "WAI-Spoke/advisors/herald/herald.json",
+    "herald_config": {
+      "wheel_id": "string",
+      "enabled": "bool",
+      "poll_interval_seconds": "int default 30",
+      "max_concurrent_spawns": "int default 2",
+      "spawn_command_template": "string \u2014 template with {thread_id} and {message_id} placeholders",
+      "spoke_directory": "string \u2014 absolute path to spoke root for CC spawn",
+      "last_poll_at": "ISO-8601 | null",
+      "poll_success_count": "int",
+      "poll_failure_count": "int"
+    },
+    "session_guard_herald_block": {
+      "spawned_by": "herald",
+      "thread_id": "uuid",
+      "message_id": "uuid",
+      "auto_exit_after_response": true,
+      "response_written": false
+    },
+    "herald_poll_loop_pseudocode": [
+      "while running:",
+      "  pending = query agent_messages WHERE to_spoke=wheel_id AND status='pending' AND (expires_at IS NULL OR expires_at > now())",
+      "  expired = query agent_messages WHERE to_spoke=wheel_id AND status='pending' AND expires_at <= now()",
+      "  mark expired rows: UPDATE agent_messages SET status='expired' WHERE id IN expired.ids",
+      "  for each msg in pending (up to max_concurrent_spawns):",
+      "    write session-guard.json herald block with msg.thread_id, msg.id",
+      "    spawn CC headless in spoke_directory",
+      "    wait for CC exit",
+      "    if CC exited 0 and response row present: mark msg status='responded'",
+      "    else: increment failure count, leave status='pending' for retry",
+      "  UPDATE herald.json last_poll_at, counters",
+      "  sleep poll_interval_seconds"
+    ]
+  },
+  "constraints": [
+    "Herald MUST write spawned_by=herald to session-guard.json BEFORE spawning CC \u2014 if this step fails, do not spawn",
+    "Herald MUST check TTL before spawning \u2014 never spawn a CC session for an expired message",
+    "Herald-spawned CC sessions MUST be headless \u2014 no interactive terminal; use claude --headless or equivalent flag",
+    "A Herald-spawned session that fails to write a response within 10 minutes is considered failed; Herald marks message status=pending for retry",
+    "Herald must not run inside a normal user session \u2014 it is a separate process; do not invoke Herald's poll loop from session startup",
+    "max_concurrent_spawns should be 1 for spokes with limited resources; higher values require sufficient CPU and memory"
+  ],
+  "tests": [
+    "Basic poll-spawn-respond: write pending message to agent_messages for this spoke; trigger Herald poll; verify CC spawned, response written, message status=responded",
+    "TTL expiry: write message with expires_at = 1 second ago; trigger Herald poll; verify message marked expired, no CC spawned",
+    "Herald flag check: after Herald spawns CC, verify WAI-Spoke/runtime/session-guard.json contains spawned_by=herald and correct message_id",
+    "Auto-exit: Herald-spawned CC session writes response and exits with code 0; verify it does not proceed to wakeup banner or chain claiming",
+    "Crash recovery: write pending message; simulate Herald crash mid-spawn; restart Herald; verify message still pending; verify re-spawn succeeds",
+    "Sentinel monitoring: Sentinel reads herald.json last_poll_at; verify alert fires when last_poll_at > 2 * poll_interval_seconds ago"
+  ],
+  "impl_lugs": [
+    "impl-herald-config-scaffold-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": "2026-06-02T20:34:00Z",
+    "spec_drift_risk": "low",
+    "open_questions": [
+      "Deployment mode: cron (simpler, 30s latency per message) vs always-on daemon (lower latency, needs process supervision). For MVP, cron is sufficient.",
+      "How does Herald run headless CC in WSL2 without a TTY? Requires testing with claude --print or equivalent non-interactive mode.",
+      "Should Herald be per-spoke (each spoke runs its own Herald) or hub-hosted (Hub Herald routes to target spoke directories)? Per-spoke is simpler and more sovereign."
+    ]
+  },
+  "related_specs": [
+    "spec-intra-agent-comms-v1",
+    "spec-sentinel-advisor-v1"
+  ],
+  "routed_to": "LOCAL",
+  "perceive": "Read this spec. Read spec-intra-agent-comms-v1 for agent_messages table schema. Check if WAI-Spoke/advisors/herald/ directory exists. Read WAI-Spoke/runtime/session-guard.json for current structure to understand how to add spawned_by block.",
+  "execute": "1. Create WAI-Spoke/advisors/herald/herald.json config scaffold. 2. Implement herald_poll.py: query agent_messages, TTL check, write session-guard herald block, spawn CC headless, wait, mark responded. 3. Add spawned_by=herald detection to session startup (wai-enter.sh): if present, set AUTO_EXIT=true, skip full wakeup. 4. Wire herald_poll.py as a cron job (initial deployment). 5. Add Herald health metric to Sentinel watch list.",
+  "verify": "1. herald.json config exists and parses. 2. Write test message to agent_messages; run herald_poll.py manually; verify CC spawned. 3. session-guard.json has spawned_by=herald block before CC launch. 4. Herald-spawned session exits after responding without full wakeup. 5. Expired message not spawned.",
+  "execution_mode": "gastown",
+  "execution_substrate": "gastown",
+  "model_fit": "haiku"
+}

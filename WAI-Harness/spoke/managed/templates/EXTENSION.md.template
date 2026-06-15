@@ -1,0 +1,105 @@
+# Extension Identity: ${EXTENSION_NAME}
+
+**Extension ID:** ${EXTENSION_ID}
+**Type:** ${EXTENSION_TYPE}
+**Framework Version:** 2.0.0
+
+---
+
+## Purpose
+
+${EXTENSION_PURPOSE}
+
+This extension is part of the Wheelwright ecosystem and follows the Wheelwright Framework v2 architecture.
+
+---
+
+## Structure
+
+```
+${EXTENSION_ROOT}/
+├── WAI-Spoke/           # Wheelwright state and logs
+│   ├── WAI-State.json   # Project state and decisions
+│   ├── WAI-State.md     # Strategic vision (human-readable)
+│   ├── WAI-Lugs.jsonl   # Work items and learnings
+│   └── observations.jsonl  # Event stream
+├── skills/              # Extension-specific skill overrides
+├── BRIEF.md            # Behavioral rules (this extension)
+├── EXTENSION.md        # This file (extension identity)
+└── [extension files]   # Your project/spoke files
+```
+
+---
+
+## Scope
+
+**What this extension does:**
+${EXTENSION_SCOPE}
+
+**What this extension does NOT do:**
+${EXTENSION_NON_SCOPE}
+
+---
+
+## Integration
+
+### Hub Connection
+- **Hub Path:** ${HUB_PATH}
+- **Cross-node signals:** ${CROSS_NODE_SIGNALS}
+
+### Skills Loaded
+**Framework Skills:** (inherited)
+- safe-refactor, qc-check, hub-watcher, framework-updater
+- brief-advisor, session-observer, file-audit, integration-check
+
+**Extension-specific Skills:** (overrides)
+${EXTENSION_SKILLS}
+
+---
+
+## Machine Optimization
+
+This extension is optimized for:
+- **Machine:** ${MACHINE_NAME}
+- **Classification:** ${MACHINE_CLASS}
+- **IDE Settings:** Tuned for ${MACHINE_CLASS} (see AI-AGENT-MACHINE-PROTOCOL.md)
+
+---
+
+## Lifecycle
+
+### Session Start
+1. integration-check verifies environment
+2. Briefing displays machine status, recent work, incomplete items
+3. hub-watcher checks for framework updates and signals
+4. Agent loads WAI context (State, BRIEF, Skills)
+
+### During Session
+- Signals fire based on events (complexity, context, stewardship)
+- Skills guard/review/advise as work progresses
+- Observations recorded to observations.jsonl
+- Session log captures conversation
+
+### Session End
+1. session-observer synthesizes session summary
+2. closeout_validator checks git, observations, framework health
+3. Optional: /shipit commits with summary
+4. Session Lug created for next briefing
+
+---
+
+## Related Documents
+
+- **CLAUDE.md** - Priority 0 instructions for Claude Code
+- **BRIEF.md** - Behavioral rules cascade
+- **WAI-State.md** - Strategic vision and project status
+- **AI-AGENT-MACHINE-PROTOCOL.md** - Machine optimization protocol
+
+---
+
+## Maintenance
+
+**Last Framework Update:** ${LAST_FRAMEWORK_UPDATE}
+**Last Structure Audit:** ${LAST_AUDIT}
+
+Run `/wai-status` to check extension health.

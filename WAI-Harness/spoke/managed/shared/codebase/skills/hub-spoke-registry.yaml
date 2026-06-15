@@ -1,0 +1,125 @@
+id: hub-spoke-registry
+name: "Hub Spoke Registry"
+role: advisor
+model_tier: standard
+
+description: >
+  Builds a live fleet map from the hub registry. Reads hub-registry.json to discover
+  spoke paths, resolves each to its WAI-State.json for name and status, and produces
+  a delivery map used for direct mail routing (teachings + lugs) without guessing paths.
+
+  Run during wakeup Step 3b when hub is connected. Output is held in session memory —
+  not written to disk. Used by any skill that needs to address mail to a specific spoke.
+
+trigger: "on_hub_connected"  # Called from wakeup Step 3b
+
+---
+
+## Algorithm
+
+### Step 1: Read Hub Registry
+
+Read `{hub_path}/hub-registry.json`:
+- Field `wheels` — array of wheel objects, each with `path` key
+- If file not found or malformed → skip silently, fleet = "unavailable"
+- Filter out placeholder entries (path = "/path/to/project" or non-existent directories)
+
+### Step 2: Resolve Each Spoke
+
+For each wheel path that exists on disk:
+
+1. Check for `{path}/WAI-Spoke/WAI-State.json`
+   - If missing → spoke is legacy or non-WAI; include in fleet as `wai: false`
+   - If present → read and extract:
+     - `wheel.name` (or `_project_foundation.identity.name` as fallback)
+     - `wheel.version`
+     - `wheel.status` (active/archived)
+     - `_session_state.session_count`
+     - `_session_state.last_closeout`
+
+2. Build delivery addresses:
+   - `seed_ingest: "{path}/WAI-Spoke/seed/ingest/"` — for teachings
+   - `lugs_incoming: "{path}/WAI-Spoke/lugs/incoming/"` — for lug delivery
+
+3. Check if ingest/incoming directories exist (they may not on v1 spokes):
+   - Mark `can_receive_teachings: true/false`
+   - Mark `can_receive_lugs: true/false`
+
+### Step 3: Build Fleet Map
+
+Produce in-session delivery map:
+
+```
+fleet = {
+  "{spoke-name}": {
+    path: "/absolute/path/to/spoke",
+    version: "x.x.x",
+    status: "active|archived",
+    wai: true|false,
+    sessions: N,
+    last_closeout: "ISO-8601 or null",
+    seed_ingest: "/path/WAI-Spoke/seed/ingest/",
+    lugs_incoming: "/path/WAI-Spoke/lugs/incoming/",
+    can_receive_teachings: true|false,
+    can_receive_lugs: true|false
+  },
+  ...
+}
+```
+
+### Step 4: Surface in Briefing
+
+In wakeup Step 3b output:
+
+```
+### Fleet ({N} WAI spokes)
+| Spoke | Version | Sessions | Can Receive |
+|-------|---------|----------|-------------|
+| pathfinder | v0.4.0 | 18 | teachings + lugs |
+| tracks | v0.1.0 | 0 | teachings only |
+| ... | | | |
+```
+
+Non-WAI spokes listed as: `{name} (no WAI-Spoke)`
+
+### Step 5: Delivery Helper
+
+When delivering a teaching or lug to a spoke, look up from fleet map:
+
+```
+deliver_teaching(spoke_name, file_path):
+  target = fleet[spoke_name]
+  if not target: raise "Unknown spoke: {spoke_name}"
+  if not target.can_receive_teachings: raise "Spoke {spoke_name} has no seed/ingest/"
+  copy file_path → target.seed_ingest
+
+deliver_lug(spoke_name, lug_json):
+  target = fleet[spoke_name]
+  if not target: raise "Unknown spoke: {spoke_name}"
+  if not target.can_receive_lugs: raise "Spoke {spoke_name} has no lugs/incoming/"
+  append lug_json → target.lugs_incoming/{filename}.jsonl
+```
+
+---
+
+## Example Fleet (dynamic — resolved at runtime)
+
+Resolved from `{hub_path}/hub-registry.json`:
+
+| Spoke | Path | WAI | Deliver To |
+|-------|------|-----|------------|
+| My Framework | `{projects_root}/my-framework` | v2 | seed/ingest |
+| Project Alpha | `{projects_root}/project-alpha` | v1 | seed/ingest |
+| Project Beta | `{projects_root}/project-beta` | v1 | unknown |
+
+Note: This table is an example. Always re-read hub-registry.json at session start — the actual fleet is resolved dynamically.
+
+---
+
+## Notes
+
+- Fleet map is session-scoped memory. Do not write it to disk.
+- Spoke names are case-sensitive in the fleet map (use `wheel.name` from WAI-State.json).
+- For v1 spokes (no sessions/ directory, no seed/ingest/processed/), teachings still land in seed/ingest/ — the spoke agent processes them manually.
+- The hub itself appears in the registry — skip it for delivery purposes.
+- `/path/to/project` placeholder in registry — always skip.

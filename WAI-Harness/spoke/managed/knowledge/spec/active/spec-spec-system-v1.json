@@ -1,0 +1,124 @@
+{
+  "id": "spec-spec-system-v1",
+  "type": "spec",
+  "status": "active",
+  "version": "1.0.0",
+  "created_at": "2026-05-08T18:03:03Z",
+  "updated_at": "2026-05-08T18:03:03Z",
+  "gb": "claude-sonnet-4-6",
+  "fw_ver": "2.0.207",
+  "impact": 8,
+  "subject": {
+    "kind": "schema",
+    "id": "spec-system",
+    "label": "Spec Lug System"
+  },
+  "title": "Spec Lug System -- JSON-native living documentation for spoke behaviors",
+  "what": "The spec lug system provides first-class JSON documentation for all spoke behaviors. Spec lugs (type=spec) are the primary authoritative source for understanding what this spoke does. They are indexed at WAI-SpecIndex.jsonl for fast cold-start agent lookup. Sage advisor maintains spec fidelity nightly. Impl lugs reference their spec via spec_id.",
+  "why": "Without spec lugs, agents must read code or markdown to understand behaviors - expensive and error-prone. Spec lugs compress this to two operations: grep the index, load one file. They also enable heat map analysis, test gap detection, and persona-aware documentation.",
+  "audience": [
+    "agent",
+    "dev"
+  ],
+  "use_cases": [
+    {
+      "title": "Cold-start agent lookup",
+      "trigger": "New session agent needs to understand how Ozi dispatch works",
+      "outcome": "Agent runs: grep subject_id=ozi-queue WAI-SpecIndex.jsonl, gets folder path, loads spec-ozi-queue-v1.json, has full behavior spec in one file read",
+      "persona": "agent"
+    },
+    {
+      "title": "Impl lug spec review at delivery",
+      "trigger": "Impl lug with spec_id moves to completed",
+      "outcome": "Agent checks the referenced spec, confirms what/how still matches delivered behavior, or creates draft spec update lug",
+      "persona": "dev"
+    },
+    {
+      "title": "Sage gap detection",
+      "trigger": "Sage nightly run",
+      "outcome": "Sage finds spec with test_count=0, creates remediation lug to add tests",
+      "persona": "dev"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Index first, full spec second",
+      "description": "Load WAI-SpecIndex.jsonl to find the spec, then load the target file. Never scan bytype/spec/ directly."
+    },
+    {
+      "name": "Spec content is JSON only",
+      "description": "Never put spec content in markdown files. The spec lug IS the documentation."
+    },
+    {
+      "name": "Evergreen via soft gate",
+      "description": "Spec drift is caught by the soft gate at impl lug delivery and by Sage nightly. Neither is a hard blocker - drift is visible, not bureaucratic."
+    }
+  ],
+  "how": {
+    "trigger": "Created when a new spoke behavior is implemented; updated when behavior changes significantly",
+    "steps_summary": [
+      "1. Author spec lug JSON with full schema",
+      "2. Store at bytype/spec/active/{id}.json",
+      "3. Regenerate WAI-SpecIndex.jsonl via regen-spec-index alias",
+      "4. On impl lug creation for this behavior: set spec_id={id}",
+      "5. On impl lug delivery: review spec, update if behavior changed, or create draft update lug"
+    ],
+    "constraints": [
+      "Spec content lives in JSON only - never in markdown",
+      "Spec lugs use draft/active/deprecated lifecycle",
+      "WAI-SpecIndex.jsonl regenerated at closeout via regen-spec-index alias (hub tool)"
+    ]
+  },
+  "when": {
+    "triggers": [
+      "New spoke feature implemented",
+      "Existing behavior significantly changed",
+      "Sage flags missing spec"
+    ],
+    "not_when": [
+      "Framework internals - WAI protocol specs belong at hub level"
+    ],
+    "frequency": "Once per behavior, updated on each significant change"
+  },
+  "schema": {
+    "inputs": [],
+    "outputs": [
+      "bytype/spec/active/{id}.json",
+      "WAI-SpecIndex.jsonl entry"
+    ],
+    "state_changes": [
+      "WAI-SpecIndex.jsonl updated",
+      "Impl lugs gain spec_id back-reference"
+    ]
+  },
+  "constraints": [
+    "Spec scope: THIS SPOKE's behaviors only",
+    "Every spec lug must have at least one use_case entry"
+  ],
+  "tests": [],
+  "impl_lugs": [
+    "impl-spec-type-registration-v1",
+    "impl-spec-retro-batch1-v1",
+    "impl-spec-hub-tooling-v1"
+  ],
+  "health": {
+    "test_coverage": "none",
+    "last_impl_lug_completed": null,
+    "spec_drift_risk": "low",
+    "open_questions": []
+  },
+  "subject_id": "spec-system",
+  "body": "The spec lug system is the primary authoritative source for understanding what this spoke does. Spec lugs (type=spec) are JSON files that describe spoke behaviors, workflows, and protocols in a structured format covering: what the behavior is, why it exists, who the audience is, use cases with trigger/outcome/persona, how it works step-by-step, schema (inputs/outputs/state_changes), constraints, tests, and implementation lug references. Spec lugs are indexed at WAI-SpecIndex.jsonl — one line per spec with subject_id and folder path. Cold-start agent lookup is two operations: grep subject_id in the index, load the target file. This is cheaper than reading code or markdown files. Spec lugs use a 3-state lifecycle (draft/active/deprecated) stored in separate subdirectories at bytype/spec/{draft,active,deprecated}/. They do not use open/completed because a spec does not complete — it remains live as long as the behavior exists. Impl lugs reference their governing spec via the spec_id field. When an impl lug with spec_id moves to completed, the agent must confirm the spec still matches the delivered behavior or create a draft spec update lug. This soft gate prevents silent spec drift. Sage advisor runs nightly to detect specs with no tests, missing use_cases, or stale health fields and creates remediation lugs. The WAI-SpecIndex.jsonl is regenerated at closeout. Scout jobs use the lug_filter input_source type with the spec as their backing schema — the scout-job-schema.md and schema-extensions.json files define extended fields like commitment_weight, outcome_expected, and remedy that supplement the base spec schema for scout-generated finding lugs.",
+  "done_when": [
+    "grep subject_id='ozi-queue' WAI-SpecIndex.jsonl returns a single line with the correct folder path pointing to spec-ozi-queue-v1.json",
+    "A spec lug stored in bytype/spec/active/ has all required fields: subject, version, updated_at, what, why, audience, use_cases, how, when, schema, constraints, tests, impl_lugs, health, and subject_id",
+    "When an impl lug with a non-null spec_id is moved to completed/, the agent either confirms the spec's what/how fields match the implementation or creates a new spec lug in bytype/spec/draft/",
+    "Sage nightly run produces a remediation lug for any spec lug missing subject_id or use_cases entries",
+    "WAI-SpecIndex.jsonl is regenerated at closeout and each entry contains id, subject_id, title, folder, and status fields"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "related_specs": [],
+  "outcome": null,
+  "gitnexus_symbols": []
+}

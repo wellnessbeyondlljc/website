@@ -1,0 +1,153 @@
+name: file-audit
+role: reviewer
+model: lightweight
+description: "Sprawl detection and organization health check - flags disorganization before it compounds"
+
+trigger:
+  events:
+    - session_start
+    - pre_commit
+    - on_demand
+  conditions:
+    - "new session begins OR"
+    - "significant file changes detected OR"
+    - "user invokes /audit-files"
+
+scope:
+  reads:
+    - "project directory structure"
+    - "file counts by directory"
+    - "git status (untracked files)"
+    - "PROJECT.md or EXTENSION.md (declared structure)"
+  writes:
+    - "observations.jsonl (sprawl warnings)"
+    - "audit report to session log"
+
+prerequisites:
+  - "filesystem readable"
+  - "git repository (optional but preferred)"
+
+behavior:
+  on_trigger: |
+    1. Scan project structure:
+       - Count files per directory
+       - Identify deeply nested paths (depth > 4)
+       - Find orphaned files (no clear owner/purpose)
+       - Detect naming inconsistencies (camelCase vs snake_case mix)
+
+    2. Check against declared structure:
+       - If EXTENSION.md declares directories, verify they exist
+       - If PROJECT.md declares organization rules, check compliance
+
+    3. Detect sprawl patterns:
+       - Flat root: > 10 files in project root
+       - Config sprawl: Multiple config formats (.yaml, .json, .toml for same purpose)
+       - Test sprawl: Tests not co-located with source
+       - Orphan sprawl: Files with no clear owner (random scripts in root)
+
+    4. Calculate health score (0-10):
+       - 10: Well-organized, clear structure
+       - 7-9: Minor issues, addressable
+       - 4-6: Sprawl detected, needs attention
+       - 0-3: Severe disorganization, refactor recommended
+
+  on_findings: |
+    Low health (0-6):
+      - WARNING: "File sprawl detected - health score: {score}/10"
+      - List issues: ["15 files in project root", "Tests not co-located"]
+      - Suggest: "Create /organize-project task"
+
+    Medium health (7-9):
+      - NOTE: "Minor organization issues - health score: {score}/10"
+      - List issues: ["3 config files could consolidate"]
+      - Optional: "Address when convenient"
+
+    High health (10):
+      - "Project structure healthy"
+
+output:
+  success:
+    type: "audit_complete"
+    data:
+      health_score: 8
+      issues: ["Minor: 3 untracked scripts in root"]
+      recommendations: ["Move scripts to scripts/ directory"]
+  warning:
+    type: "sprawl_detected"
+    data:
+      health_score: 5
+      issues: ["12 files in root", "Tests not organized"]
+      recommendations: ["Organize root files", "Co-locate tests with source"]
+
+use_cases:
+  - scenario: "Project root has 15+ loose files (config files, scripts, READMEs)"
+    what_happens: "file-audit flags 'flat root sprawl', suggests organizing into subdirs"
+    why_it_matters: "Sprawl compounds - easier to fix at 15 files than 50 files"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Tests are in separate tests/ tree, not co-located with source"
+    what_happens: "file-audit detects pattern, suggests co-location"
+    why_it_matters: "Co-located tests easier to maintain (test next to code)"
+    reference: "Modern project organization patterns"
+
+  - scenario: "EXTENSION.md declares src/ and docs/ directories, but they don't exist"
+    what_happens: "file-audit warns 'Declared structure missing: src/, docs/'"
+    why_it_matters: "Structure documentation should match reality"
+    user_trigger: "Automatic structure validation"
+
+  - scenario: "Project has .yaml, .yml, .json config files for similar purposes"
+    what_happens: "file-audit flags 'config format sprawl', suggests standardizing"
+    why_it_matters: "Consistency reduces cognitive load"
+    user_trigger: "Automatic on audit"
+
+  - scenario: "New project, 5 files total, clean structure"
+    what_happens: "file-audit reports health score: 10/10, no issues"
+    why_it_matters: "No false positives on healthy projects"
+    user_trigger: "Automatic on session_start"
+
+  - scenario: "Untracked files accumulating (git status shows 10+ untracked)"
+    what_happens: "file-audit warns 'Many untracked files - commit or clean'"
+    why_it_matters: "Untracked files signal incomplete work or clutter"
+    user_trigger: "Automatic git status check"
+
+tests:
+  - name: "Detects flat root sprawl"
+    setup: "Create 15 files in project root"
+    action: "Run file-audit"
+    expected: "Warning issued with health score < 7"
+
+  - name: "Validates against declared structure"
+    setup: "EXTENSION.md declares src/ dir, but it doesn't exist"
+    action: "Run file-audit"
+    expected: "Missing structure warning issued"
+
+  - name: "Reports healthy structure correctly"
+    setup: "Well-organized project with clear directories"
+    action: "Run file-audit"
+    expected: "Health score: 9-10, no warnings"
+
+  - name: "Detects config sprawl"
+    setup: "Project has config.yaml, config.yml, config.json"
+    action: "Run file-audit"
+    expected: "Config format sprawl flagged"
+
+notes: |
+  Lightweight model is sufficient - file counting and pattern matching.
+
+  Prevention vs reaction: Better to flag sprawl at 15 files than 50 files.
+
+  Not prescriptive: Doesn't enforce a specific structure, just flags patterns
+  known to cause maintenance burden.
+
+  Common sprawl patterns:
+  - Flat root (everything in project root)
+  - Config sprawl (multiple formats)
+  - Test separation (tests/ far from src/)
+  - Orphan files (random scripts, temp files committed)
+  - Deep nesting (src/app/components/auth/login/forms/inputs/text/...)
+
+  Health score heuristics:
+  - Files in root: 0-5 = ok, 6-10 = -1, 11-15 = -2, 16+ = -3
+  - Max depth: ≤3 = ok, 4 = -1, 5 = -2, 6+ = -3
+  - Config formats: 1-2 = ok, 3 = -1, 4+ = -2
+  - Untracked files: 0-3 = ok, 4-10 = -1, 11+ = -2

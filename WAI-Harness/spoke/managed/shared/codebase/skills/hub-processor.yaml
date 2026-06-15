@@ -1,0 +1,180 @@
+name: hub-processor
+role: watcher
+model: lightweight
+description: "Processes hub/intake/, aggregates cross-spoke patterns, checks spoke health"
+
+trigger:
+  events:
+    - session_start
+    - on_demand
+  conditions:
+    - "node_type == 'hub' (from WAI-Manifest.yaml)"
+    - "Skip if node_type == 'spoke' (spokes don't process intake)"
+
+scope:
+  reads:
+    - "hub/intake/**/*.yaml (pending signals from spokes)"
+    - "hub/registry.yaml (all registered spokes)"
+    - "hub/WAI-Lugs.jsonl (existing hub Lugs)"
+  writes:
+    - "hub/WAI-Lugs.jsonl (observation and decision Lugs)"
+    - "hub/intake/processed/ (move processed signals)"
+    - "hub/health.yaml (update hub health status)"
+
+prerequisites:
+  - "hub/intake/ directory exists"
+  - "hub/registry.yaml exists"
+
+behavior:
+  on_trigger: |
+    0. **Check node_type from WAI-Manifest.yaml:**
+       - If node_type == "spoke": SKIP (spokes don't process intake)
+       - If node_type == "hub": CONTINUE
+
+    1. **Process Intake:**
+       - Read all files in hub/intake/**/*.yaml
+       - For each signal:
+         * Parse Lug content (id, type, impact, node, summary)
+         * Check if already processed (exists in hub/WAI-Lugs.jsonl)
+         * If new: Create hub Lug with source_id pointing to spoke Lug
+         * Move to hub/intake/processed/{node-path}/{lug-id}.yaml
+       - Count: signals processed, duplicates skipped
+
+    2. **Aggregate Patterns:**
+       - Group signals by category (security, performance, architecture, etc.)
+       - Look for recurring patterns across spokes:
+         * Same diagnosis appearing in multiple projects
+         * Similar decisions made independently
+         * Common preferences emerging
+       - Create observation Lugs for patterns with 2+ instances
+
+    3. **Check Spoke Health:**
+       - Read hub/registry.yaml for all registered spokes
+       - For each spoke:
+         * Check if framework_version matches hub version
+         * Check last_session timestamp (stale if >30 days?)
+         * Check outbound_pending count (stuck signals?)
+       - Create observation Lugs for health issues
+
+    4. **Update Hub Health:**
+       - Write hub/health.yaml:
+         * intake_pending: count of unprocessed signals
+         * oldest_pending: timestamp of oldest signal
+         * spokes_outdated: count of spokes on old framework version
+         * patterns_detected: count of cross-spoke patterns this session
+
+    5. **Report Summary:**
+       - "{N} signals processed from {M} spokes"
+       - "{P} patterns detected across spokes"
+       - "{S} spokes need framework updates"
+       - "Use /wai-teach to consolidate learnings into framework"
+
+  pattern_detection: |
+    Examples of patterns to detect:
+
+    - **Recurring diagnosis:** 3 spokes independently found same security issue
+      → Create hub observation Lug recommending framework guidance
+
+    - **Common preference:** Multiple spokes have same communication style preference
+      → Flag for consolidation into hub/BRIEF.md via /wai-teach
+
+    - **Architecture convergence:** 2+ spokes adopted similar patterns independently
+      → Create hub learning Lug documenting the pattern
+
+    - **Template gap:** Multiple spokes created similar custom files
+      → Suggest promoting to framework template
+
+output:
+  success:
+    type: "hub_intake_processed"
+    data:
+      signals_processed: 5
+      spokes_active: 3
+      patterns_detected: 2
+      health: "ok"
+      recommendations: ["/wai-teach to review patterns"]
+
+  findings:
+    type: "hub_patterns_detected"
+    data:
+      patterns:
+        - type: "recurring_diagnosis"
+          category: "security"
+          instances: 3
+          spokes: ["ezorg/email", "wheelwright/website", "archive/notionpilot"]
+          summary: "SQL injection pattern detected across projects"
+        - type: "common_preference"
+          category: "communication"
+          instances: 2
+          summary: "Terse verification format preferred"
+      spoke_health_issues:
+        - spoke: "archive/xn-insights"
+          issue: "Framework v1.0.0 (hub is v2.0.0)"
+          recommendation: "Archived - no action needed"
+
+use_cases:
+  - scenario: "3 spokes submitted security signals to hub/intake/"
+    what_happens: "hub-processor reads intake, creates hub Lugs, moves to processed/"
+    why_it_matters: "Cross-spoke learning - patterns from one project benefit all"
+    user_trigger: "Automatic on hub session_start"
+
+  - scenario: "2 spokes independently created same preference Lug"
+    what_happens: "hub-processor detects pattern, creates observation Lug"
+    why_it_matters: "Conductor sees 'promote to hub/BRIEF.md' recommendation"
+    reference: "Communication style pattern (lug-2026-02-14-pref-001)"
+
+  - scenario: "Spoke is on framework v1.0.0, hub is on v2.0.0"
+    what_happens: "hub-processor flags in health check, creates observation Lug"
+    why_it_matters: "Conductor sees which spokes are outdated"
+    user_trigger: "Automatic health check on hub wakeup"
+
+  - scenario: "Hub intake is empty, all spokes up-to-date"
+    what_happens: "hub-processor reports 'all clear', no actions"
+    why_it_matters: "No false alarms when everything is healthy"
+    user_trigger: "Automatic on hub wakeup"
+
+  - scenario: "Signal in intake/ already processed (duplicate submission)"
+    what_happens: "hub-processor skips duplicate, moves to processed/"
+    why_it_matters: "Idempotency - same signal submitted twice doesn't create duplicate Lugs"
+    reference: "Lug idempotency rules from schema spec"
+
+tests:
+  - name: "Processes intake signals and creates hub Lugs"
+    setup: "Place 3 signal YAMLs in hub/intake/ezorg/email/"
+    action: "Trigger hub-processor"
+    expected: "3 hub Lugs created, files moved to processed/"
+
+  - name: "Detects cross-spoke patterns"
+    setup: "2 spokes have same diagnosis in intake"
+    action: "Trigger hub-processor"
+    expected: "Pattern observation Lug created"
+
+  - name: "Checks spoke health from registry"
+    setup: "registry.yaml has spoke on v1.0.0, hub on v2.0.0"
+    action: "Trigger hub-processor"
+    expected: "Health observation Lug flags outdated spoke"
+
+  - name: "Updates hub/health.yaml"
+    setup: "Process 5 signals"
+    action: "Trigger hub-processor"
+    expected: "health.yaml shows intake_pending: 0, patterns_detected: 2"
+
+  - name: "Handles empty intake gracefully"
+    setup: "hub/intake/ is empty"
+    action: "Trigger hub-processor"
+    expected: "Reports 'all clear', no Lugs created"
+
+notes: |
+  Runs on hub wakeup (node_type == "hub").
+
+  Spokes push signals to hub/intake/ → Hub pulls and processes on wakeup.
+
+  Hub doesn't auto-upgrade itself - framework updates require /wai-teach review.
+
+  Pattern detection feeds the apprenticeship loop:
+  - Spokes learn from hub BRIEF cascade
+  - Hub learns from spoke signals
+  - Conductor consolidates via /wai-teach
+  - Framework evolves based on actual usage patterns
+
+  Lightweight model sufficient - file processing and pattern matching.

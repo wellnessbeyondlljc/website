@@ -1,0 +1,186 @@
+{
+  "id": "spec-savepoint-resume-contract-v1",
+  "type": "spec",
+  "status": "open",
+  "version": "1.1.0",
+  "created_at": "2026-06-09T15:10:00Z",
+  "updated_at": "2026-06-09T23:25:00Z",
+  "gb": "harness-v4-self-certifying",
+  "fw_ver": "v2.0.270",
+  "impact": 9,
+  "routed_to": "FRAMEWORK",
+  "authored_by": "session-20260609-0713.mariov96",
+  "subject": "Savepoint as a RESUME CONTRACT, not a summary \u2014 applies the object-quality-v4 cold-reader gate to the savepoint object; mandates ordered first-actions, pending cross-spoke handoffs, deferred-with-reason, honest flags, blockers/human-gates and the phase arc, so the next session resumes with ZERO archaeology and ZERO hand-feeding",
+  "title": "Savepoint Resume Contract v1 \u2014 Mandate Full Resume Detail (object-quality-v4 applied to the savepoint object)",
+  "situation": "The current savepoint contract (templates/commands/wai-savepoint.md) captures a SUMMARY, not a resume contract. Its `work_done` is 'one line of what was completed', its `resume_note` is hard-capped at 'max 60 chars', and its `paper_trail.topics` and `paper_trail.decisions` are written as empty arrays []. Observed directly in session-20260609-0713: the claimed savepoint sp-session-20260609-0031-built-harness-phases carried resume_note='Author capabilitiesgraph + lug-schema-v4 specs (phase-3)' (a 50-char one-liner) and empty topics/decisions. To actually resume, the USER had to hand-feed, in a follow-up message, all of: (1) two pending cross-spoke confirms owed before work could safely proceed (Basher .claude/* touchpoints + the ECC stale-template fix, with the exact fallback command `git checkout HEAD -- .claude/hooks/synthesize_turn.py` if not landed); (2) the precise spec ids and the rev/optimistic-concurrency + bolt/check-linkage requirements for lug-schema-v4; (3) the tracked-but-deferred items (mywheel registry/cutover phase-5 with its hard human gate, the experiential browser gate, spoke-creation cold-start) with WHY each is deferred and where it is captured so it is 'not lost'; (4) an honest flag that the verification-spine + change-registry tests are self-reviewed this single-agent session and owe a second-party review; (5) the where-we-are arc (phases 0-2 done, phase-3 3-of-6, natural next arc = phase 4 then 5). None of that had a mandated home in the savepoint schema, so it lived only in the user's head \u2014 the exact failure object-quality-v4 names: summary where detail is needed, not self-contained, fails the cold-reader gate.",
+  "why": "A savepoint exists for ONE purpose: a different session (possibly a different model, possibly months later, with no conversational context) resumes cleanly. The promotion test for a savepoint is therefore identical to the object-quality-v4 cold-reader gate: 'can an agent with NO other context resume exactly where this left off and know how to proceed, with no gaps and without asking the user anything that was knowable at savepoint time?' The current schema fails that test by design \u2014 it mandates a one-line summary and an optional/empty detail surface. The cost is silent and recurring: every resume pays an archaeology tax (re-reading the track, grepping lugs) AND a hand-feeding tax (the user re-supplies what they already knew at save time), and anything the user forgets to re-supply is simply lost. v4's whole thesis is completeness-over-brevity on the executable core (spec-object-quality-v4-v1) and no-silent-anything (the observability spine); a savepoint that summarizes the resume path violates both. This spec makes the resume contract a hard, gated standard: the savepoint must carry the full resume detail or it does not promote.",
+  "audience": [
+    "wai-savepoint skill (the savepoint sub-agent) \u2014 composes + writes the savepoint to this contract; refuses to write a savepoint missing a mandatory resume field",
+    "wai-closeout skill \u2014 the closeout-produced handoff record meets the same resume-contract bar (a closeout is a savepoint with finality)",
+    "wai (wakeup) resume menu \u2014 surfaces the richer fields (first_actions, pending_handoffs, blockers) so the user picks an informed silo",
+    "the resuming agent \u2014 reads ONE artifact and proceeds; it must not need to ask the user anything knowable at save time",
+    "lug-reviewer / a savepoint-gate check \u2014 applies the cold-reader gate to the savepoint before it is considered valid (the structural+content gate, reusing spec-object-quality-v4-v1)"
+  ],
+  "core_principle": "A savepoint is a RESUME CONTRACT, not a status summary. Brevity is banned on the resume path. Every field a fresh session needs to (a) know what happened, (b) know exactly what to do first, (c) honor what is owed/blocked/deferred, and (d) carry forward honest caveats, is mandated and complete IN the savepoint. The single acceptance test: the resuming agent asks the user NOTHING that was knowable at save time.",
+  "the_resume_contract_test": "Promotion gate (hard): hand the savepoint to a fresh no-context agent. It must be able to (1) restate where the work is, (2) execute first_actions[0] immediately with no clarification, (3) name every pending handoff + how to verify it + the fallback if undone, (4) name every deferred item + why + where it is captured, and (5) repeat every honest flag. If any of these requires asking the user a question whose answer existed at save time, the savepoint FAILS the contract and is incomplete. This is the object-quality-v4 cold-reader gate specialized to resumption.",
+  "schema": {
+    "_relationship": "Extends the current savepoint file (templates/commands/wai-savepoint.md). Identity/git/lifecycle fields (id, slug, session_id, status, git_sha, git_branch, created_at, claimed_at, claiming_session_id, completed_at, initiative_id, silo_label, focus_directive, lug_id, lug_locks, conflicts) are CARRIED UNCHANGED. The fields below REPLACE the thin summary fields and ADD the mandated resume surfaces.",
+    "work_done": {
+      "type": "array<object>",
+      "replaces": "the v3 one-line string",
+      "rule": "An itemized list of what was completed this session, NOT a one-liner. Each item carries its evidence so the claim is verifiable.",
+      "entry_schema": {
+        "what": "string \u2014 the concrete thing done",
+        "evidence": "string \u2014 the commit sha / file path / test count that proves it (no 'probably'; spec-verification-quality-v1)",
+        "verified": "boolean \u2014 was it verified this session, or asserted unverified (an honest_flag if false)"
+      }
+    },
+    "where_we_are": {
+      "type": "string",
+      "rule": "The arc in 2-4 sentences: what phase/initiative this is, what is done, what remains, and the NATURAL NEXT ARC after the immediate resume (so the resuming agent has trajectory, not just the next keystroke). Example from this session: 'Harness v4 build; phases 0-2 complete, phase 3 is 3-of-6 pieces built; migration is zero-orphan and upgrade-ready. Natural arc after phase 3: phase 4 (dashboard/hub/Trainer) then phase 5 (cutover).'"
+    },
+    "first_actions": {
+      "type": "array<object>",
+      "replaces": "the v3 resume_note (60-char cap REMOVED)",
+      "rule": "An ORDERED list of the exact first actions the resuming AGENT takes \u2014 executable, specific, no 60-char cap, no summary. first_actions[0] must be runnable with zero clarification. Each carries the precise command/file/lug where applicable (object-quality-v4: complete paths, no banned tokens).",
+      "entry_schema": {
+        "order": "integer",
+        "action": "string \u2014 the exact agent action (agent POV, not user POV)",
+        "command_or_target": "string|null \u2014 the precise command, file path, or lug id to act on (e.g. 'git checkout HEAD -- .claude/hooks/synthesize_turn.py')",
+        "depends_on": "string|null \u2014 a pending_handoff id this action waits on; if set, the action is framed as 'verify {handoff}; if done, {action}; if not, {fallback}'"
+      }
+    },
+    "pending_handoffs": {
+      "type": "array<object>",
+      "new": true,
+      "rule": "Cross-spoke / external confirms OWED before or during resume \u2014 the single most-forgotten resume surface (this session needed two). Each is self-contained: what was sent, to whom, how to verify it landed, and the explicit fallback if it did not.",
+      "entry_schema": {
+        "id": "string \u2014 referenceable by first_actions.depends_on",
+        "what": "string \u2014 the change/lug handed off",
+        "to_whom": "string \u2014 the target spoke/agent (e.g. 'Basher')",
+        "how_to_verify": "string \u2014 the exact check that tells the resuming agent whether it landed",
+        "fallback_if_not_done": "string \u2014 the exact action to take if it has NOT landed (e.g. the restore command + 'nudge Basher')",
+        "lug_ref": "string|null \u2014 the change-lug id covering this handoff"
+      }
+    },
+    "deferred": {
+      "type": "array<object>",
+      "new": true,
+      "replaces": "the v3 empty paper_trail.topics/decisions for deferred work",
+      "rule": "Tracked-but-not-now items, so they are provably 'not lost'. Each names WHY it is deferred, what it is blocked on, and WHERE it is captured (a lug id) so the resuming agent can find it.",
+      "entry_schema": {
+        "item": "string \u2014 the deferred work",
+        "why_deferred": "string \u2014 the reason (e.g. 'phase-5; blocked on green certification', 'needs Playwright sandbox runtime')",
+        "blocked_on": "string|null \u2014 the concrete blocker",
+        "where_captured": "string \u2014 the lug id / file where this is tracked (must resolve; a deferred item with no capture is a lost item = a defect)",
+        "human_gate": "boolean \u2014 true if resuming requires explicit human sign-off (e.g. teardown)"
+      }
+    },
+    "honest_flags": {
+      "type": "array<object>",
+      "new": true,
+      "rule": "Caveats, risks, and owed reviews the resuming agent MUST carry forward \u2014 never hidden (spec-verification-quality-v1 'no silent failures'; this session owed a 'tests self-reviewed, second-party review pending' flag). Recorded openly, not buried.",
+      "entry_schema": {
+        "flag": "string \u2014 the caveat/risk/owed review",
+        "why_it_matters": "string \u2014 the consequence if ignored",
+        "where_recorded": "string|null \u2014 the lug/file that also records it (so it is durable beyond the savepoint)"
+      }
+    },
+    "blockers_and_human_gates": {
+      "type": "array<object>",
+      "new": true,
+      "rule": "Hard gates the resuming agent must NOT cross without the named condition (e.g. teardown requires human approval). Distinct from deferred (which is 'later'); a blocker is 'do not proceed past this without X'.",
+      "entry_schema": {
+        "gate": "string \u2014 what is gated",
+        "condition_to_clear": "string \u2014 exactly what must be true/approved to proceed",
+        "owner": "string \u2014 who clears it (e.g. 'human/Mario', 'green certification')"
+      }
+    },
+    "open_questions": {
+      "type": "array<string>",
+      "new": true,
+      "rule": "Unresolved decisions the resuming agent will face, stated so it does not re-derive them from scratch."
+    },
+    "paper_trail": {
+      "type": "object",
+      "rule": "RETAINED but topics[] and decisions[] are now MANDATORY non-empty when any work was done \u2014 empty arrays are no longer acceptable for a session that touched lugs. lugs_completed/lugs_opened/lugs_in_flight unchanged (auto-scanned).",
+      "shape": "{lugs_completed:[], lugs_opened:[], lugs_in_flight:[], topics:[non-empty], decisions:[non-empty]}"
+    }
+  },
+  "what_changes_in_the_skill": "templates/commands/wai-savepoint.md changes the main-session composition step from SIX thin strings to the structured resume contract above, and adds a self-check before write: the sub-agent runs the resume-contract test (cold-reader gate) and refuses to write a savepoint that fails it (e.g. first_actions empty, a deferred item with no where_captured, work_done with verified=false items but no matching honest_flag). The 60-char resume_note cap is REMOVED. topics/decisions empty-default is REMOVED. This is a harness-evolution change to a skill \u2014 per CLAUDE.md it requires acceptance-proof tests + a full suite run before closeout, tracked as the impl lug below.",
+  "constraints": [
+    "Brevity is BANNED on the resume path: work_done is itemized-with-evidence, first_actions is ordered-and-executable, no 60-char cap on the resume instruction",
+    "A savepoint that fails the resume-contract test does not promote (the cold-reader gate, object-quality-v4, specialized to resumption)",
+    "Every deferred item MUST carry where_captured that resolves to a real lug/file \u2014 a deferred item with no capture is a lost item and a hard failure",
+    "Every pending_handoff MUST carry how_to_verify AND fallback_if_not_done \u2014 a handoff with no fallback re-creates the hand-feeding tax",
+    "Every unverified work_done item (verified=false) MUST have a matching honest_flag \u2014 'probably done' is banned (spec-verification-quality-v1)",
+    "paper_trail.topics and paper_trail.decisions are non-empty for any session that touched lugs \u2014 empty arrays no longer acceptable",
+    "The resuming agent must ask the user NOTHING that was knowable at save time \u2014 this is THE acceptance test, not a guideline",
+    "This standard is dogfooded: the savepoint produced at THIS session's closeout/savepoint meets the contract"
+  ],
+  "tests": [
+    "Resume-contract pass: a fresh no-context agent given a contract-complete savepoint executes first_actions[0] with zero clarification and restates where_we_are correctly",
+    "Thin-savepoint fail: a savepoint with a one-line work_done and empty first_actions FAILS the resume-contract gate",
+    "Deferred-capture: a deferred item with where_captured pointing to a non-existent lug FAILS validation ('lost item'); pointing to a real lug passes",
+    "Pending-handoff completeness: a pending_handoff missing fallback_if_not_done FAILS; one with how_to_verify + fallback passes",
+    "Honest-flag linkage: a work_done item with verified=false and NO matching honest_flag FAILS ('probably done' banned)",
+    "Non-empty paper_trail: a savepoint for a session that completed 3 lugs but has topics=[] FAILS",
+    "60-char cap removed: a first_actions.action longer than 60 chars is accepted (the v3 cap is gone)",
+    "Dogfood: the savepoint produced by the updated wai-savepoint skill on a real session passes its own resume-contract gate",
+    "Hand-feed regression: reconstruct the session-20260609-0713 scenario \u2014 a contract-complete savepoint contains the two pending_handoffs (Basher touchpoints + ECC fix with the git-checkout fallback), the three deferred items with where_captured, and the self-reviewed-tests honest_flag; a fresh agent needs no user input to proceed"
+  ],
+  "impl_lugs": [
+    "impl-savepoint-resume-contract-skill-v1",
+    "impl-savepoint-loss-safety-net-v1"
+  ],
+  "hardening_s45_existence_and_channel": {
+    "trigger": "session-20260609-1605 resume: a prior v4-activation session held its resume state as a savepoint_note ON a lug + in conversation, never wrote a durable savepoint, never ran /wai-closeout. 100% of its resume narrative was lost; the user hand-pasted it. v1 mandated savepoint QUALITY (the resume contract) but never guaranteed a savepoint EXISTS, and left a lossy side channel open.",
+    "two_new_guarantees": {
+      "existence_guarantee": "A durable savepoint MUST exist whenever a session ends with substantive unfinished work, even if /wai-closeout is never run. Enforced by a Stop-hook safety net (stop-savepoint-guard.sh -> auto_eject_savepoint.py) that auto-writes a DEGRADED savepoint (status='auto-eject', degraded=true, honest_flag='machine-reconstructed') when unfinished-work signals (in_progress lugs / uncommitted changes / a non-empty next_session_recommendation) are present and no savepoint covers the session. The auto-eject record is EXEMPT from the full resume-contract hard gate \u2014 a degraded-but-durable lead beats total loss \u2014 but it is a real, resume-path-visible savepoint. Idempotent; non-blocking (never blocks Stop).",
+      "single_channel_rule": "Resume/handoff state lives ONLY in <working-base>/savepoints/ (or closeout incomplete_work). The resume path (/wai, the savepoint menu) reads the savepoints dir ONLY; a lug carries WORK state, not RESUME state. A lug carrying savepoint_note/resume_note/work_done/first_actions/pending_handoffs is REJECTED by check_lug_no_resume_state.py and CLAUDE.md anti-pattern, and the author is directed to write a real savepoint."
+    },
+    "v4_canonical": "The safety net + lint are v4-canonical: auto_eject_savepoint.py + check_lug_no_resume_state.py in WAI-Harness/spoke/managed/tools/, stop-savepoint-guard.sh in managed/.claude/hooks/ (wired into the managed Stop matcher), carried to the fleet by the re-cut MANIFEST. All scripts are harness-mode-aware (resolve savepoints dir per mode: v3 WAI-Spoke/savepoints | v4 WAI-Harness/spoke/local/savepoints).",
+    "impl_lug": "impl-savepoint-loss-safety-net-v1"
+  },
+  "health": {
+    "test_coverage": "mechanical \u2014 validate_savepoint.py + test_savepoint_resume_contract.py (12) AND auto_eject_savepoint.py + check_lug_no_resume_state.py + test_savepoint_loss_safety_net.py (10); full suite green",
+    "last_impl_lug_completed": "2026-06-09T14:39:07.686382+00:00",
+    "spec_drift_risk": "low \u2014 initial spec; the skill it governs is templates/commands/wai-savepoint.md (framework-owned)",
+    "resolved_decisions": [
+      "A savepoint is a resume CONTRACT, not a summary; its promotion gate is the object-quality-v4 cold-reader gate specialized to resumption (S45, user directive)",
+      "The acceptance test is 'the resuming agent asks the user nothing knowable at save time' \u2014 derived directly from the observed S45 hand-feeding failure (S45)",
+      "pending_handoffs, deferred (with where_captured), honest_flags, blockers_and_human_gates, first_actions (ordered, no 60-char cap) are mandated NEW surfaces (S45)"
+    ],
+    "open_questions": [
+      "Should the resume-contract gate be a Pattern-Gate post-gate on the savepoint flow (gate-certified) or a lug-reviewer-style check? (proposed: Pattern-Gate post-gate, since savepoint is a flow with an observable artifact)",
+      "How much paper_trail (topics/decisions) is auto-derivable from the track vs must be agent-composed? (proposed: auto-seed topics from track tool-call clusters, agent confirms+enriches)",
+      "Does wai-closeout share this exact schema or a superset (closeout adds reconciliation/routing finality)? (proposed: closeout = savepoint contract + finality fields; shared base)"
+    ]
+  },
+  "related_specs": [
+    "spec-object-quality-v4-v1",
+    "spec-verification-quality-v1",
+    "spec-observability-oversight-v1",
+    "spec-ceremony-lean-v1",
+    "spec-lug-schema-v4-v1"
+  ],
+  "perceive": "Read this spec fully. Read templates/commands/wai-savepoint.md (the current contract being replaced \u2014 note the one-line work_done, 60-char resume_note cap, empty topics/decisions). Read spec-object-quality-v4-v1 (the cold-reader gate this specializes). Read the live example failure: WAI-Spoke/savepoints/sp-session-20260609-0031-built-harness-phases.json (thin) vs the rich resume detail the user had to hand-feed in session-20260609-0713. Read templates/commands/wai-closeout.md to align the closeout handoff record with the same bar.",
+  "execute": "1. Rewrite the wai-savepoint main-session composition step (templates/commands/wai-savepoint.md) from six thin strings to the structured resume contract (work_done[], where_we_are, first_actions[], pending_handoffs[], deferred[], honest_flags[], blockers_and_human_gates[], open_questions[], non-empty paper_trail). 2. Remove the 60-char resume_note cap + the empty topics/decisions defaults. 3. Add the resume-contract self-check before write (refuse to write a failing savepoint). 4. Update the wai wakeup resume menu to surface first_actions + pending_handoffs + blockers. 5. Write acceptance-proof tests (tests[]) and run the full suite (CLAUDE.md harness-evolution rule). 6. Align wai-closeout to the shared base. 7. Publish a teaching announcing the resume-contract upgrade (no silent retirement of the v3 savepoint shape).",
+  "verify": "1. The updated skill, run on a real session, produces a savepoint that passes the resume-contract gate. 2. All tests[] pass, including the hand-feed regression (the S45 scenario reconstructed needs no user input). 3. A thin savepoint is rejected by the self-check. 4. The wakeup menu shows first_actions + pending_handoffs. 5. Full suite green before closeout.",
+  "execution_mode": "impl",
+  "execution_substrate": "framework",
+  "model_fit": "sonnet",
+  "hardening_s45": {
+    "trigger": "A resume session (session-20260609-1019) hit avoidable friction: it re-verified state the savepoint already asserted (because first_actions carried a standing 'verify-to-falsify as you go' order), stopped on an undecided fork ('pick hub-Postgres OR dashboard'), had no statement of which tree to work in (framework vs mywheel), and discovered an auth-gated hook edit mid-build instead of being warned.",
+    "new_required_fields": {
+      "workspace": "{path, why} \u2014 which tree the resumer works in. A resumer must never ask 'framework or mywheel?'. HARD-gated by validate_savepoint.py.",
+      "first_actions[].needs_authorization": "null, or the exact thing to ask the user when a step hits a self-modification / permission / human-auth wall (e.g. editing a .claude/* hook). Surfaces the gate FIRST, not mid-build.",
+      "inbox_snapshot": "the lug ids in lugs/incoming/ at save time \u2014 so the resumer's inbox-first pass surfaces nothing unexpected."
+    },
+    "new_rules": [
+      "first_actions[0] must be DECIDED \u2014 runnable with zero decision. A genuine fork is resolved IN the savepoint (the call + rationale + the alternative as a fallback), never left as 'pick X or Y' (that forces the resumer to stop and ask). validate_savepoint.py WARNS on decision-language in first_actions[0].",
+      "NO standing 'verify/reconcile everything' instructions. Assert state as-of git_sha; the resumer trusts it unless HEAD moved. Drift-checking is MECHANIZED (reconcile_epic_acs / impl-derive-epic-ac-status-v1), not delegated to every resumer \u2014 pushing reconciliation onto the agent is the anti-pattern this corrects.",
+      "Auth-gated steps (hook/.claude/settings self-edits) carry needs_authorization so the resumer asks immediately rather than discovering the wall mid-task."
+    ]
+  }
+}

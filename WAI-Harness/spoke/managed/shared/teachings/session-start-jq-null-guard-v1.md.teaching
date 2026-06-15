@@ -1,0 +1,52 @@
+---
+id: session-start-jq-null-guard-v1
+title: "Fix jq null guard in session-start.sh .decisions expression"
+version: 1
+safe_to_auto_adopt: true
+target_files:
+  - .claude/hooks/session-start.sh
+  - WAI-Spoke/_hooks/session-start.sh
+  - WAI-Spoke/hooks/session-start.sh
+---
+
+## Problem
+
+`session-start.sh` contained this jq expression:
+
+```bash
+RECENT_DECISIONS=$(jq -r '
+  .decisions
+  | map(select(.impact >= 8))
+  ...
+' "$STATE_FILE")
+```
+
+If `.decisions` is absent from `WAI-State.json` (most spokes don't have this field), jq throws:
+`Cannot iterate over null (null)` — causing the hook to fail with a non-blocking error at every session start.
+
+## Fix
+
+Add `// []` null guard:
+
+```bash
+RECENT_DECISIONS=$(jq -r '
+  (.decisions // [])
+  | map(select(.impact >= 8))
+  ...
+' "$STATE_FILE")
+```
+
+## Prerequisites
+
+- `session-start.sh` must contain the `.decisions` expression without the `// []` guard
+
+## Batch Sequence
+
+1. Find the expression: `grep -n '\.decisions' .claude/hooks/session-start.sh`
+2. Apply sed or edit: replace `  .decisions` with `  (.decisions // [])` on the matching line inside the `RECENT_DECISIONS` block
+3. Verify: `bash -n .claude/hooks/session-start.sh && echo OK`
+4. Apply same fix to `WAI-Spoke/_hooks/session-start.sh` and `WAI-Spoke/hooks/session-start.sh` if present
+
+## Notes
+
+This is a silent failure — the hook exits early but CC reports it as non-blocking. Any content that was supposed to follow the `.decisions` block is skipped. Fix is safe for all spokes regardless of whether `.decisions` exists in their state schema.

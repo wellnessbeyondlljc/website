@@ -1,0 +1,26 @@
+# Spoke scaffold ignore — v4-era (mode-agnostic: matches v3 WAI-Spoke/ and v4 WAI-Harness/spoke/local/)
+# Track durable work-state; ignore only regenerable runtime, caches, secrets.
+
+# regenerable runtime (any tree depth)
+**/runtime/
+**/.autosave/
+**/*-brief.json
+
+# build / OS
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.DS_Store
+.venv/
+venv/
+env/
+ENV/
+*.swp
+*.swo
+
+# secrets / local-only (never commit)
+**/.env.local
+**/.env.*.local
+**/.claude/settings.local.json
+**/.claude/.provider

@@ -1,0 +1,28 @@
+# Teaching: Signal — Post-compaction closeout recall hardening pattern: pre-compact.sh writes compact
+
+**Type:** signal
+**safe_to_auto_adopt:** true
+
+---
+
+## What This Teaching Does
+
+Appends a high-impact signal to `WAI-Spoke/lugs/bytype/signal/undelivered/` on this spoke.
+
+## Embedded Signal
+
+```json
+{
+  "timestamp": "2026-03-31T23:17:31Z",
+  "session_id": "session-20260331-1535",
+  "signal": "Post-compaction closeout recall hardening pattern: pre-compact.sh writes compacted=true to guard file; user-prompt-submit.sh detects flag and injects one-shot <wai-post-compact> block directing model to read skill file before acting; flag cleared after injection. Prevents silent skill reconstruction from degraded context.",
+  "impact": 9,
+  "rationale": "Context compaction silently strips skill knowledge. Without explicit re-read directive, model reconstructs closeout from memory which degrades. One-shot injection avoids noise on every subsequent turn.",
+  "by": "claude-sonnet-4-6",
+  "fw_ver": "2.0.137"
+}
+```
+
+## Post-Completion
+
+Move this file to `WAI-Spoke/seed/ingest/processed/`.

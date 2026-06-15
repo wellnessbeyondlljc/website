@@ -1,0 +1,83 @@
+# BRIEF - Behavioral Rules for ${EXTENSION_NAME}
+
+**Extension:** ${EXTENSION_ID}
+**Type:** ${EXTENSION_TYPE}
+**Last Updated:** ${TIMESTAMP}
+
+---
+
+## Purpose
+
+This BRIEF defines the behavioral rules, constraints, and preferences for this extension.
+It cascades from Hub → Project → Spoke, with each level adding specificity.
+
+**Cascade hierarchy:**
+- **Hub BRIEF:** Universal rules (all extensions)
+- **Project BRIEF:** Shared rules (all spokes in project)
+- **Spoke BRIEF:** Local rules (this extension only)
+
+---
+
+## Always
+
+Rules that **must** be followed:
+
+- ✅ Use git checkpoints before structural changes
+- ✅ Run quality gates (tests, startup) before commits
+- ✅ Log high-impact decisions (impact >= 7) as Lugs
+- ✅ Respect CLAUDE.md instructions (priority 0)
+- ✅ Use PEV (Perceive-Execute-Verify) for important Lugs
+
+---
+
+## Never
+
+Rules that **must not** be violated:
+
+- ❌ Skip tests or bypass quality gates without explicit approval
+- ❌ Commit generated files (build artifacts, __pycache__, etc.)
+- ❌ Make destructive changes without checkpoints (safe-refactor)
+- ❌ Proceed with work if foundation is uncertain (wai-foundation-gate)
+- ❌ Ignore machine classification (adjust recommendations to hardware)
+
+---
+
+## Preferences
+
+Guidelines for decision-making (not strict rules):
+
+- Prefer simplicity over complexity
+- Prefer existing patterns over new ones
+- Prefer co-located tests over separated test directories
+- Prefer explicit over implicit
+- Prefer lightweight solutions for deterministic tasks
+
+---
+
+## Project-Specific Rules
+
+*(Add project-level rules here if this is a Project BRIEF)*
+
+Example:
+- **Dependency policy:** Minimize external dependencies
+- **Testing policy:** 80%+ coverage for critical paths
+- **Documentation policy:** Inline comments for non-obvious logic only
+
+---
+
+## Spoke-Specific Rules
+
+*(Add spoke-level rules here if this is a Spoke BRIEF)*
+
+Example:
+- **Code style:** Follow existing patterns in this spoke
+- **Feature flags:** Use `features.yaml` for experimental features
+- **Custom QC:** Run `make lint` before commits (qc-check override)
+
+---
+
+## Notes
+
+- This BRIEF is read by **brief-advisor Skill** for alignment checking
+- Decision Lugs with `resolution_reason` train the apprenticeship model
+- Over time, brief-advisor learns your preferences from decision patterns

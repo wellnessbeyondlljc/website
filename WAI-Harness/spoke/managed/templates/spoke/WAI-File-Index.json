@@ -1,0 +1,85 @@
+{
+  "version": "2.1",
+  "metadata": {
+    "spoke_path": "PLACEHOLDER_SPOKE_PATH",
+    "project_root": "PLACEHOLDER_PROJECT_ROOT",
+    "project_name": "PLACEHOLDER_PROJECT_NAME",
+    "last_updated": "PLACEHOLDER_TIMESTAMP",
+    "updated_by": "WAI Initialization"
+  },
+  "core_files": {
+    "WAI-State.json": {
+      "purpose": "Project state, decisions, session tracking",
+      "required": true,
+      "auto_managed": true
+    },
+    "WAI-Guide.md": {
+      "purpose": "AI behavioral instructions and protocols",
+      "required": true,
+      "auto_managed": false
+    },
+    "WAI-State.md": {
+      "purpose": "Strategic vision and evolution narrative",
+      "required": true,
+      "auto_managed": false
+    },
+    "WAI-File-Index.json": {
+      "purpose": "Manifest of all managed files and bidirectional attribution",
+      "required": true,
+      "auto_managed": true
+    }
+  },
+  "operational_files": {
+    "WAI-KB-Sync.json": {
+      "purpose": "Hub knowledge base sync metadata",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "safe_to_delete_if_stale"
+    },
+    "WAI-Signals.jsonl": {
+      "purpose": "Learning signals for hub ingestion",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "archive_after_hub_sync"
+    },
+    "WAI-WebLLM-Instructions.md": {
+      "purpose": "Instructions for web-based LLM workflows",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "regenerate_on_configure"
+    },
+    "WAI-Session-Log.jsonl": {
+      "purpose": "Conversation log for current session (legacy, see sessions/)",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "delete_on_closeout"
+    },
+    "sessions/": {
+      "purpose": "Per-environment session logs for multi-agent support",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "reconcile_on_closeout",
+      "contents": "{tool}-{machine}.jsonl files"
+    },
+    "WAI-Baseline-Log.jsonl": {
+      "purpose": "Baseline comparison runs and summaries",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "append_only"
+    },
+    "WAI-Testing-Log.jsonl": {
+      "purpose": "Test run history and results",
+      "required": false,
+      "auto_managed": true,
+      "cleanup": "append_only"
+    }
+  },
+  "project_files": {
+    "WAI-Implementation-Summary.md": {
+      "purpose": "Implementation summaries for completed work",
+      "required": false,
+      "auto_managed": false
+    }
+  },
+  "legacy_files": {}
+}
