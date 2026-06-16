@@ -4,8 +4,8 @@
     "name": "Wellness Beyond LLJC Website",
     "version": "0.1.0",
     "structure_version": "v4",
-    "status": "greenfield-stub",
-    "description": "Client website for Wellness Beyond LLJC \u2014 purpose/stack/content to be confirmed.",
+    "status": "active",
+    "description": "Static marketing/support website for the Wellness Beyond #LLJC youth-wellness nonprofit. Multi-page (home + crisis resources), light/dark themed, content derived verbatim from the org brochure. Served locally via a Bun static server behind Caddy at http://wbl.local/.",
     "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub"
   },
   "_project_foundation": {
@@ -15,34 +15,42 @@
     "identity": {
       "type": "spoke",
       "name": "Wellness Beyond LLJC Website",
-      "one_liner": "Client website for Wellness Beyond LLJC \u2014 purpose, stack, and content scope TO BE CONFIRMED in the first session.",
-      "success_looks_like": "TBD \u2014 confirm goals + stack with operator before substantive work."
+      "one_liner": "Static, brochure-faithful website for the Wellness Beyond #LLJC youth-wellness nonprofit (resilience, grief, anti-bullying, suicide prevention).",
+      "success_looks_like": "A clean, accessible multi-page site whose copy, logo, and palette match the org brochure exactly; light/dark themes; crisis (988) paths prominent; verified donation/social links before launch."
     },
     "boundaries": {
       "in_scope": [
-        "TBD \u2014 confirm in first session"
+        "Static HTML/CSS/JS site (no backend/build step)",
+        "Content verbatim from the org brochure",
+        "Light + dark theming from the supplied design system",
+        "Bun static dev server behind Caddy (wbl.local:3150)"
       ],
       "out_of_scope": [
-        "TBD"
+        "Inventing programs/content not on the brochure (e.g. a 'Wellness Bag' page) without operator confirmation",
+        "Shipping unverified payment/social links (QR-only on brochure)"
       ]
     },
-    "approach": "TBD \u2014 greenfield; likely a client site build/rebuild (cf. the Hines client sites). Confirm before work.",
-    "philosophy": "Onboarded as a greenfield stub (empty dir) per operator; refine identity first.",
+    "approach": "Ground every asset in the real brochure/logo files; build plain semantic HTML + a token-based CSS design system; mark anything unverifiable as TODO rather than fabricate.",
+    "philosophy": "Faithful to the brand and to the truth \u2014 a crisis-support nonprofit site must be accurate and accessible, never padded with AI-invented copy.",
     "evolution_log": [
       {
         "at": "2026-06-15T11:11:22.256784+00:00",
         "note": "Greenfield v4 onboard (empty dir, no source yet); provisional foundation pending operator confirmation of purpose/stack."
+      },
+      {
+        "at": "2026-06-16T04:02:43Z",
+        "note": "Session 1: identity confirmed. Built the site from the brochure (index.html + resources.html), token-based light/dark CSS, theme toggle, real logo (dark + keyed-transparent light variant), and a Bun dev server (wbl.local:3150 via Caddy) with a pre-flight stale-listener kill check. Status greenfield-stub -> active."
       }
     ]
   },
   "_session_state": {
-    "session_count": 0,
-    "last_session_id": null,
-    "last_closeout": null,
-    "next_session_recommendation": "Run /wai to begin. FIRST: confirm project identity/purpose/stack with operator (foundation is a provisional greenfield stub).",
-    "requires_review": true,
+    "session_count": 1,
+    "last_session_id": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
+    "last_closeout": "2026-06-16T04:02:43Z",
+    "next_session_recommendation": "Verify + wire the 6 TODO links (PayPal/Zelle/Cash App + Facebook/Instagram/TikTok) from the brochure QR codes — find via `grep -rn data-todo .`. Confirm whether a 'Wellness Bag' program is real (not on the brochure) before adding bags.html. Then run a WCAG AA contrast pass on muted text + the coral 988 accent.",
+    "requires_review": false,
     "mode": "execution",
-    "track_path": "WAI-Harness/spoke/local/sessions/session-bootstrap-20260615/track.jsonl"
+    "track_path": null
   },
   "feature_toggles": {},
   "_work_queue": {},

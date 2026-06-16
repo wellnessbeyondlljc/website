@@ -1,16 +1,27 @@
 # Wellness Beyond #LLJC — website
 
-Static site (no build step). Open `index.html` in a browser, or serve locally:
+Static site (no build step). Serve locally with Bun:
 
 ```bash
-python3 -m http.server 8000   # then visit http://localhost:8000
+bun run dev                          # http://wbl.local  (also http://localhost:3150)
+HOST=0.0.0.0 PORT=8080 bun run dev   # override host/port
 ```
+
+The dev server listens on `127.0.0.1:3150`; a Caddy reverse proxy maps the short URL
+`http://wbl.local/` (port 80) → `:3150`. Host/port come from the mywheel hub registry for
+this spoke: short URL `wbl.local`, primary port `3150` (reserved block 3150–3159).
+
+On startup the server runs a pre-flight check: if anything is already LISTENing on the
+port (always a stale dev server, since the port is dedicated to this spoke) it kills it and
+binds clean. It uses `ss` to target only the listening socket, so the shared Caddy proxy is
+never touched.
 
 ## Files
 - `index.html` — home (mission, awareness, what we do, get involved, donate, vision, connect)
 - `resources.html` — crisis support (988, Crisis Text Line) + warning signs
 - `assets/css/styles.css` — design system: tokens, light + dark themes, components
 - `assets/js/theme.js` — theme toggle (remembers choice; defaults to system) + mobile nav
+- `server.ts` / `package.json` — Bun static dev server (`bun run dev`)
 
 ## Content source
 All copy is taken **verbatim** from the brochure in `resources/`. Visual design follows

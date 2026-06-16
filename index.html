@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
+  <link rel="icon" type="image/webp" href="assets/img/logo.webp" />
   <link rel="stylesheet" href="assets/css/styles.css" />
   <script src="assets/js/theme.js"></script>
 </head>
@@ -44,7 +45,14 @@
     <!-- ============ HERO ============ -->
     <section class="hero">
       <div class="container">
-        <h1 class="wordmark">WELLNESS BEYOND <span class="lljc">#LLJC</span></h1>
+        <h1 class="visually-hidden">Wellness Beyond #LLJC</h1>
+        <span class="hero-logo-wrap">
+          <img class="hero-logo logo-dark" src="assets/img/logo.png" width="1260" height="1440"
+               alt="Wellness Beyond #LLJC logo" />
+          <img class="hero-logo logo-light" src="assets/img/logo-light.png" width="1260" height="1440"
+               alt="" aria-hidden="true"
+               onerror="this.closest('.hero-logo-wrap').classList.add('logo-light-missing')" />
+        </span>
         <p class="pillars">Building Resilience. Teaching Compassion. Empowering Youth.</p>
         <p class="script">Creating Stronger Communities.</p>
         <div class="cta">

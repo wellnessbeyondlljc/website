@@ -162,6 +162,29 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
   font-size: clamp(2.1rem, 6vw, 3.6rem); margin-bottom: .15em; color: var(--text);
 }
 .hero .wordmark .lljc { color: var(--coral); display: block; letter-spacing: .2em; font-size: .55em; margin-top: .25em; }
+
+/* Logo lockup — theme-aware. Transparent dark logo (white wordmark) on the dark
+   theme; dedicated light logo (dark wordmark) on the light theme. */
+.hero-logo-wrap { display: inline-block; line-height: 0; margin-bottom: 1rem; }
+.hero-logo { width: clamp(220px, 32vw, 340px); height: auto; }
+.logo-light { display: none; }
+[data-theme="light"] .logo-dark  { display: none; }
+[data-theme="light"] .logo-light { display: inline-block; }
+
+/* Fallback: if the light logo file isn't present yet, show the dark logo on a
+   dark badge in the light theme so the hero never looks broken. */
+[data-theme="light"] .hero-logo-wrap.logo-light-missing {
+  background: #0e1319; padding: clamp(1.25rem, 3vw, 2rem);
+  border-radius: 24px; box-shadow: var(--shadow-soft);
+}
+[data-theme="light"] .hero-logo-wrap.logo-light-missing .logo-dark  { display: inline-block; }
+[data-theme="light"] .hero-logo-wrap.logo-light-missing .logo-light { display: none; }
+
+/* Accessible text that stays off-screen for sighted users */
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .hero .pillars {
   font-family: var(--font-heading); font-weight: 600;
   font-size: clamp(1.1rem, 2.6vw, 1.6rem); color: var(--accent-text); margin: 1rem 0 .25rem;
