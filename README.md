@@ -27,20 +27,21 @@ never touched.
 All copy is taken **verbatim** from the brochure in `resources/`. Visual design follows
 `resources/usable-asset-inspiration.png` (gold + coral accents, serif display, script accents).
 
-## ⚠️ Before launch — verify these (marked `data-todo` in the HTML)
-The brochure shows these only as **QR codes / icons**, so the real destinations could not be
-read from the images. Each is currently a `#` placeholder labelled "verify":
+## Verified links (decoded from the brochure QR codes)
+All payment/social destinations were decoded from the brochure QR codes (OpenCV WeChat
+detector) and wired into `index.html` — no placeholders remain.
 
-| Item            | Where                       | What to fill in                          |
-|-----------------|-----------------------------|------------------------------------------|
-| PayPal          | `index.html` → `#support`   | PayPal.me link or donate URL             |
-| Zelle           | `index.html` → `#support`   | Zelle email/phone (likely the org email) |
-| Cash App        | `index.html` → `#support`   | `$cashtag`                               |
-| Facebook        | `index.html` → `#connect`   | Profile URL                              |
-| Instagram       | `index.html` → `#connect`   | Profile URL                              |
-| TikTok          | `index.html` → `#connect`   | Profile URL                              |
+| Item      | Destination                                                                 |
+|-----------|------------------------------------------------------------------------------|
+| PayPal    | `https://www.paypal.com/qrcodes/managed/4506c7e5-3630-48ef-b00d-09afbb209fe7` |
+| Zelle     | `https://enroll.zellepay.com/qr-codes?data=…` (recipient token from QR)       |
+| Cash App  | `https://cash.app/$WellnessBeyondLLJC`                                        |
+| Facebook  | `https://www.facebook.com/profile.php?id=61571447918292`                      |
+| Instagram | `https://www.instagram.com/wellness_beyond_lljc`                             |
+| TikTok    | `https://www.tiktok.com/@wellness_beyond_lljc`                               |
 
-Find them all quickly: `grep -rn "data-todo" .`
+> Worth a final human spot-check by scanning the printed brochure, but each was decoded
+> directly from the QR bitmaps, so confidence is high.
 
 ## Confirmed values (from brochure)
 - Email: wellness.beyond.lljc@gmail.com
