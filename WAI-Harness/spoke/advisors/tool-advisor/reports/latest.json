@@ -1,0 +1,29 @@
+{
+  "advisor_id": "tool-advisor",
+  "version": "1.0.0",
+  "mode": "update",
+  "project_root": "/home/mario/projects/client-work/wellnessbeyondlljc-website",
+  "score": 2,
+  "score_by_area": {
+    "Claude": "pass",
+    "Gemini": "skip",
+    "Codex": "skip",
+    "Qwen": "skip",
+    "Shared": "pass"
+  },
+  "findings": [],
+  "auto_applied": [],
+  "planned_fixes": [],
+  "proposals": [
+    {
+      "area": "Claude",
+      "code": "mcp-not-configured",
+      "message": "No .mcp.json found \u2014 consider configuring MCP servers for enhanced tool capabilities",
+      "target_file": ".mcp.json",
+      "risk": "low",
+      "requires_human_review": true
+    }
+  ],
+  "audit_pending": false,
+  "audit_reason": ""
+}

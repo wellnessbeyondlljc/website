@@ -47,15 +47,18 @@
     "session_count": 1,
     "last_session_id": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
     "last_closeout": "2026-06-16T04:02:43Z",
-    "next_session_recommendation": "Verify + wire the 6 TODO links (PayPal/Zelle/Cash App + Facebook/Instagram/TikTok) from the brochure QR codes — find via `grep -rn data-todo .`. Confirm whether a 'Wellness Bag' program is real (not on the brochure) before adding bags.html. Then run a WCAG AA contrast pass on muted text + the coral 988 accent.",
+    "next_session_recommendation": "Ask if verify list answered; apply + add VERIFY.md",
+    "last_savepoint": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
     "requires_review": false,
     "mode": "execution",
-    "track_path": null
+    "track_path": "WAI-Harness/spoke/local/sessions/0cc6d5c6-0175-44b8-8098-8dbb47a349e1/track.jsonl"
   },
   "feature_toggles": {},
   "_work_queue": {},
   "_savepoint": {
-    "active_ids": [],
-    "count": 0
+    "active_ids": [
+      "sp-0cc6d5c6-0175-44b8-8098-8dbb47a349e1-built-shipped-wellness"
+    ],
+    "count": 1
   }
 }

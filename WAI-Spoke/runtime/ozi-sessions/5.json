@@ -1,0 +1,8 @@
+{
+  "auto_mode": true,
+  "max_parallel": 1,
+  "watch_mode": false,
+  "poll_interval_minutes": 5,
+  "source": "wcl-default",
+  "set_at": "2026-06-17T06:03:04.642790+00:00"
+}

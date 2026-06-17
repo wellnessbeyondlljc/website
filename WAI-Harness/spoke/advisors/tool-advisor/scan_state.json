@@ -1,0 +1,59 @@
+{
+  "advisor_id": "tool-advisor",
+  "advisor_name": "Cross-Tool Configuration Advisor",
+  "version": "1.0.0",
+  "mission_statement": "Keep Claude, Gemini, Codex/OpenAI, and Qwen integrations lean, non-recursive, and safe across spokes",
+  "last_audit_at": "2026-06-17T06:03:04.528534+00:00",
+  "last_audit_session": null,
+  "last_observed_session": null,
+  "sessions_since_last_audit": 0,
+  "audit_pending": false,
+  "audit_reason": "",
+  "last_drift_at": null,
+  "total_audits": 2,
+  "auto_applied_count": 5,
+  "current_score": 2,
+  "score_by_area": {
+    "Claude": "pass",
+    "Gemini": "skip",
+    "Codex": "skip",
+    "Qwen": "skip",
+    "Shared": "pass"
+  },
+  "pending_proposals": [
+    {
+      "area": "Claude",
+      "code": "mcp-not-configured",
+      "message": "No .mcp.json found \u2014 consider configuring MCP servers for enhanced tool capabilities",
+      "target_file": ".mcp.json",
+      "risk": "low",
+      "requires_human_review": true
+    }
+  ],
+  "last_findings": [],
+  "last_fingerprint": "59fdb5daf997e8c52d37dae4bd25a6f6b2d2df288e6acae02b49b528b6b378cd",
+  "fingerprint_entries": {
+    "AGENTS.md": "missing",
+    "CLAUDE.md": "2d5aa88a3f6db17ad415af84c870f4820a7022b04a5bf7cca1da13e42abc22c3",
+    "GEMINI.md": "missing",
+    "QWEN.md": "missing",
+    ".claude/settings.json": "missing",
+    ".gemini/settings.json": "missing",
+    ".geminiignore": "missing",
+    ".qwen/settings.json": "missing",
+    ".qwenignore": "missing",
+    "WAI-Spoke/commands/wai.md": "missing",
+    "WAI-Spoke/skills/wai/wai.md": "missing",
+    "templates/commands/wai.md": "missing",
+    "templates/spoke/skills/wai/wai.md": "missing",
+    "templates/spoke/GEMINI.md": "missing",
+    "templates/gemini/GEMINI.md": "missing",
+    "templates/spoke/QWEN.md": "missing",
+    "templates/qwen/QWEN.md": "missing",
+    "templates/spoke/AGENTS.md": "missing",
+    "templates/codex/AGENTS.md": "missing",
+    "templates/spoke/.claude/settings.json": "missing",
+    "templates/claude/settings.json": "missing",
+    "bootstrap/spoke-upgrade.sh": "missing"
+  }
+}
