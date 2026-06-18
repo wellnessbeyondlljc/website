@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Great+Vibes&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0c0a09;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(214,162,74,0.35);color:#fff}
+</style>
+</helmet>
+
+<div style="background:#0c0a09;color:#f4ede0;font-family:'Lato',sans-serif;min-height:100vh;width:100%;overflow-x:hidden">
+
+  <!-- ============ MASTHEAD ============ -->
+  <header style="max-width:1180px;margin:0 auto;padding:84px 48px 64px;text-align:center;position:relative">
+    <div style="font-family:'Lato',sans-serif;font-size:12px;letter-spacing:0.42em;text-transform:uppercase;color:#d6a24a;font-weight:700;margin-bottom:30px">Brand &amp; Web Style Sheet</div>
+    <div style="font-size:64px;color:#d6a24a;line-height:0.6;margin-bottom:18px">♥</div>
+    <h1 style="font-family:'Cinzel',serif;font-weight:600;font-size:clamp(40px,7vw,82px);letter-spacing:0.06em;color:#fdfaf4;line-height:1.05">WELLNESS</h1>
+    <div style="display:flex;align-items:center;justify-content:center;gap:24px;margin:10px 0 4px">
+      <span style="height:1px;width:64px;background:linear-gradient(90deg,transparent,#b8772e)"></span>
+      <h1 style="font-family:'Cinzel',serif;font-weight:600;font-size:clamp(40px,7vw,82px);letter-spacing:0.14em;color:#fdfaf4;line-height:1">BEYOND</h1>
+      <span style="height:1px;width:64px;background:linear-gradient(90deg,#b8772e,transparent)"></span>
+    </div>
+    <div style="font-family:'Cinzel',serif;font-weight:700;font-size:26px;letter-spacing:0.12em;color:#e0364c;margin-top:6px">#LLJC</div>
+    <p style="font-family:'Great Vibes',cursive;font-size:34px;color:#e6b65a;margin-top:26px;line-height:1.1">Building Resilience &middot; Teaching Compassion &middot; Creating Hope</p>
+    <p style="max-width:620px;margin:28px auto 0;color:#bdb3a3;font-size:17px;line-height:1.7">A living reference for translating the Wellness Beyond brochure into a warm, dignified, and hopeful digital presence — built for young people, families, and the communities around them.</p>
+  </header>
+
+  <div style="max-width:1180px;margin:0 auto;padding:0 48px 120px">
+
+    <!-- ============ 01 ESSENCE ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:40px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">01</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">Brand Essence</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px">
+        <sc-for list="{{ essence }}" as="e" hint-placeholder-count="3">
+          <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:30px 26px">
+            <div style="color:#d6a24a;font-size:22px;margin-bottom:14px">♥</div>
+            <h3 style="font-family:'Cinzel',serif;font-size:17px;letter-spacing:0.05em;color:#fdfaf4;margin-bottom:10px">{{ e.title }}</h3>
+            <p style="color:#a89e8e;font-size:14.5px;line-height:1.65">{{ e.body }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ============ 02 COLOR ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:14px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">02</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">Color</h2>
+      </div>
+      <p style="color:#a89e8e;font-size:15px;line-height:1.6;max-width:640px;margin-bottom:38px">Deep charcoal anchors the system; warm metallic gold carries the brand's hopeful glow; a single coral-red signals heart, urgency, and care. Cream provides relief for long-form reading.</p>
+
+      <div style="margin-bottom:32px">
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:16px;font-weight:700">Core</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
+          <sc-for list="{{ coreColors }}" as="c" hint-placeholder-count="4">
+            <div style="border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,0.07)">
+              <div style="height:120px;background:{{ c.swatch }};border-bottom:1px solid rgba(255,255,255,0.06)"></div>
+              <div style="padding:16px 16px 18px;background:#16120e">
+                <div style="font-family:'Cinzel',serif;font-size:14px;color:#fdfaf4;letter-spacing:0.04em">{{ c.name }}</div>
+                <sc-if value="{{ showValues }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-family:'Lato',monospace;font-size:12px;color:#8a8070;margin-top:6px;font-weight:700;letter-spacing:0.04em">{{ c.hex }}</div>
+                </sc-if>
+                <div style="font-size:12px;color:#a89e8e;margin-top:8px;line-height:1.45">{{ c.use }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:16px;font-weight:700">Gradients &amp; Tints</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+          <div style="border-radius:14px;height:108px;background:linear-gradient(100deg,#f4d27a,#d6a24a 45%,#b8772e);display:flex;align-items:flex-end;padding:14px"><span style="font-size:12px;color:#3a2a12;font-weight:700;letter-spacing:0.04em">Gold Foil &middot; headers &amp; accents</span></div>
+          <div style="border-radius:14px;height:108px;background:linear-gradient(180deg,#3a1d22,#7a2e1f 55%,#d6a24a);display:flex;align-items:flex-end;padding:14px"><span style="font-size:12px;color:#fdfaf4;font-weight:700;letter-spacing:0.04em">Sunset &middot; imagery overlay</span></div>
+          <div style="border-radius:14px;height:108px;background:linear-gradient(160deg,#16120e,#0c0a09);border:1px solid rgba(214,162,74,0.18);display:flex;align-items:flex-end;padding:14px"><span style="font-size:12px;color:#d6a24a;font-weight:700;letter-spacing:0.04em">Charcoal Panel &middot; surfaces</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 03 TYPE ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:38px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">03</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">Typography</h2>
+      </div>
+
+      <div style="display:grid;gap:18px">
+        <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px 32px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+            <span style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;font-weight:700">Display &middot; Cinzel</span>
+            <span style="font-size:12.5px;color:#a89e8e">Headlines, brand lockup &middot; uppercase, letter-spaced</span>
+          </div>
+          <div style="font-family:'Cinzel',serif;font-weight:600;font-size:46px;letter-spacing:0.06em;color:#fdfaf4;line-height:1.1">Every Life Matters</div>
+        </div>
+
+        <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px 32px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            <span style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;font-weight:700">Script &middot; Great Vibes</span>
+            <span style="font-size:12.5px;color:#a89e8e">Emotional accents &amp; taglines only &middot; never body</span>
+          </div>
+          <div style="font-family:'Great Vibes',cursive;font-size:62px;color:#e6b65a;line-height:1.2">Creating Stronger Communities</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+          <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px 32px">
+            <span style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;font-weight:700;display:block;margin-bottom:18px">Subhead &middot; Cormorant Garamond</span>
+            <div style="font-family:'Cormorant Garamond',serif;font-weight:500;font-size:30px;color:#fdfaf4;line-height:1.3;font-style:italic">You Are Not Alone</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:21px;color:#bdb3a3;margin-top:10px">Warm, literary section intros</div>
+          </div>
+          <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px 32px">
+            <span style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;font-weight:700;display:block;margin-bottom:18px">Body &middot; Lato</span>
+            <p style="font-size:15.5px;color:#cabfae;line-height:1.7">Our mission is to strengthen resilience, compassion, and hope — before and during life's difficult moments. Clean, highly legible, friendly at every size.</p>
+          </div>
+        </div>
+
+        <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:30px 32px;display:flex;flex-wrap:wrap;gap:36px;align-items:flex-end">
+          <sc-for list="{{ scale }}" as="s" hint-placeholder-count="5">
+            <div>
+              <div style="{{ s.style }}">{{ s.px }}</div>
+              <div style="font-size:11px;color:#8a8070;letter-spacing:0.16em;text-transform:uppercase;margin-top:8px;font-weight:700">{{ s.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 HEART MOTIF ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:14px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">04</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">The Heart</h2>
+      </div>
+      <p style="color:#a89e8e;font-size:15px;line-height:1.6;max-width:640px;margin-bottom:38px">The heart is the signature mark — used as a bullet, a divider, and a quiet emphasis. Coral-red for warmth and care; gold for celebration and hope. Use it with restraint.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+        <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:18px;color:#b8772e"><span style="height:1px;width:54px;background:#b8772e"></span><span style="color:#e0364c;font-size:22px">♥</span><span style="height:1px;width:54px;background:#b8772e"></span></div>
+          <div style="font-size:12px;color:#8a8070;letter-spacing:0.16em;text-transform:uppercase;margin-top:18px;font-weight:700">Section Divider</div>
+        </div>
+        <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px;text-align:center">
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;max-width:160px;margin:0 auto;text-align:left">
+            <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#cabfae"><span style="color:#e0364c">♥</span> Listen without judgment</div>
+            <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#cabfae"><span style="color:#e0364c">♥</span> Take concerns seriously</div>
+            <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#cabfae"><span style="color:#e0364c">♥</span> Check in often</div>
+          </div>
+          <div style="font-size:12px;color:#8a8070;letter-spacing:0.16em;text-transform:uppercase;margin-top:18px;font-weight:700">Heart Bullets</div>
+        </div>
+        <div style="background:linear-gradient(160deg,#1a130d,#0c0a09);border:1px solid rgba(214,162,74,0.16);border-radius:14px;padding:34px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-size:46px;color:#e6b65a;line-height:1;filter:drop-shadow(0 2px 8px rgba(230,182,90,0.4))">♥</div>
+          <div style="font-size:12px;color:#8a8070;letter-spacing:0.16em;text-transform:uppercase;margin-top:18px;font-weight:700">Hero Glow Mark</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 05 ICONOGRAPHY ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:14px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">05</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">Iconography</h2>
+      </div>
+      <p style="color:#a89e8e;font-size:15px;line-height:1.6;max-width:640px;margin-bottom:38px">Line icons sit inside a charcoal disc with a thin gold ring. Keep strokes even and rounded; the coral heart appears inside icons that speak to emotion and care.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start">
+        <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="6">
+          <div style="text-align:center;width:108px">
+            <div style="width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#1f1810,#100c08);border:1.5px solid #b8772e;display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:inset 0 0 18px rgba(0,0,0,0.6)">
+              <span style="{{ ic.style }}">{{ ic.glyph }}</span>
+            </div>
+            <div style="font-size:12px;color:#a89e8e;margin-top:12px;line-height:1.35">{{ ic.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ============ 06 COMPONENTS ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:40px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">06</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">Components</h2>
+      </div>
+
+      <!-- Brushstroke header -->
+      <div style="margin-bottom:40px">
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:18px;font-weight:700">Brushstroke Section Header</div>
+        <div style="display:inline-block;position:relative;padding:14px 38px;background:linear-gradient(100deg,#f4d27a,#d6a24a 50%,#b8772e);border-radius:40px 32px 44px 30px/30px 40px 28px 38px">
+          <span style="font-family:'Cinzel',serif;font-weight:700;font-size:26px;letter-spacing:0.05em;color:#2a1c0a;text-transform:uppercase">What We Do</span>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div style="margin-bottom:40px">
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:18px;font-weight:700">Buttons</div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+          <button style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#2a1c0a;background:linear-gradient(100deg,#f4d27a,#d6a24a);border:none;padding:15px 34px;border-radius:40px;cursor:pointer;box-shadow:0 6px 20px rgba(214,162,74,0.25)" style-hover="filter:brightness(1.08)">Donate Now</button>
+          <button style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#fdfaf4;background:transparent;border:1.5px solid #d6a24a;padding:15px 34px;border-radius:40px;cursor:pointer" style-hover="background:rgba(214,162,74,0.12)">Volunteer</button>
+          <button style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#fff;background:#e0364c;border:none;padding:15px 34px;border-radius:40px;cursor:pointer;box-shadow:0 6px 20px rgba(224,54,76,0.3)" style-hover="filter:brightness(1.06)">Get Help Now ♥</button>
+          <a style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.04em;color:#d6a24a;text-decoration:none;border-bottom:1px solid rgba(214,162,74,0.4);padding-bottom:3px;cursor:pointer">Learn more &rarr;</a>
+        </div>
+      </div>
+
+      <!-- Cards -->
+      <div style="margin-bottom:40px">
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:18px;font-weight:700">Program Cards</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px">
+          <sc-for list="{{ programs }}" as="p" hint-placeholder-count="3">
+            <div style="background:#16120e;border:1px solid rgba(214,162,74,0.16);border-radius:16px;padding:30px 28px" style-hover="border-color:rgba(214,162,74,0.45)">
+              <div style="width:60px;height:60px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#1f1810,#100c08);border:1.5px solid #b8772e;display:flex;align-items:center;justify-content:center;margin-bottom:20px"><span style="{{ p.style }}">{{ p.glyph }}</span></div>
+              <h3 style="font-family:'Cinzel',serif;font-size:18px;color:#fdfaf4;letter-spacing:0.03em;margin-bottom:10px;line-height:1.25">{{ p.title }}</h3>
+              <p style="color:#a89e8e;font-size:14.5px;line-height:1.6">{{ p.body }}</p>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- Crisis banner -->
+      <div>
+        <div style="font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a8070;margin-bottom:18px;font-weight:700">Crisis Support Banner</div>
+        <div style="background:linear-gradient(135deg,#1a130d,#241006);border:1px solid rgba(224,54,76,0.3);border-radius:18px;padding:38px 40px;text-align:center">
+          <div style="color:#e6b65a;font-size:20px;margin-bottom:8px">♥</div>
+          <p style="color:#cabfae;font-size:16px;line-height:1.5;margin-bottom:6px">If you or someone you know is in crisis, call or text</p>
+          <div style="font-family:'Cinzel',serif;font-weight:700;font-size:54px;color:#e0364c;letter-spacing:0.05em;line-height:1">988</div>
+          <p style="color:#a89e8e;font-size:14px;margin-top:6px">for immediate support</p>
+          <p style="font-family:'Great Vibes',cursive;font-size:32px;color:#e6b65a;margin-top:16px">Hope. Help. Healing.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 07 IN CONTEXT ============ -->
+    <section style="padding:52px 0;border-top:1px solid rgba(214,162,74,0.18)">
+      <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:38px">
+        <span style="font-family:'Cinzel',serif;font-size:15px;color:#b8772e;letter-spacing:0.2em">07</span>
+        <h2 style="font-family:'Cinzel',serif;font-weight:600;font-size:30px;letter-spacing:0.08em;color:#fdfaf4">In Context &mdash; Homepage Hero</h2>
+      </div>
+      <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(214,162,74,0.2)">
+        <div style="position:relative;background:linear-gradient(180deg,#0c0a09 0%,#1a0e07 60%,#3a1d0e 100%);padding:80px 56px 0;text-align:center">
+          <div style="font-size:40px;color:#e6b65a;line-height:1;filter:drop-shadow(0 2px 10px rgba(230,182,90,0.4))">♥</div>
+          <div style="font-family:'Cinzel',serif;font-weight:600;font-size:clamp(30px,4vw,52px);letter-spacing:0.06em;color:#fdfaf4;margin-top:20px;line-height:1.1">HELPING KIDS HEAL,<br>GROW, AND THRIVE</div>
+          <p style="font-family:'Great Vibes',cursive;font-size:34px;color:#e6b65a;margin-top:18px">You are not alone</p>
+          <p style="max-width:560px;margin:20px auto 0;color:#cabfae;font-size:16px;line-height:1.65">Strengthening resilience, compassion, and hope for every child, teen, and family — before and during life's difficult moments.</p>
+          <div style="display:flex;gap:14px;justify-content:center;margin:34px 0 56px;flex-wrap:wrap">
+            <button style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#2a1c0a;background:linear-gradient(100deg,#f4d27a,#d6a24a);border:none;padding:15px 34px;border-radius:40px;cursor:pointer">Donate</button>
+            <button style="font-family:'Lato',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#fdfaf4;background:transparent;border:1.5px solid #d6a24a;padding:15px 34px;border-radius:40px;cursor:pointer">Get Involved</button>
+          </div>
+          <!-- placeholder community image -->
+          <div style="height:180px;border-radius:14px 14px 0 0;background-image:repeating-linear-gradient(45deg,rgba(214,162,74,0.10) 0 12px,transparent 12px 24px);border:1px dashed rgba(214,162,74,0.35);border-bottom:none;display:flex;align-items:center;justify-content:center">
+            <span style="font-family:'Lato',monospace;font-size:12px;letter-spacing:0.12em;color:#8a8070;text-transform:uppercase">[ community at sunset — full-bleed photo ]</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- footer -->
+    <div style="text-align:center;padding-top:40px;color:#6e6555;font-size:13px;letter-spacing:0.04em">
+      <div style="color:#d6a24a;font-size:18px;margin-bottom:10px">♥</div>
+      Wellness Beyond #LLJC &middot; Website Style Sheet &middot; wellnessbeyondlljc.org
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180},&quot;showValues&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const showValues = this.props.showValues ?? true;
+    return {
+      showValues,
+      essence: [
+        { title: "Compassionate", body: "We meet young people where they are — with warmth, never judgment. The tone is gentle, human, and steady." },
+        { title: "Hopeful", body: "Even in hard moments, the design points toward light. Gold glow and uplifting language carry the promise of a brighter future." },
+        { title: "Dignified", body: "Serious subject, handled with grace. Generous space, elegant type, and restraint keep the experience trustworthy." }
+      ],
+      coreColors: [
+        { name: "Charcoal", hex: "#0C0A09", swatch: "#0C0A09", use: "Primary background" },
+        { name: "Panel", hex: "#16120E", swatch: "#16120E", use: "Cards & surfaces" },
+        { name: "Metallic Gold", hex: "#D6A24A", swatch: "#D6A24A", use: "Accents, headers, rings" },
+        { name: "Bronze", hex: "#B8772E", swatch: "#B8772E", use: "Borders, deep gold" },
+        { name: "Coral Red", hex: "#E0364C", swatch: "#E0364C", use: "Hearts, emphasis, crisis" },
+        { name: "Cream", hex: "#F4EDE0", swatch: "#F4EDE0", use: "Body text on dark" },
+        { name: "Warm Gray", hex: "#A89E8E", swatch: "#A89E8E", use: "Secondary text" },
+        { name: "Soft Gold", hex: "#E6B65A", swatch: "#E6B65A", use: "Script & glow" }
+      ],
+      scale: [
+        { px: "82", label: "Display", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "44px" } },
+        { px: "46", label: "H1", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "34px" } },
+        { px: "30", label: "H2", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "26px" } },
+        { px: "18", label: "H3", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "18px" } },
+        { px: "16", label: "Body", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "16px" } },
+        { px: "13", label: "Caption", style: { fontFamily: "'Lato',sans-serif", fontWeight: 900, color: "#fdfaf4", lineHeight: 1, fontSize: "13px" } }
+      ],
+      icons: [
+        { glyph: "❤", style: { fontSize: "30px", color: "#e0364c" }, label: "Grief & Support" },
+        { glyph: "✋", style: { fontSize: "30px", color: "#d6a24a" }, label: "Anti-Bullying" },
+        { glyph: "✿", style: { fontSize: "30px", color: "#d6a24a" }, label: "Resilience" },
+        { glyph: "★", style: { fontSize: "30px", color: "#e0364c" }, label: "Empowerment" },
+        { glyph: "✉", style: { fontSize: "30px", color: "#d6a24a" }, label: "Contact" },
+        { glyph: "✦", style: { fontSize: "30px", color: "#e6b65a" }, label: "Hope" }
+      ],
+      programs: [
+        { glyph: "❤", style: { fontSize: "26px", color: "#e0364c" }, title: "Youth Mental Wellness", body: "Promoting mental health and emotional well-being for kids and teens." },
+        { glyph: "✿", style: { fontSize: "26px", color: "#d6a24a" }, title: "Resilience & Coping Tools", body: "Equipping youth with practical life skills to navigate hard times." },
+        { glyph: "★", style: { fontSize: "26px", color: "#e0364c" }, title: "Youth Empowerment", body: "Inspiring confidence, leadership, and a strong sense of self-worth." }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

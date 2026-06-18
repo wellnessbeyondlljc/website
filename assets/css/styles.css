@@ -1,46 +1,69 @@
 /* =========================================================================
    Wellness Beyond #LLJC — design system
-   Tokens, themes, and components derived from usable-asset-inspiration.png
-   Light + dark theme. Accents: gold + coral. Display serif + script accents.
+   Tokens, themes, and components recreated from the brochure style handoff
+   (resources/design_handoff_wellness_beyond_styles). Warm charcoal base,
+   metallic gold accent, coral-red heart. Display: Cinzel. Body: Lato.
+   Script: Great Vibes (taglines only). Subhead: Cormorant Garamond.
    ========================================================================= */
 
 /* ---------- Design tokens ---------- */
 :root {
-  /* Brand accents (shared across themes) */
-  --gold:        #d6a94c;
-  --gold-soft:   #e8c276;
-  --gold-deep:   #b5852e;   /* darker gold for text on light surfaces (contrast) */
-  --coral:       #d6724a;
-  --coral-deep:  #b85534;
+  /* Brand palette (shared across themes) */
+  --gold:        #d6a24a;   /* Metallic Gold — primary accent */
+  --gold-soft:   #e6b65a;   /* Soft Gold — script, glow, highlight */
+  --gold-foil:   #f4d27a;   /* Foil highlight */
+  --bronze:      #b8772e;   /* Deep gold — borders, icon rings, dividers */
+  --gold-deep:   #b8772e;   /* alias: gold for text on light surfaces */
+  --coral:       #e0364c;   /* Coral Red — hearts, emphasis, crisis */
+  --coral-deep:  #c02438;   /* deeper coral for hovers/contrast */
+
+  /* Brochure neutrals */
+  --charcoal:    #0c0a09;
+  --panel:       #16120e;
+  --cream:       #f4ede0;
+  --offwhite:    #fdfaf4;
+  --warm-gray:   #a89e8e;
+  --muted-gray:  #8a8070;
+
+  /* Signature gradients */
+  --grad-foil:   linear-gradient(100deg, #f4d27a, #d6a24a 50%, #b8772e);
+  --grad-sunset: linear-gradient(180deg, #3a1d22, #7a2e1f 55%, #d6a24a);
+  --grad-hero:   linear-gradient(180deg, #0c0a09 0%, #1a0e07 60%, #3a1d0e 100%);
+  --disc:        radial-gradient(circle at 35% 30%, #1f1810, #100c08);
 
   /* Typography */
-  --font-display: "Cinzel", "Playfair Display", Georgia, serif;
-  --font-heading: "Playfair Display", Georgia, serif;
+  --font-display: "Cinzel", Georgia, serif;
+  --font-heading: "Cinzel", Georgia, serif;
+  --font-subhead: "Cormorant Garamond", Georgia, serif;
   --font-script:  "Great Vibes", "Brush Script MT", cursive;
-  --font-body:    "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --font-body:    "Lato", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   /* Shape & spacing */
-  --radius-card: 18px;
-  --radius-pill: 999px;
-  --radius-sm:   10px;
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, .18);
-  --maxw: 1120px;
+  --radius-card: 16px;
+  --radius-pill: 40px;
+  --radius-sm:   12px;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-gold: 0 6px 20px rgba(214, 162, 74, .25);
+  --shadow-coral:0 6px 20px rgba(224, 54, 76, .30);
+  --maxw: 1180px;
 
   /* Motion */
   --t: 180ms ease;
 }
 
-/* Dark theme (default) */
+/* Dark theme (default) — warm charcoal, per the brochure */
 :root,
 [data-theme="dark"] {
-  --bg:        #0e1319;
-  --bg-2:      #0b0e12;
-  --surface:   #171e26;
-  --surface-2: #1c252f;
-  --border:    #273340;
-  --text:      #e8edea;
-  --text-muted:#a8b2ad;
-  --hero-overlay: linear-gradient(180deg, rgba(14,19,25,.55), rgba(14,19,25,.92));
+  --bg:        #0c0a09;
+  --bg-2:      #120e0b;
+  --surface:   #16120e;
+  --surface-2: #1f1810;
+  --border:    rgba(214, 162, 74, .18);
+  --heading:   #fdfaf4;            /* Off-White */
+  --text:      #f4ede0;            /* Cream */
+  --text-muted:#a89e8e;            /* Warm Gray */
+  --hero-bg:   radial-gradient(120% 80% at 50% 0%, rgba(214, 162, 74, .14), transparent 60%), var(--grad-hero);
+  --hero-script: var(--gold-soft);
   --accent-text: var(--gold-soft);
 }
 
@@ -51,9 +74,14 @@
   --surface:   #ffffff;
   --surface-2: #fbf6ea;
   --border:    #e3d9c4;
-  --text:      #1b2027;
-  --text-muted:#5c665f;
-  --hero-overlay: linear-gradient(180deg, rgba(20,16,12,.35), rgba(20,16,12,.78));
+  --heading:   #2a1c0a;           /* dark brown */
+  --text:      #241a12;
+  --text-muted:#6b5d49;
+  /* Light, warm hero: soft gold glow over cream that melts into the page
+     (ends on --bg-2) so there is no hard seam below the hero. */
+  --hero-bg:   radial-gradient(120% 85% at 50% -10%, rgba(214, 162, 74, .28), transparent 55%),
+               linear-gradient(180deg, #fbf6ea 0%, #f6f1e7 55%, #efe8d8 100%);
+  --hero-script: var(--bronze);
   --accent-text: var(--gold-deep);
 }
 
@@ -67,60 +95,82 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   transition: background var(--t), color var(--t);
 }
+
+::selection { background: rgba(214, 162, 74, .35); color: #fff; }
 
 a { color: var(--accent-text); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 img { max-width: 100%; display: block; }
 
-h1, h2, h3 { font-family: var(--font-heading); line-height: 1.15; margin: 0 0 .5em; }
-h1 { font-size: clamp(2rem, 5vw, 3.25rem); }
-h2 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); }
-h3 { font-size: 1.2rem; }
+h1, h2, h3 {
+  font-family: var(--font-heading); color: var(--heading);
+  line-height: 1.15; letter-spacing: .08em; margin: 0 0 .5em;
+}
+h1 { font-size: clamp(2.5rem, 7vw, 5.125rem); font-weight: 600; }
+h2 { font-size: clamp(1.6rem, 3.5vw, 1.875rem); font-weight: 600; }
+h3 { font-size: 1.125rem; font-weight: 600; letter-spacing: .04em; }
 
 .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
-section { padding: clamp(48px, 8vw, 96px) 0; }
+section { padding: clamp(48px, 8vw, 88px) 0; }
 
+/* Eyebrow label — Lato 700, uppercase, letter-spaced (per spec) */
 .section-eyebrow {
-  font-family: var(--font-script);
-  font-size: 1.9rem;
-  color: var(--accent-text);
-  line-height: 1;
-  margin-bottom: .25rem;
+  font-family: var(--font-body); font-weight: 700;
+  font-size: .75rem; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--muted-gray); line-height: 1; margin-bottom: .9rem;
 }
 .section-title { position: relative; display: inline-block; padding-bottom: 12px; }
 .section-title::after {
   content: ""; position: absolute; left: 0; bottom: 0;
   width: 64px; height: 3px; border-radius: 3px; background: var(--coral);
 }
-.lead { font-size: 1.15rem; color: var(--text-muted); max-width: 60ch; }
+.lead { font-family: var(--font-subhead); font-size: 1.3rem; color: var(--text-muted); max-width: 60ch; }
 .text-center { text-align: center; }
 .text-center .section-title::after { left: 50%; transform: translateX(-50%); }
 
-/* Heart bullet used throughout the brochure */
+/* Script taglines — Great Vibes, emotional accents only */
+.script { font-family: var(--font-script); color: var(--gold-soft); }
+
+/* Heart motif — coral, the signature mark */
 .heart { color: var(--coral); }
+
+/* ---------- Line icons (Lucide — thin, rounded gold stroke) ---------- */
+.ico {
+  display: inline-block; width: 1.05em; height: 1.05em; vertical-align: -0.18em;
+  stroke: currentColor; fill: none; stroke-width: 1.75;
+  stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto;
+}
+/* Sized larger inside icon discs */
+.program .icon .ico, .card .icon .ico { width: 28px; height: 28px; }
+/* Coral for emotion / care icons; gold is the default */
+.icon.care { color: var(--coral); }
 
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: .5rem;
-  font-family: var(--font-body); font-weight: 600; font-size: 1rem;
-  padding: .8rem 1.5rem; border-radius: var(--radius-pill);
-  border: 2px solid transparent; cursor: pointer; transition: all var(--t);
+  font-family: var(--font-body); font-weight: 700; font-size: .875rem;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 15px 34px; border-radius: var(--radius-pill);
+  border: 1.5px solid transparent; cursor: pointer; transition: all var(--t);
   text-decoration: none;
 }
-.btn:hover { text-decoration: none; transform: translateY(-2px); }
-.btn-primary { background: var(--gold); color: #16110a; border-color: var(--gold); }
-.btn-primary:hover { background: var(--gold-soft); border-color: var(--gold-soft); }
+.btn:hover { text-decoration: none; }
+.btn-primary {
+  background: var(--grad-foil); color: #2a1c0a; border-color: transparent;
+  box-shadow: var(--shadow-gold);
+}
+.btn-primary:hover { filter: brightness(1.08); }
 .btn-outline { background: transparent; color: var(--accent-text); border-color: var(--gold); }
-.btn-outline:hover { background: rgba(214, 169, 76, .12); }
-.btn-coral { background: var(--coral); color: #fff; border-color: var(--coral); }
-.btn-coral:hover { background: var(--coral-deep); border-color: var(--coral-deep); }
+.btn-outline:hover { background: rgba(214, 162, 74, .12); }
+.btn-coral { background: var(--coral); color: #fff; border-color: var(--coral); box-shadow: var(--shadow-coral); }
+.btn-coral:hover { filter: brightness(1.06); }
 
 /* ---------- Header / nav ---------- */
 .site-header {
@@ -130,20 +180,26 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
   border-bottom: 1px solid var(--border);
 }
 .nav { display: flex; align-items: center; justify-content: space-between; height: 70px; gap: 1rem; }
-.brand { display: flex; flex-direction: column; line-height: 1; text-decoration: none; }
+.brand { display: flex; align-items: center; gap: .6rem; line-height: 1; text-decoration: none; }
 .brand:hover { text-decoration: none; }
+.brand-logo { height: 48px; width: auto; display: block; }
+.brand-name {
+  font-family: var(--font-display); font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; font-size: .95rem; color: var(--heading);
+}
+.brand-name .lljc { color: var(--coral); }
 .brand .name {
   font-family: var(--font-display); font-weight: 600; letter-spacing: .14em;
-  font-size: 1.05rem; color: var(--text);
+  font-size: 1.05rem; color: var(--heading);
 }
 .brand .tag { font-size: .62rem; letter-spacing: .22em; font-weight: 700; color: var(--coral); margin-top: 3px; }
 .nav-links { display: flex; align-items: center; gap: 1.4rem; list-style: none; margin: 0; padding: 0; }
-.nav-links a { color: var(--text); font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+.nav-links a { color: var(--text); font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
 .nav-links a:hover { color: var(--accent-text); text-decoration: none; }
 
 .theme-toggle {
   display: inline-grid; place-items: center; width: 40px; height: 40px;
-  border-radius: var(--radius-pill); border: 1px solid var(--border);
+  border-radius: 50%; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); cursor: pointer; font-size: 1.05rem;
   transition: all var(--t);
 }
@@ -153,13 +209,11 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
 /* ---------- Hero ---------- */
 .hero {
   position: relative; text-align: center; padding: clamp(70px, 12vw, 140px) 0;
-  background:
-    var(--hero-overlay),
-    radial-gradient(120% 80% at 50% 0%, rgba(214, 169, 76, .14), transparent 60%);
+  background: var(--hero-bg);
 }
 .hero .wordmark {
   font-family: var(--font-display); letter-spacing: .12em; font-weight: 600;
-  font-size: clamp(2.1rem, 6vw, 3.6rem); margin-bottom: .15em; color: var(--text);
+  font-size: clamp(2.1rem, 6vw, 3.6rem); margin-bottom: .15em; color: var(--heading);
 }
 .hero .wordmark .lljc { color: var(--coral); display: block; letter-spacing: .2em; font-size: .55em; margin-top: .25em; }
 
@@ -174,7 +228,7 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
 /* Fallback: if the light logo file isn't present yet, show the dark logo on a
    dark badge in the light theme so the hero never looks broken. */
 [data-theme="light"] .hero-logo-wrap.logo-light-missing {
-  background: #0e1319; padding: clamp(1.25rem, 3vw, 2rem);
+  background: #0c0a09; padding: clamp(1.25rem, 3vw, 2rem);
   border-radius: 24px; box-shadow: var(--shadow-soft);
 }
 [data-theme="light"] .hero-logo-wrap.logo-light-missing .logo-dark  { display: inline-block; }
@@ -186,24 +240,31 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
   padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 .hero .pillars {
-  font-family: var(--font-heading); font-weight: 600;
-  font-size: clamp(1.1rem, 2.6vw, 1.6rem); color: var(--accent-text); margin: 1rem 0 .25rem;
+  font-family: var(--font-display); font-weight: 600; letter-spacing: .08em;
+  font-size: clamp(1.05rem, 2.4vw, 1.5rem); color: var(--accent-text); margin: 1rem 0 .25rem;
 }
-.hero .script { font-family: var(--font-script); font-size: clamp(1.8rem, 4vw, 2.6rem); color: var(--gold-soft); }
+.hero .script { font-family: var(--font-script); font-size: clamp(1.9rem, 4vw, 2.6rem); color: var(--hero-script); }
 .hero .cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
 
 /* ---------- 988 crisis banner ---------- */
 .crisis {
-  background: var(--surface);
-  border-left: 5px solid var(--coral);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 1.1rem 1.4rem; margin: 0 auto; max-width: var(--maxw);
-  display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;
+  background: linear-gradient(135deg, #1a130d, #241006);
+  border: 1px solid rgba(224, 54, 76, .3);
+  border-radius: 18px;
+  padding: 1.2rem 1.5rem; margin: 0 auto; max-width: var(--maxw);
+  display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap;
 }
-.crisis .num { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; color: var(--coral); }
-.crisis p { margin: 0; color: var(--text); }
-.crisis .hope { color: var(--accent-text); font-weight: 600; }
+.crisis .num {
+  font-family: var(--font-display); font-size: 2rem; font-weight: 700;
+  letter-spacing: .04em; color: var(--coral); line-height: 1;
+}
+.crisis .num:hover { text-decoration: none; filter: brightness(1.1); }
+.crisis p { margin: 0; color: var(--cream); }
+.crisis .hope { color: var(--gold-soft); font-weight: 600; }
 .crisis-wrap { padding: 0 24px; margin-top: -28px; position: relative; z-index: 2; }
+
+/* Light theme keeps the dark crisis panel for urgency + contrast */
+[data-theme="light"] .crisis p { color: #f4ede0; }
 
 /* ---------- Cards & grids ---------- */
 .grid { display: grid; gap: 1.25rem; }
@@ -213,38 +274,51 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
 
 .card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-card); padding: 1.5rem;
-  transition: transform var(--t), border-color var(--t), box-shadow var(--t);
+  border-radius: var(--radius-card); padding: 30px 28px;
+  transition: border-color var(--t), box-shadow var(--t);
 }
-.card:hover { transform: translateY(-4px); border-color: var(--gold); box-shadow: var(--shadow-soft); }
-.card .icon { font-size: 1.6rem; margin-bottom: .5rem; }
-.card h3 { color: var(--text); margin-bottom: .35rem; }
-.card p { margin: 0; color: var(--text-muted); font-size: .98rem; }
+.card:hover { border-color: rgba(214, 162, 74, .45); box-shadow: var(--shadow-soft); }
+.card .icon {
+  width: 60px; height: 60px; border-radius: 50%; margin-bottom: 20px;
+  display: grid; place-items: center; color: var(--gold);
+  background: var(--disc); border: 1.5px solid var(--bronze);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, .6);
+}
+.card h3 { color: var(--heading); margin-bottom: .35rem; }
+.card p { margin: 0; color: var(--text-muted); font-size: .95rem; line-height: 1.6; }
+.card ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+.card li { margin-bottom: .4rem; color: var(--text-muted); }
 
-/* Program list (the 8 "What We Do" areas) */
+/* Program list (the 8 "What We Do" areas) — gold icon disc per spec */
 .program { display: flex; gap: .9rem; align-items: flex-start; }
 .program .icon {
-  flex: 0 0 auto; width: 44px; height: 44px; border-radius: var(--radius-pill);
-  display: grid; place-items: center; font-size: 1.3rem;
-  background: var(--surface-2); border: 1px solid var(--border);
+  flex: 0 0 auto; width: 60px; height: 60px; border-radius: 50%;
+  display: grid; place-items: center; color: var(--gold);
+  background: var(--disc); border: 1.5px solid var(--bronze);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, .6);
 }
+.program h3 { color: var(--heading); }
+.program p { color: var(--text-muted); margin: .25rem 0 0; }
 
 /* Donation chips */
 .chips { display: flex; gap: .75rem; flex-wrap: wrap; }
 .chip {
   display: inline-flex; align-items: center; gap: .5rem;
   background: var(--surface-2); border: 1px solid var(--gold);
-  color: var(--text); padding: .6rem 1.1rem; border-radius: var(--radius-pill);
-  font-weight: 600; transition: all var(--t);
+  color: var(--text); padding: .65rem 1.15rem; border-radius: var(--radius-pill);
+  font-weight: 700; transition: all var(--t);
 }
-.chip:hover { background: rgba(214,169,76,.12); text-decoration: none; }
+.chip:hover { background: rgba(214, 162, 74, .12); text-decoration: none; }
 
 /* Vision block */
 .vision {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-card); padding: clamp(2rem, 5vw, 3rem); text-align: center;
 }
-.vision .quote { font-family: var(--font-heading); font-style: italic; font-size: 1.35rem; color: var(--text); max-width: 50ch; margin: 1rem auto 0; }
+.vision .quote {
+  font-family: var(--font-subhead); font-style: italic; font-size: 1.6rem;
+  color: var(--text); max-width: 50ch; margin: 1rem auto 0; line-height: 1.4;
+}
 
 /* Two-column awareness lists */
 .awareness-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -253,7 +327,8 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
 
 /* Connect row */
 .connect-row { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; justify-content: center; }
-.connect-row a { font-weight: 600; }
+.connect-row a { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; }
+.connect-row .ico { width: 1.15em; height: 1.15em; }
 
 /* ---------- Footer ---------- */
 .site-footer {
@@ -261,8 +336,9 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
   padding: 3rem 0; margin-top: 2rem;
 }
 .footer-grid { display: flex; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
-.footer-brand .name { font-family: var(--font-display); letter-spacing: .12em; color: var(--text); font-size: 1.1rem; }
-.footer-brand .script { font-family: var(--font-script); font-size: 1.5rem; color: var(--accent-text); }
+.footer-logo { width: 92px; height: auto; margin-bottom: .85rem; }
+.footer-brand .name { font-family: var(--font-display); letter-spacing: .12em; color: var(--heading); font-size: 1.1rem; }
+.footer-brand .script { font-family: var(--font-script); font-size: 1.6rem; color: var(--accent-text); }
 .footer-right { text-align: right; }
 .footer-right .crisis-note { color: var(--coral); font-weight: 600; }
 .footer-meta { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.25rem; color: var(--text-muted); font-size: .85rem; }
@@ -283,10 +359,12 @@ section { padding: clamp(48px, 8vw, 96px) 0; }
 }
 @media (max-width: 540px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .brand-name { display: none; }   /* emblem alone keeps the header tidy on phones */
 }
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
-  .btn:hover, .card:hover { transform: none; }
 }
+</content>
+</invoke>
