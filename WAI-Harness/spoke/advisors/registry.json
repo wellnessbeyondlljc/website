@@ -1,0 +1,20 @@
+[
+  {
+    "advisor_id": "sage",
+    "title": "Sage - Spec Lug Curator",
+    "version": "0.1.0",
+    "status": "stub",
+    "department_id": null,
+    "role_type": "curator",
+    "reports_to": "ozi",
+    "direct_reports": [],
+    "preferred_model_class": "sonnet",
+    "activation": "all_spoke_types",
+    "run_schedule": "nightly",
+    "run_after": "gardener",
+    "event_triggers": [],
+    "relevance_conditions": [],
+    "last_run_at": null,
+    "self_reported_relevance": null
+  }
+]

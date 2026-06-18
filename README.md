@@ -44,7 +44,7 @@ detector) and wired into `index.html` — no placeholders remain.
 > directly from the QR bitmaps, so confidence is high.
 
 ## Confirmed values (from brochure)
-- Email: wellness.beyond.lljc@gmail.com
+- Email: info@wellnessbeyondlljc.org
 - Website: wellnessbeyondlljc.org
 - Crisis: 988 (call/text) · Crisis Text Line: text HOME to 741741
 
