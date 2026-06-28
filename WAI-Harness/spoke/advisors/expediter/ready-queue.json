@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "spoke_id": "wellnessbeyondlljc-website",
+  "generated_at": "2026-06-28T03:50:20.662315+00:00",
+  "priority_sequence": [
+    "teachings",
+    "work(initiative-scoped first)",
+    "scouting",
+    "refinement",
+    "triage"
+  ],
+  "priority_source": "WAI-Harness/spoke/local/tastegraph.json engagement-inbox-first",
+  "columns": {
+    "autonomous": [],
+    "needs_you": []
+  },
+  "display_labels": {
+    "autonomous": "no-user-needed",
+    "needs_you": "user-needed"
+  },
+  "counts": {
+    "total": 0,
+    "autonomous": 0,
+    "needs_you": 0
+  }
+}

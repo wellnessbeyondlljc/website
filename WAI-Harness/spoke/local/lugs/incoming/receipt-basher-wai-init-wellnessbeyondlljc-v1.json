@@ -1,0 +1,28 @@
+{
+  "id": "receipt-basher-wai-init-wellnessbeyondlljc-v1",
+  "type": "receipt",
+  "status": "completed",
+  "title": "basher completed your WAI init: added basher.json manifest + deployed live hooks",
+  "description": "Your spoke had WAI-Harness/spoke/managed canon + local/ but NO WAI-Harness/spoke/basher.json manifest, so `basher restore --live-hooks` was skipping it and the global SessionStart hook (${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh) errored on every startup ('not found'). basher (canon owner) made two cross-spoke edits to your tree, reported here per the cross-spoke receipt rule: (1) created WAI-Harness/spoke/basher.json (spoke identity: wheel_id=wellnessbeyondlljc-website, short=wbl, tier=client; hooks:[] empty; wiring → mywheel master/hub); (2) ran `basher restore --live-hooks`, deploying 14 managed hooks into .claude/hooks/ (session-start.sh, user-prompt-submit.sh, pre-tool-guard.sh, stop-*, pre-compact.sh, etc.).",
+  "priority": "P3",
+  "impact": 4,
+  "effort_score": 1,
+  "model": "haiku",
+  "acceptance_criteria": [
+    "AC1 WAI-Harness/spoke/basher.json exists and is valid JSON (verified)",
+    "AC2 .claude/hooks/session-start.sh present + executable; runs exit 0 on a SessionStart payload (verified)",
+    "AC3 startup no longer errors 'session-start.sh: not found'"
+  ],
+  "verify": [
+    "session-start.sh deployed (-rwxr-xr-x), runs exit 0 on {\"hook_event_name\":\"SessionStart\"}",
+    "restore --live-hooks: deployed=14"
+  ],
+  "target_files": [
+    "WAI-Harness/spoke/basher.json",
+    ".claude/hooks/ (14 hooks)"
+  ],
+  "notes": "Minor non-fatal: wakeup-canonical.sh emitted a stderr warning about a missing WAI-Harness/spoke/local/skills path (freshly-initialized spoke); session-start still exits 0. Adjust the manifest's spoke identity (short_name/alias/tier) if you'd prefer different values. Paired fleet fix: basher also guarded the global hook canon so a missing hook no-ops instead of erroring (change-lug to mywheel).",
+  "routed_to": "LOCAL",
+  "source_spoke": "basher",
+  "generated_by": "claude-opus-4-8"
+}

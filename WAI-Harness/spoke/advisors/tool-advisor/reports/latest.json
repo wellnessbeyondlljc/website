@@ -24,6 +24,7 @@
       "requires_human_review": true
     }
   ],
+  "auto_routed": [],
   "audit_pending": false,
   "audit_reason": ""
 }

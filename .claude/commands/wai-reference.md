@@ -1,4 +1,5 @@
 # WAI Wakeup Protocol — Reference
+> Fast path: load `wai-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 **Companion to `wai.md`.** Contains scripts, schemas, and verbose specs. Load on-demand.
 
@@ -57,7 +58,7 @@ WAI-Spoke/signals/
 **Track A — Hub signals → Framework** (framework is the receiver):
 ```
 Signal arrives → hub/WAI-Hub/signals/incoming/{framework|hub|spokes}/<id>.json
-Tender (wheel-tender.sh) detects signals via rglob → force-inserts framework
+Tender (Minder tender.py, cron 02:27) detects signals via rglob → force-inserts framework
   into the active spoke list regardless of recent activity
 Framework Pass 2 gets "Step 0: Process Hub Signals" injected into prompt
 Framework implements fix + generates teaching with signal_closes: <id> frontmatter

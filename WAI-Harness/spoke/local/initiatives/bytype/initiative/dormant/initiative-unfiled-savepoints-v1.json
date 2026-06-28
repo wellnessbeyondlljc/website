@@ -1,0 +1,11 @@
+{
+  "id": "initiative-unfiled-savepoints-v1",
+  "label": "Unfiled savepoints (needs operator triage)",
+  "description": "Auto-created bucket for legacy savepoints that carried no initiative_id. Triage and reassign or discard.",
+  "status": "open",
+  "lifecycle_state": "dormant",
+  "created_at": "2026-06-19T18:38:33.219607+00:00",
+  "created_by": "savepoint_migrate.py",
+  "needs_triage": true,
+  "wake_on": "operator review of migrated savepoint"
+}

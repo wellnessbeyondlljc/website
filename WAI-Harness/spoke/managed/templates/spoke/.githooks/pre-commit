@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# WAI pre-commit hook (Fable MR-2) — block secrets before they enter git history.
+# Installed by tools/install_git_hooks.py (sets core.hooksPath to this dir, or copies here).
+# Bypass a single commit with `git commit --no-verify` (use sparingly, and rotate if real).
+set -u
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+# Locate the managed tools dir across harness layouts (v4 first, then v3, then flat).
+scanner=""
+for cand in \
+  "$repo_root/WAI-Harness/spoke/managed/tools/secret_precommit_scan.py" \
+  "$repo_root/tools/secret_precommit_scan.py" \
+  "$repo_root/WAI-Spoke/tools/secret_precommit_scan.py"; do
+  if [ -f "$cand" ]; then scanner="$cand"; break; fi
+done
+
+rc=0
+if [ -n "$scanner" ]; then
+  python3 "$scanner" --staged || rc=1
+else
+  echo "WAI pre-commit: secret_precommit_scan.py not found — secret scan SKIPPED." >&2
+fi
+
+# Chain the existing health gate if present (non-fatal: it guards drift, not secrets).
+health=""
+for cand in \
+  "$repo_root/WAI-Harness/spoke/managed/tools/pre_commit_health.py" \
+  "$repo_root/tools/pre_commit_health.py"; do
+  if [ -f "$cand" ]; then health="$cand"; break; fi
+done
+if [ -n "$health" ]; then
+  python3 "$health" "$repo_root" || echo "WAI pre-commit: health gate reported drift (non-blocking)." >&2
+fi
+
+if [ "$rc" -ne 0 ]; then
+  echo "WAI pre-commit: commit blocked by secret scan. Fix or rotate the secret above." >&2
+fi
+exit "$rc"

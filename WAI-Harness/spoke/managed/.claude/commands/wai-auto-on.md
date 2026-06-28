@@ -21,8 +21,10 @@ When enabled, Ozi:
 
 ## Protocol
 
+> **Runtime base** is the active harness: `WAI-Harness/spoke/local/runtime/` on v4 spokes (legacy v3 spokes only: `WAI-Spoke/runtime/`). Never write the v3 path on a v4 spoke — it resurrects a `WAI-Spoke/` phantom (P12 savepoint-circuit breaker).
+
 1. Determine the current session key using Ozi's runtime logic.
-2. Write/update `WAI-Spoke/runtime/ozi-sessions/<session-key>.json` with:
+2. Write/update `WAI-Harness/spoke/local/runtime/ozi-sessions/<session-key>.json` with:
    - `auto_mode: true`
    - current `max_parallel` (default 1 if unset)
    - `watch_mode: true`

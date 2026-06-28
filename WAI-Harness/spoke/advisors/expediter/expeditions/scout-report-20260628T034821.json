@@ -1,0 +1,26 @@
+{
+  "id": "scout-report-20260628T034821",
+  "type": "scout_report",
+  "status": "open",
+  "title": "Scout expedition report (0 unmet expectations; trigger: forced (--hygiene/--all))",
+  "routed_to": "LOCAL",
+  "authored_by": "session-d5cfedfd.expediter-scout",
+  "authored_kind": "agent",
+  "created_at": "2026-06-28T03:48:21.559406+00:00",
+  "scout_report": true,
+  "trigger": "forced (--hygiene/--all)",
+  "scanned": {
+    "open_lugs": 0,
+    "findings": 0
+  },
+  "principle": "Chase each artifact's declared expectation and verify it is satisfied. No invented work.",
+  "findings": [],
+  "findings_by_producer": {},
+  "verification_debt_reported": {
+    "deployed_unverified": 0,
+    "spec_drift": 0,
+    "abandoned": 0
+  },
+  "auto_refinement_lug": null,
+  "needs_user_judgment": []
+}

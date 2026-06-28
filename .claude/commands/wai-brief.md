@@ -51,6 +51,21 @@ Read last session `track.jsonl` for `decisions[]`.
 
 Output using the **Synopsis template** from reference file.
 
+**Code Structure (conditional):** If `StructureContext.md` exists in the project root, append this block at the end of the synopsis output:
+
+```
+## Code Structure
+
+Structural context for this spoke is in `StructureContext.md` (repo root).
+Feed it alongside this brief when the external session needs to understand
+module boundaries, call chains, or blast radius before designing changes.
+
+If live MCP is available: `context`, `impact`, and `query` tools give
+real-time graph data beyond what the snapshot contains.
+```
+
+If `StructureContext.md` does not exist, omit this section silently.
+
 ### Step 3 (Topic Mode): Build Topic-Focused Brief
 
 Search active lugs, current session track, and WAI-State.json for topic keywords.

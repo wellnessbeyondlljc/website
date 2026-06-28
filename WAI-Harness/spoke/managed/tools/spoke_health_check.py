@@ -581,14 +581,21 @@ def run_health_check(spoke_path: str, mode: str = "full") -> HealthReport:
     report = HealthReport(spoke_path, mode)
     path = Path(spoke_path).resolve()
 
-    # Find WAI-Spoke
-    if (path / "WAI-Spoke").exists():
-        wai_spoke = path / "WAI-Spoke"
-    elif path.name == "WAI-Spoke":
+    # Resolve the active working base via the canonical resolver. PRE-FIX this only
+    # looked for WAI-Spoke/ — on a v4-only spoke (base = WAI-Harness/spoke/local) it
+    # FAILED at init and the ENTIRE health check no-op'd, so every nightly / pre-commit
+    # / wai-health gate passed by doing NOTHING (a silent soft-feature: false green).
+    if path.name == "WAI-Spoke":              # invoked directly on a v3 base dir
         wai_spoke = path
     else:
-        report.add("init", "structure", "FAIL", f"No WAI-Spoke/ found at {path}")
-        return report
+        from tools import wai_paths as _wp
+        base, _active = _wp.resolve_wai_root(str(path))
+        if base and _active != "none":
+            wai_spoke = Path(base)            # v4: WAI-Harness/spoke/local ; v3: WAI-Spoke
+        else:
+            report.add("init", "structure", "FAIL",
+                       f"No WAI working base (WAI-Harness/ or WAI-Spoke/) found at {path}")
+            return report
 
     # Always run: structure, stale files, skill registry
     check_structure(report, wai_spoke)

@@ -69,6 +69,22 @@ def detect(spoke_root=".", override=None):
                 info["v4_managed_verify"] = {"ok": None, "note": "no MANIFEST.json"}
         except Exception as e:
             info["v4_managed_verify"] = {"ok": None, "note": f"verify unavailable: {e}"}
+
+        # master<->spoke version drift (impl-harness-couple-version-cut-and-adoption-gate-v1):
+        # make 'spoke behind/ahead of master' observable instead of discovered by a hand-run
+        # pull. Reports both harness_versions + an in_sync verdict; silent-skip if unresolved.
+        try:
+            import harness_upgrade as hu  # noqa: F811
+            spoke_ver = hu.load_manifest(managed).get("harness_version") if mpath.exists() else None
+            master_managed = hu._resolve_managed(hu.resolve_master(str(root)), "spoke")
+            mm = Path(master_managed) / hu.MANIFEST_NAME
+            master_ver = hu.load_manifest(master_managed).get("harness_version") if mm.exists() else None
+            info["version_drift"] = {
+                "spoke": spoke_ver, "master": master_ver,
+                "in_sync": (spoke_ver == master_ver) if (spoke_ver and master_ver) else None,
+            }
+        except Exception as e:
+            info["version_drift"] = {"spoke": None, "master": None, "in_sync": None, "note": str(e)}
     return info
 
 
@@ -88,6 +104,14 @@ def render(info):
                          "(v3 overlap covers until patched)")
         else:
             lines.append(f"  v4 managed: {mv.get('note')}")
+    vd = info.get("version_drift")
+    if vd and (vd.get("spoke") or vd.get("master")):
+        if vd.get("in_sync") is True:
+            lines.append(f"  version:    {vd['spoke']} (in sync with master)")
+        elif vd.get("in_sync") is False:
+            lines.append(f"  version:    spoke {vd['spoke']} != master {vd['master']} — DRIFT (pull to sync)")
+        else:
+            lines.append(f"  version:    spoke {vd.get('spoke')} / master {vd.get('master')} (drift unknown)")
     if info["mode"] == "coexist":
         lines.append("  coexistence: v3 + v4 both available; set WAI_HARNESS_MODE=v3|v4 to pin the active one")
     return "\n".join(lines)

@@ -17,9 +17,27 @@ import os
 import sqlite3
 import sys
 import uuid
+from pathlib import Path
 
-DEFAULT_DB = "WAI-Spoke/managed/harness.db"
-DEFAULT_JOURNAL = "WAI-Spoke/managed/events-journal.jsonl"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _managed_base(spoke_root="."):
+    """The dir holding harness.db + the events journal, base-aware. On a v4 spoke
+    this resolves to WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke default
+    silently read/wrote a nonexistent tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root) / "managed"
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke" / "managed"  # last-resort v3 fallback
+
+
+DEFAULT_DB = str(_managed_base() / "harness.db")
+DEFAULT_JOURNAL = str(_managed_base() / "events-journal.jsonl")
 EVENT_COLS = ("event_id", "ts", "spoke", "session", "actor", "type",
               "subject_ref", "status", "evidence", "correlation_id", "parent_event")
 

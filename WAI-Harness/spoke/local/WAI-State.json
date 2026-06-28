@@ -2,11 +2,13 @@
   "wheel": {
     "wheel_id": "wellnessbeyondlljc-website",
     "name": "Wellness Beyond LLJC Website",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "structure_version": "v4",
     "status": "active",
     "description": "Static marketing/support website for the Wellness Beyond #LLJC youth-wellness nonprofit. Multi-page (home + crisis resources), light/dark themed, content derived verbatim from the org brochure. Served locally via a Bun static server behind Caddy at http://wbl.local/.",
-    "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub"
+    "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub",
+    "last_modified_at": "2026-06-28T05:00:48Z",
+    "last_modified_by": "claude-opus-4-8"
   },
   "_project_foundation": {
     "completed": true,
@@ -44,21 +46,35 @@
     ]
   },
   "_session_state": {
-    "session_count": 1,
-    "last_session_id": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
-    "last_closeout": "2026-06-16T04:02:43Z",
-    "next_session_recommendation": "Ask if verify list answered; apply + add VERIFY.md",
+    "session_count": 2,
+    "last_session_id": "session-20260628-0357",
+    "last_closeout": "2026-06-28T05:00:48Z",
+    "next_session_recommendation": "SEO foundation shipped (sitemap, robots, OG/Twitter, JSON-LD NGO schema, 404, hero social image). Next: (1) submit sitemap in Google Search Console after domain verification; (2) claim/verify Google Business Profile; (3) add EIN + nonprofitStatus to JSON-LD once the 501(c)(3) number is available.",
     "last_savepoint": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
     "requires_review": false,
     "mode": "execution",
-    "track_path": "WAI-Harness/spoke/local/sessions/0cc6d5c6-0175-44b8-8098-8dbb47a349e1/track.jsonl"
+    "track_path": "WAI-Harness/spoke/local/sessions/session-20260628-0357/track.jsonl"
   },
   "feature_toggles": {},
-  "_work_queue": {},
+  "_work_queue": {
+    "items": [],
+    "queue_state": {
+      "ready_count": 0,
+      "needs_refinement_count": 0,
+      "blocked_count": 0,
+      "stalled_count": 0
+    },
+    "last_scored_at": "2026-06-28T05:00:48.837725+00:00"
+  },
   "_savepoint": {
     "active_ids": [
       "sp-0cc6d5c6-0175-44b8-8098-8dbb47a349e1-built-shipped-wellness"
     ],
     "count": 1
+  },
+  "_session_status": {
+    "status": "clean",
+    "clean_at": "2026-06-28T05:01:33.588801Z",
+    "interrupted_session": null
   }
 }

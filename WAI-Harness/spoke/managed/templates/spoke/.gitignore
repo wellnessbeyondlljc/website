@@ -24,3 +24,73 @@ ENV/
 **/.env.*.local
 **/.claude/settings.local.json
 **/.claude/.provider
+
+# === Secrets & artifacts baseline (Fable MR-1) — never commit ===
+# Root cause of the fleet's #1 risk: an absent/one-line .gitignore. This block is the
+# reusable baseline. Keep templates tracked via the negations; everything else is ignored.
+# env files (all variants) — but keep the committed templates
+**/.env
+**/.env.*
+!**/.env.template
+!**/.env.example
+!**/.env.sample
+# private keys / certs / keystores
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+# cloud / service credentials & tokens
+**/credentials.json
+**/client_secret*.json
+**/service-account*.json
+**/*-service-account*.json
+**/gha-creds-*.json
+token.json
+*.token
+*token*.pickle
+*.pickle
+*.pkl
+.aws/
+.gcloud/
+gcloud-*.json
+# browser credential stores / OS cruft / Windows
+**/Login Data
+**/Cookies
+*:Zone.Identifier
+Thumbs.db
+desktop.ini
+# build artifacts / dependencies (regenerable)
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+# runtime data dumps (the nurturator/pathfinder leak class) — un-ignore tracked sets with !data/<path>
+**/data/runtime/
+**/*.sqlite
+**/*.sqlite3
+# === END Secrets & artifacts baseline ===
+
+# === WAI managed: regenerable advisor/runtime state (idempotent block) ===
+WAI-Harness/spoke/local/runtime/
+WAI-Harness/spoke/local/wakeup-brief.json
+WAI-Harness/spoke/advisors/*/scan_state.json
+WAI-Harness/spoke/advisors/*/passes.jsonl
+WAI-Harness/spoke/advisors/*/vectors.jsonl
+WAI-Harness/spoke/advisors/*/findings-log.jsonl
+WAI-Harness/hub/local/WAI-Hub/advisors/*/scan_state.json
+WAI-Harness/hub/local/WAI-Hub/advisors/*/passes.jsonl
+WAI-Harness/hub/local/WAI-Hub/advisors/*/vectors.jsonl
+WAI-Harness/hub/local/WAI-Hub/advisors/*/findings-log.jsonl
+WAI-Harness/hub/local/autopilot/wheel-activity.html
+WAI-Harness/hub/local/autopilot/runs.jsonl
+# v3 fallback
+WAI-Spoke/runtime/
+WAI-Spoke/advisors/*/scan_state.json
+# === END WAI managed ===

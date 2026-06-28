@@ -38,6 +38,43 @@ def _git_user() -> str | None:
         return None
 
 
+def resolve_worktree_origin(spoke_path: str | os.PathLike = ".") -> dict:
+    """Where does this lug physically live RIGHT NOW — which git worktree + branch + sha.
+
+    Stamped at creation and refreshed on every mutating write (bump_rev) so a lug
+    always carries the worktree it was last touched in. The fleet runs many concurrent
+    sessions, each in its own worktree (.worktrees/<name>) on its own branch; a lug
+    created/advanced in worktree A on an unmerged branch is invisible from worktree B.
+    Recording origin lets a reconciler (lug_worktree_map.py) answer "where is this work
+    spread, and which worktree/branch must I check out to handle it?" — instead of work
+    silently stranding on a branch nobody merges (the 8-worktree / 7-branch drift, S135).
+
+    Fails soft: outside a git repo, returns the path with null git fields (never raises).
+    """
+    cwd = str(spoke_path) if spoke_path and str(spoke_path) != "." else os.getcwd()
+
+    def _git(*args):
+        try:
+            out = subprocess.run(["git", "-C", cwd, *args],
+                                 capture_output=True, text=True, timeout=3)
+            return out.stdout.strip() if out.returncode == 0 else None
+        except Exception:
+            return None
+
+    # worktree root = top of THIS working tree (each worktree has its own), so
+    # .worktrees/<name> resolves to itself rather than the shared main checkout.
+    wt_root = _git("rev-parse", "--show-toplevel")
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    sha = _git("rev-parse", "--short", "HEAD")
+    return {
+        "worktree": wt_root,
+        "worktree_name": (os.path.basename(wt_root) if wt_root else None),
+        "branch": (branch if branch and branch != "HEAD" else None),
+        "git_sha": sha,
+        "stamped_at": _now_iso(),
+    }
+
+
 def _wai_session_id(spoke_path: str | os.PathLike = ".") -> str:
     """Resolve the current WAI session id: env override, else the most recent
     sessions/ track dir, else a uuid-derived fallback."""
@@ -284,6 +321,10 @@ def bump_rev(lug: dict, now_iso: str | None = None) -> dict:
     cur = lug.get("rev")
     lug["rev"] = (cur + 1) if isinstance(cur, int) else 1
     lug["updated_at"] = now_iso or _now_iso()
+    # refresh where this lug now lives — the worktree/branch doing this write is, by
+    # definition, where the lug currently is. Keeps origin accurate as work moves
+    # between worktrees so reconciliation can always locate it.
+    lug["origin"] = resolve_worktree_origin()
     return lug
 
 

@@ -2,6 +2,13 @@
 
 **Secondary file. Load on-demand only — not needed for standard closeout execution.**
 
+> **Harness-mode-aware paths:** `{BASE}` below is the active spoke's data-tree base —
+> `WAI-Harness/spoke/local` on a v4-only spoke, `WAI-Spoke` on v3/coexist. Resolve it once
+> (`BASE=$(python3 WAI-Harness/spoke/managed/tools/wai_paths.py --root . --json | python3 -c "import json,sys; print(json.load(sys.stdin).get('_base') or '')")`;
+> fall back to `WAI-Harness/spoke/local` if that dir exists, else `WAI-Spoke`). Tools resolve as
+> `TOOLS="WAI-Harness/spoke/managed/tools"; [ -d "$TOOLS" ] || TOOLS="tools"`. Never hardcode
+> `WAI-Spoke/` — on a v4-only spoke it does not exist.
+
 ---
 
 ## Teaching File Format (Step 9b)
@@ -101,7 +108,7 @@ Placement: after first `---`, before `## What This Teaching Provides`.
 
 **Gap:** Teaching `skill-wai-closeout-health-report-v1` distributed the Step 9d instructions to spokes but did NOT distribute the `health-check.jsonl` file. Spokes with Step 9d silently skip because the file isn't found. Step 9d was also removed from the canonical `templates/commands/wai-closeout.md` during the thrift rewrite.
 
-**To activate:** Create a teaching that plants `health-check.jsonl` at `WAI-Spoke/health-check.jsonl` on target spokes and updates Step 9d's load path accordingly.
+**To activate:** Create a teaching that plants `health-check.jsonl` at `{BASE}/health-check.jsonl` on target spokes and updates Step 9d's load path accordingly.
 
 When implemented: run health checks, score PASS/total, write health lug to hub. Thresholds: healthy=100%, degraded=80-99%, critical=<80%.
 

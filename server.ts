@@ -53,7 +53,18 @@ function handler(req: Request): Promise<Response> | Response {
     if (!(await file.exists()) && !pathname.includes(".")) {
       file = Bun.file(ROOT + pathname + ".html"); // pretty "/page" -> "/page.html"
     }
-    if (await file.exists()) return new Response(file);
+    if (await file.exists()) {
+      // Bun.file infers content-type from most extensions, but not .webmanifest —
+      // browsers require application/manifest+json or they ignore the manifest.
+      if (pathname.endsWith(".webmanifest")) {
+        return new Response(file, { headers: { "Content-Type": "application/manifest+json" } });
+      }
+      return new Response(file);
+    }
+    const notFound = Bun.file(ROOT + "/404.html");
+    if (await notFound.exists()) {
+      return new Response(notFound, { status: 404, headers: { "Content-Type": "text/html;charset=utf-8" } });
+    }
     return new Response("404 — Not Found", { status: 404, headers: { "Content-Type": "text/plain" } });
   })();
 }

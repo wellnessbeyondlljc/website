@@ -1,0 +1,6 @@
+# Wellness Beyond #LLJC
+# Allow all crawlers full access.
+User-agent: *
+Allow: /
+
+Sitemap: https://wellnessbeyondlljc.org/sitemap.xml

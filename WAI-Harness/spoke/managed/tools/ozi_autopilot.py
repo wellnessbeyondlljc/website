@@ -35,6 +35,20 @@ from wai_ozi_config import OziConfig  # noqa: E402
 from wai_ozi_scanner import OziScanner  # noqa: E402
 from wai_ozi_dispatch import OziDispatch  # noqa: E402
 from lug_utils import evaluate_execute_when  # noqa: E402
+from wai_paths import resolve_wai_root, advisors_dir  # noqa: E402  (v3/v4 resolver)
+
+
+def _v4_safe_root(spoke_path):
+    """resolve_wai_root with a v4-aware fallback: never returns a phantom WAI-Spoke on
+    a v4-activated spoke (WAI-Harness/spoke/local or .activated marker present). The old
+    `or (spoke_path/'WAI-Spoke')` fallback created dead trees fleet-wide (gap-001/002)."""
+    root = resolve_wai_root(str(spoke_path))[0]
+    if root:
+        return Path(root)
+    sp = Path(spoke_path) / "WAI-Harness" / "spoke"
+    if (sp / "local").is_dir() or (sp / ".activated").exists():
+        return sp / "local"
+    return Path(spoke_path) / "WAI-Spoke"
 
 # Goal queue integration (optional — graceful fallback if module absent)
 try:
@@ -110,6 +124,8 @@ class AutopilotResult:
     gitnexus_freshness_checked: bool = False
     gitnexus_impact_warnings: List[Dict[str, Any]] = field(default_factory=list)
     skipped_no_work: bool = False
+    advisor_fallback: bool = False          # ready=0 round redirected to scout work
+    advisor_fallback_jobs: int = 0          # scout jobs generated on that path
 
 
 @dataclass
@@ -464,7 +480,7 @@ class Phase6WheelMode:
                 print(f"[wheel-mode] spoke path not found for {wheel_id}: {spoke_path}", file=sys.stderr)
                 continue
 
-            incoming_dir = spoke_path / "WAI-Spoke" / "lugs" / "incoming"
+            incoming_dir = _v4_safe_root(spoke_path) / "lugs" / "incoming"
             try:
                 incoming_dir.mkdir(parents=True, exist_ok=True)
             except OSError as exc:
@@ -645,7 +661,7 @@ class Phase6WheelMode:
         for wheel in cohort_0:
             wheel_id = wheel["wheel_id"]
             spoke_path = Path(wheel["path"])
-            spoke_incoming = spoke_path / "WAI-Spoke" / "lugs" / "incoming"
+            spoke_incoming = _v4_safe_root(spoke_path) / "lugs" / "incoming"
             if not spoke_path.exists():
                 print(f"[wheel-mode] rfc: spoke path not found for {wheel_id}", file=sys.stderr)
                 continue
@@ -669,15 +685,15 @@ class Phase6WheelMode:
                     f"1. Copy updated skill files from {self.hub_path}/WAI-Spoke/hub/harness/bootstrap/v{new_version}/ "
                     f"to this spoke's templates/commands/ directory (dry_run_safe=false, skip in dry_run).\n"
                     f"2. Update wheel.harness_version to '{new_version}' in WAI-State.json (dry_run_safe=false, skip in dry_run).\n"
-                    f"3. Write rfc_response to WAI-Spoke/lugs/outgoing/rfc-response-{lug_id}.json — see learn_directive.rfc_response_schema for required fields (dry_run_safe=true, always execute).\n"
+                    f"3. Write rfc_response to WAI-Harness/spoke/local/lugs/outgoing/rfc-response-{lug_id}.json — see learn_directive.rfc_response_schema for required fields (dry_run_safe=true, always execute).\n"
                     f"4. Commit with message: 'chore: harness migration to v{new_version}' (dry_run_safe=false, skip in dry_run)."
                 ),
                 "verify": (
-                    f"python3 -c \"import json; r=json.load(open('WAI-Spoke/lugs/outgoing/rfc-response-{lug_id}.json')); "
+                    f"python3 -c \"import json; r=json.load(open('WAI-Harness/spoke/local/lugs/outgoing/rfc-response-{lug_id}.json')); "
                     f"assert r.get('type')=='rfc_response'\""
                 ),
                 "acceptance_criteria": [
-                    "rfc_response written to WAI-Spoke/lugs/outgoing/ with all schema fields",
+                    "rfc_response written to WAI-Harness/spoke/local/lugs/outgoing/ with all schema fields",
                     "dry_run_safe=false steps skipped (no actual file changes in dry_run)",
                     "dry_run_result.success=true even if no files changed (dry_run mode)",
                 ],
@@ -848,8 +864,16 @@ class OziAutopilot:
         scout_if_empty: bool = False,
         provider: str = "anthropic",
     ) -> None:
-        self.spoke_root = spoke_path          # project root (contains WAI-Spoke/)
-        self.spoke_wai = spoke_path / "WAI-Spoke"
+        self.spoke_root = spoke_path          # project root (contains WAI-Spoke/ or WAI-Harness/)
+        # v3/v4-aware (s131): resolver returns WAI-Spoke while it exists (coexist→v3),
+        # WAI-Harness/spoke/local once WAI-Spoke is archived / when WAI_HARNESS_MODE=v4-only.
+        # Advisors live BESIDE the base in v4 (WAI-Harness/spoke/advisors), under it in v3 —
+        # resolve separately so v4 scout/crew output never lands in a phantom WAI-Spoke tree.
+        _base, _mode = resolve_wai_root(str(spoke_path))
+        self.spoke_wai = Path(_base) if _base else _v4_safe_root(spoke_path)
+        _adv = advisors_dir(str(spoke_path))
+        self.spoke_advisors = Path(_adv) if _adv else (self.spoke_advisors)
+        self.harness_mode = _mode
         self.budget = budget
         self.hub_dir = hub_dir                # may be None until Phase 0 sets it
         self.dry_run = dry_run
@@ -904,7 +928,7 @@ class OziAutopilot:
 
         # Key paths
         self.state_file = self.spoke_wai / "WAI-State.json"
-        self.autopilot_dir = self.spoke_wai / "advisors" / "autopilot"
+        self.autopilot_dir = self.spoke_advisors / "autopilot"
         self.activity_log = self.autopilot_dir / "activity-log.jsonl"
         self.scan_state_path = self.autopilot_dir / "scan_state.json"
 
@@ -1088,7 +1112,7 @@ class OziAutopilot:
                 hub_path / "WAI-Spoke" / "advisors" / "navigator" / "recommendations-current.json"
             )
         candidates.append(
-            self.spoke_wai / "advisors" / "navigator" / "recommendations-current.json"
+            self.spoke_advisors / "navigator" / "recommendations-current.json"
         )
 
         data: Optional[Dict[str, Any]] = None
@@ -1522,12 +1546,30 @@ class OziAutopilot:
         except (ValueError, TypeError):
             return True
 
+    def _advisor_fundable(self, aid: str) -> bool:
+        """Forward-movement gate (operator s132): spend AP tokens warming an advisor ONLY
+        when it CAN produce — it has a context_prompt.md/charter.md to scan from — and is
+        not contract-retired (advisors/<id>/contract.json status=retired or fund=false).
+        Skips stub advisor dirs (no prompt -> the warm-up scout no-ops = pure token waste;
+        e.g. ezorg has 16/17 stubs). Conservative: a dir with a prompt and no contract stays
+        fundable, so spokes keep evolving while undefined/unproductive advisors are starved."""
+        adir = self.spoke_advisors / aid
+        contract = adir / "contract.json"
+        if contract.exists():
+            try:
+                c = json.loads(contract.read_text())
+                if c.get("retired") or c.get("status") == "retired" or c.get("fund") is False:
+                    return False
+            except (OSError, json.JSONDecodeError):
+                pass
+        return (adir / "context_prompt.md").exists() or (adir / "charter.md").exists()
+
     def _due_advisors(self, now: datetime) -> List[Tuple[Dict[str, Any], str]]:
         """Reuse advisor_schedule_eval to find advisors due to fire (cadence +
         event triggers). Returns [(entry, reason)] sorted most-stale first
         (never-run before largest days-since). Synthesis (after_subordinates)
         entries are skipped — they have no direct specialty scan."""
-        sched_path = self.spoke_wai / "advisors" / "schedule-index.json"
+        sched_path = self.spoke_advisors / "schedule-index.json"
         if not sched_path.exists():
             return []
         try:
@@ -1582,6 +1624,31 @@ class OziAutopilot:
         due.sort(key=_staleness)
         return due
 
+    def _v4ize_lug(self, lug: Dict[str, Any]) -> Dict[str, Any]:
+        """Rewrite stale v3 'WAI-Spoke/...' instruction paths in a minted scout lug to the
+        active v4 layout, so the dispatched haiku agent reads the REAL advisor home
+        (WAI-Harness/spoke/advisors/<id>/) instead of a non-existent WAI-Spoke/ path — the
+        bug that left advisor warm-ups firing repeatedly but no-op'ing (advisors stuck
+        dormant: e.g. architecture_oversight had 15 'completed' scout lugs, 0 actual runs).
+        No-op on a genuine v3 spoke."""
+        if "WAI-Harness" not in str(self.spoke_wai):
+            return lug
+        def fix(s):
+            if not isinstance(s, str):
+                return s
+            return (s.replace("WAI-Spoke/advisors", "WAI-Harness/spoke/advisors")
+                     .replace("WAI-Spoke/lugs", "WAI-Harness/spoke/local/lugs")
+                     .replace("WAI-Spoke/", "WAI-Harness/spoke/local/"))
+        def walk(v):
+            if isinstance(v, str):
+                return fix(v)
+            if isinstance(v, list):
+                return [walk(x) for x in v]
+            if isinstance(v, dict):
+                return {k: walk(x) for k, x in v.items()}
+            return v
+        return walk(lug)
+
     def _run_advisor_scouting(self, open_lugs: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
         """Generate haiku scout jobs in foundation-first order:
           (a) hygiene/PEV-verification  (b) coverage eval  (c) advisor warm-ups
@@ -1598,6 +1665,7 @@ class OziAutopilot:
             return any(pred(l) for l in open_lugs) or any(pred(g) for g in generated)
 
         def emit(lug: Dict[str, Any]) -> None:
+            lug = self._v4ize_lug(lug)   # rewrite stale v3 WAI-Spoke/ instruction paths -> v4
             if not self.dry_run:
                 dest.mkdir(parents=True, exist_ok=True)
                 (dest / f"{lug['id']}.json").write_text(json.dumps(lug, indent=2))
@@ -1608,7 +1676,7 @@ class OziAutopilot:
         # a hygiene scout here; it retains only crew-health scouts (b)-(d).
 
         # Load Ozi team-coverage state once for (b) and (d)
-        ozi_scan_path = self.spoke_wai / "advisors" / "ozi" / "scan_state.json"
+        ozi_scan_path = self.spoke_advisors / "ozi" / "scan_state.json"
         ozi_state: Dict[str, Any] = {}
         if ozi_scan_path.exists():
             try:
@@ -1641,6 +1709,8 @@ class OziAutopilot:
             aid = entry.get("advisor_id")
             if not aid:
                 continue
+            if not self._advisor_fundable(aid):
+                continue  # forward-movement gate: skip stubs / contract-retired (no token waste)
             if already_open(lambda l, a=aid: l.get("advisor_scout") and l.get("advisor_id") == a):
                 continue
             emit(self._build_scout_run_lug(entry, reason))
@@ -1705,7 +1775,7 @@ class OziAutopilot:
     def _phase0c_check_work_availability(self) -> bool:
         """Check if there is dispatchable work. Returns True if work exists or file is missing.
         Returns False (skip work) if has_work is explicitly False in manifest."""
-        manifest_path = self.spoke_wai / "advisors" / "expediter" / "work-availability.json"
+        manifest_path = self.spoke_advisors / "expediter" / "work-availability.json"
 
         if not manifest_path.exists():
             print("[autopilot] phase 0c: work-availability.json missing — proceeding normally", file=sys.stderr)
@@ -2047,12 +2117,24 @@ class OziAutopilot:
             if paths:
                 lug["target_files"] = list(dict.fromkeys(paths))
                 changed = True
-        # (d) acceptance_criteria from verify
+        # (d) acceptance_criteria derived from verify — split into DISCRETE testable
+        #     conditions (not one blob) so the groomed lug actually passes quality and
+        #     stops being re-flagged auto_groomable by the expediter scout every round
+        #     (the groom-gap-expediter-churn fix; sp-session-20260614-0117).
         if not lug.get("acceptance_criteria") and lug.get("verify"):
             v = lug["verify"]
-            lug["acceptance_criteria"] = v if isinstance(v, list) else [str(v)]
+            if isinstance(v, list):
+                criteria = [str(c).strip() for c in v if str(c).strip()]
+            else:
+                # split prose verify on sentence/clause boundaries into 2-4 conditions
+                parts = _re.split(r"(?<=[.;])\s+|\s+\bAND\b\s+", str(v))
+                criteria = [p.strip().rstrip(".") for p in parts if len(p.strip()) > 8][:4]
+                if not criteria:
+                    criteria = [str(v).strip()]
+            lug["acceptance_criteria"] = criteria
             changed = True
         if changed:
+            lug["_was_auto_filled"] = True  # truthful telemetry: auto_filled count was always 0 before
             lug_path = lug.get("_lug_path")
             if lug_path and Path(lug_path).exists():
                 data = json.loads(Path(lug_path).read_text())
@@ -2339,7 +2421,7 @@ class OziAutopilot:
         and return the set of lug ids in the needs-you column. Autopilot must never
         auto-dispatch these — they go to the user. Empty set when the file is absent
         (legacy fallback). spec-expediter-work-categorization-matrix-v1."""
-        rq_path = self.spoke_wai / "advisors" / "expediter" / "ready-queue.json"
+        rq_path = self.spoke_advisors / "expediter" / "ready-queue.json"
         if not rq_path.exists():
             return set()
         try:
@@ -2352,7 +2434,7 @@ class OziAutopilot:
         """Return lug ids in any 'attended' cell of the 2x4 work-queue.json.
         Attended items require user attention; autopilot should skip them.
         Returns empty set when work-queue.json is absent (graceful fallback)."""
-        wq_path = self.spoke_wai / "advisors" / "expediter" / "work-queue.json"
+        wq_path = self.spoke_advisors / "expediter" / "work-queue.json"
         if not wq_path.exists():
             return set()
         try:
@@ -2515,7 +2597,11 @@ class OziAutopilot:
                 completed_lug_objects.append(lug)
                 # Post-execution: verify rfc_response written for learn_directive lugs
                 if learn_directive:
-                    rfc_out = self.spoke_root / "WAI-Spoke" / "lugs" / "outgoing" / f"rfc-response-{lug_id}.json"
+                    # v4-aware: self.spoke_wai resolves to WAI-Harness/spoke/local on v4
+                    # spokes (and WAI-Spoke while it still exists in coexist/v3). The old
+                    # hardcoded self.spoke_root/"WAI-Spoke" checked a phantom tree on v4
+                    # spokes so this verifier always logged "rfc_response not found".
+                    rfc_out = self.spoke_wai / "lugs" / "outgoing" / f"rfc-response-{lug_id}.json"
                     if rfc_out.exists():
                         print(f"[autopilot]   rfc_response written: {rfc_out.name}", file=sys.stderr)
                     else:
@@ -2602,6 +2688,15 @@ class OziAutopilot:
             )
 
         # Append RFC response step (always execute — dry_run_safe=true)
+        # v4-aware outgoing dir: instruct the subagent to write exactly where the
+        # post-execution verifier (self.spoke_wai/lugs/outgoing) looks. The subagent
+        # runs with CWD at self.spoke_root, so emit the path relative to it — on a v4
+        # spoke this is WAI-Harness/spoke/local/lugs/outgoing, in coexist/v3 WAI-Spoke/lugs/outgoing.
+        try:
+            rfc_out_dir = (self.spoke_wai / "lugs" / "outgoing").relative_to(self.spoke_root).as_posix()
+        except ValueError:
+            rfc_out_dir = (self.spoke_wai / "lugs" / "outgoing").as_posix()
+
         questions_block = ""
         for q in questions:
             questions_block += f'    {{"question": "{q}", "answer": "<your answer>"}},\n'
@@ -2609,7 +2704,7 @@ class OziAutopilot:
         rfc_response_step = (
             f"\n\nRFC RESPONSE STEP (always execute — dry_run_safe=true):\n"
             f"After completing (or dry-running) all steps above, build and write an rfc_response to "
-            f"WAI-Spoke/lugs/outgoing/rfc-response-{lug_id}.json with this exact structure:\n"
+            f"{rfc_out_dir}/rfc-response-{lug_id}.json with this exact structure:\n"
             f"{{\n"
             f'  "type": "rfc_response",\n'
             f'  "spoke_id": "<read from WAI-State.json wheel.spoke_id or wheel_id>",\n'
@@ -2626,7 +2721,7 @@ class OziAutopilot:
             f"{questions_block}"
             f'  ]\n'
             f"}}\n"
-            f"mkdir -p WAI-Spoke/lugs/outgoing"
+            f"mkdir -p {rfc_out_dir}"
         )
 
         # Peer verification step (always execute — dry_run_safe=true)
@@ -2635,7 +2730,7 @@ class OziAutopilot:
             peer_review_step = (
                 f"\n\nPEER VERIFICATION STEP (dry_run_safe=true, always execute):\n"
                 f"Since learn_directive.cohort_index == {cohort_index} (> 0), also write a "
-                f"peer_review_submission to WAI-Spoke/lugs/outgoing/peer-review-{lug_id}.json:\n"
+                f"peer_review_submission to {rfc_out_dir}/peer-review-{lug_id}.json:\n"
                 f"{{\n"
                 f'  "type": "peer_review_submission",\n'
                 f'  "rfc_job_id": "{rfc_job_id}",\n'
@@ -3176,8 +3271,11 @@ class OziAutopilot:
 
         Returns dict: {teachings_adopted: int, teaching_ids: [str], errors: [str]}
         """
-        inbox_dir = self.spoke_root / "WAI-Spoke" / "teachings" / "inbox"
-        adopted_dir = self.spoke_root / "WAI-Spoke" / "teachings" / "adopted"
+        # Resolve via the v4-aware base (self.spoke_wai), NOT self.spoke_root/"WAI-Spoke":
+        # the latter does not exist on a v4-only spoke, so teaching adoption silently no-op'd
+        # every autopilot run (impl-fix-p1-silent-dead-v4-paths-v1).
+        inbox_dir = self.spoke_wai / "teachings" / "inbox"
+        adopted_dir = self.spoke_wai / "teachings" / "adopted"
         commands_dir = self.spoke_root / ".claude" / "commands"
 
         if not inbox_dir.exists():
@@ -3538,7 +3636,7 @@ class OziAutopilot:
             spoke_path = Path(wheel["path"])
             if not spoke_path.exists():
                 continue
-            spoke_incoming = spoke_path / "WAI-Spoke" / "lugs" / "incoming"
+            spoke_incoming = _v4_safe_root(spoke_path) / "lugs" / "incoming"
             lug_id = f"impl-harness-migration-{wheel_id}-v{new_version}"
 
             improvement_notes = ""
@@ -3570,7 +3668,7 @@ class OziAutopilot:
                     + f"1. Copy updated skill files from {self.hub_dir}/WAI-Spoke/hub/harness/"
                     f"bootstrap/v{new_version}/ to this spoke's templates/commands/.\n"
                     f"2. Update wheel.harness_version to '{new_version}' in WAI-State.json.\n"
-                    f"3. Write rfc_response to WAI-Spoke/lugs/outgoing/rfc-response-{lug_id}.json.\n"
+                    f"3. Write rfc_response to WAI-Harness/spoke/local/lugs/outgoing/rfc-response-{lug_id}.json.\n"
                     f"4. Commit."
                 ),
                 "created_at": ts_now,
@@ -3608,7 +3706,7 @@ class OziAutopilot:
                         "instructions": (
                             "When peer_review_submission lugs arrive from the listed reviewee_spokes, "
                             "read each one. Compare to your own implementation experience. "
-                            "Write peer_review_response to WAI-Spoke/lugs/outgoing/ with: "
+                            "Write peer_review_response to WAI-Harness/spoke/local/lugs/outgoing/ with: "
                             "{type: peer_review_response, rfc_job_id, reviewee_spoke_id, "
                             "approved: bool, refinements: [{step, suggested_change, reason}]}"
                         ),
@@ -3813,7 +3911,7 @@ class OziAutopilot:
         stderr so no data is silently dropped.  After all files are
         processed the CapitalCase dir is removed.
         """
-        advisors_root = self.spoke_wai / "advisors"
+        advisors_root = self.spoke_advisors
         summary: Dict[str, Any] = {
             "dirs_merged": [],
             "files_moved": 0,
@@ -4000,11 +4098,37 @@ class OziAutopilot:
                 has_work = self._phase0c_check_work_availability()
                 _ec = round(time.monotonic() - _tc, 1)
                 if not has_work:
-                    result.skipped_no_work = True
-                    phases["phase_0c_work_check"] = f"no_work_skip [{_ec}s]"
+                    # spec-ozi-no-work-advisor-fallback-v1: a no-ready-work round
+                    # redirects the round budget to ADVISOR/SCOUT work instead of
+                    # forfeiting it — generate scout jobs / coverage so FUTURE rounds
+                    # have ready work. Reuses Phase 2.5 scouting (coverage-spread via
+                    # _due_advisors rotation, SCOUT_RUN_CAP, scan_state idempotency =
+                    # budget-bounded + no-spin). True idle (advisors all current) still
+                    # skips — that legitimate skip is preserved.
+                    print("[autopilot] phase 0c: no ready lugs — advisor-fallback scouting…", file=sys.stderr)
+                    try:
+                        _scout_jobs = self._run_advisor_scouting()
+                    except Exception as exc:
+                        _scout_jobs = []
+                        result.errors.append(f"phase_0c_advisor_fallback: {exc}")
+                        print(f"[autopilot] phase 0c: advisor-fallback error (skipping): {exc}", file=sys.stderr)
+                    if _scout_jobs:
+                        result.advisor_fallback = True
+                        result.advisor_fallback_jobs = len(_scout_jobs)
+                        phases["phase_0c_work_check"] = (
+                            f"advisor_fallback:{len(_scout_jobs)} scout job(s) [{_ec}s]"
+                        )
+                        print(
+                            f"[autopilot] phase 0c: advisor-fallback generated "
+                            f"{len(_scout_jobs)} scout job(s) (budget redirected, not forfeited)",
+                            file=sys.stderr,
+                        )
+                    else:
+                        result.skipped_no_work = True
+                        phases["phase_0c_work_check"] = f"no_work_skip (advisors current) [{_ec}s]"
+                        print("[autopilot] phase 0c: true-idle — advisors current, skipping", file=sys.stderr)
                     result.phases = phases
                     result.duration_seconds = round(time.monotonic() - _t_run, 1)
-                    print(f"[autopilot] phase 0c: skipping due to no dispatchable work", file=sys.stderr)
                     return result
                 phases["phase_0c_work_check"] = f"ok [{_ec}s]"
                 print(f"[autopilot] phase 0c: done ({_ec}s)", file=sys.stderr)
@@ -4433,7 +4557,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--trigger-source",
-        choices=["cron", "navigator", "basher", "manual"],
+        choices=["cron", "navigator", "basher", "manual", "conductor"],
         default="manual",
         help="Source that triggered this autopilot run (default: manual)"
     )
@@ -4514,6 +4638,8 @@ def main() -> None:
         "gitnexus_freshness_checked": autopilot_result.gitnexus_freshness_checked,
         "gitnexus_impact_warnings": autopilot_result.gitnexus_impact_warnings,
         "skipped_no_work": autopilot_result.skipped_no_work,
+        "advisor_fallback": autopilot_result.advisor_fallback,
+        "advisor_fallback_jobs": autopilot_result.advisor_fallback_jobs,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "dry_run": args.dry_run,
     }

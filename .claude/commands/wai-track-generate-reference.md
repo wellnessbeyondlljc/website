@@ -18,9 +18,12 @@
   "thinking": "This session continues from a prior conversation. Need to honor predecessor context while tracking new work separately. Focus on new turns only - not duplicating loaded content.",
   "activity": ["Read predecessor track metadata", "Analyzed user request"],
   "decisions": ["Generate new session with predecessor link"],
-  "open": []
+  "open": [],
+  "sentiment": null
 }
 ```
+
+**`sentiment` (optional):** `"frustration" | "delight" | null` — written by the agent at entry time when the user signal in the turn is strong. Set at the moment of writing the track point, never inferred retroactively. Default: `null`. Consumed by Historian v2 to build the fleet-wide sentiment record.
 
 ### First Point with session_metadata
 
@@ -48,7 +51,8 @@
   "thinking": "...",
   "activity": [],
   "decisions": [],
-  "open": []
+  "open": [],
+  "sentiment": null
 }
 ```
 

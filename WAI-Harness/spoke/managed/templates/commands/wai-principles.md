@@ -94,17 +94,15 @@ Every WAI component must embody these principles. Details and examples: `wai-pri
 - Put work intent, decisions, progress, subagent prompts, and blockers in lugs
 - Trigger: any time about to call TaskCreate or write a scratch file — stop, use a lug
 
-## P12: Resumable Completeness
+## P12: Purposeful Objects (Circuit Contracts)
 
-**Every durable document must let an uninitiated agent resume the full state of work — no summarizing, no clipping.**
+**Every object declares its circuit and earns its capacity — built, present, or active is NOT productive.**
 
-Extends P8 (document when known) with a hard bar: it is not enough to document — the documentation must be *complete enough to resume from*. Brevity is for prose-to-the-user; durable objects (savepoints, lugs, specs, design docs, historical records, future-state plans) are for cold readers and machine executors and carry the full detail.
-
-- **Completeness over brevity on the durable core.** If a future agent needs background, rationale, exact next actions, pending handoffs, deferred-with-reason items, blockers, or honest caveats to resume — it lives IN the document, in full. A one-line summary where a paragraph is needed is a defect.
-- **Never clip future states or historical records.** Planned next steps, deferred work (with why + where captured), open questions, and the record of what happened + why are exactly the information a future agent cannot reconstruct. Clipping them transfers a hidden archaeology + re-derivation cost to the next session, and anything not written is silently lost.
-- **The cold-reader / resume test (hard gate).** A fresh, no-context agent must be able to resume from the document and execute the first action with zero clarification — asking the user *nothing that was knowable at authoring time*. If it cannot, the document is incomplete. (Savepoints: `spec-savepoint-resume-contract-v1`. Lugs/specs/objects: `spec-object-quality-v4-v1`.)
-- **No banned vagueness in actionable areas.** Complete relative-from-root paths, inline exact schemas, named targets, ordered concrete steps. Banned tokens in actionable fields: `etc.`, `as needed`, `figure it out`, `TBD`, `…`.
-- **Self-contained.** Context that lived only in the authoring session's head (active epics, what triggered the work, alternatives weighed) is stamped into the document, not assumed.
+- Each canonical object (lug, tool, hook, advisor, crew, scout) self-declares its contract: purpose, owner, produces → consumed_by → downstream, and the data point that proves forward movement
+- Built ≠ active ≠ productive: spend capacity only where the circuit closes (downstream value realized); starve undefined / active-unproductive / inactive objects (forward movement over motion — don't waste tokens)
+- Maintained AND monitored: the contract is declared at creation and the AP data continuously asserts it (object-contracts.json + contract_validate.py + advisor_contract_audit.py, run each Conductor cycle); a broken or active-unproductive circuit is a finding to fix or retire
+- This is how spokes evolve freely while staying canon-conformant — purpose drives ownership + continuity, which drive learning + evolution
+- Trigger: implementing any object → declare its contract first; reviewing → assert productivity from AP data, never from mere presence
 
 ---
 
@@ -123,7 +121,7 @@ Extends P8 (document when known) with a hard bar: it is not enough to document �
 | P9 | Intuitive Design | Self-activating, self-improving |
 | P10 | Autonomy | Trust is the default — proceed, don't pause |
 | P11 | Lug-First Memory | Lugs outlive sessions; tasks and md files don't |
-| P12 | Resumable Completeness | Document fully enough to resume — never clip future states or history |
+| P12 | Purposeful Objects | Every object declares its circuit + earns capacity; productive ≠ present |
 
 ---
 

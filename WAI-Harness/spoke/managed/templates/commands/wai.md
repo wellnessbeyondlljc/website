@@ -49,6 +49,14 @@ Pre-conditions met: hook pre-computed all data, track entry already written by s
 └─ Ready to work.
 ```
 
+**2a. Loose-end surface (no-dead-ends).** Surface any work the LAST session stranded so it is not silently lost (initiative-no-dead-ends-v1):
+
+```bash
+python3 WAI-Harness/spoke/managed/tools/dead_end_scan.py --root . --json
+```
+
+If `clean: false`, add a banner line: `⚠ Carryover: {N} uncommitted, {N} untracked-source, {N} unpushed, {N} stash(es)` and offer to reconcile them (commit / lug / discard-with-reason) before new work. `branches_ahead` → note `↪ {N} session branch(es) unmerged to main — reunify (initiative-fleet-branch-reunification-v1)`. Cheap, read-only; never auto-commits.
+
 **0.5 — Priority Gate (mandatory, runs before intent router and savepoint intercept):**
 
 If a hub base is reachable, OR `TEACH_NEW > 0`, OR `Incoming: N lug(s) pending triage` — execute A → B → C silently, **in that order**, before any other step. Do not present a savepoint prompt or work queue until all complete.
@@ -241,6 +249,22 @@ Active feedback (N): [rule-1 short label] | [rule-2 short label] | [rule-3 short
 This line closes the apply gap — feedback entries are loaded at wakeup AND explicitly surfaced so the agent acknowledges them before starting work. If fewer than 3 feedback entries exist, show all of them. If MEMORY.md has no feedback entries, skip this line silently.
 
 **3b. Initiative Prompt (soft, skippable):** After vibe prompt, ask once: _"Which initiative are you advancing this session? (or skip for freeform)"_ Present up to 3 options drawn from `WAI-Spoke/initiatives/bytype/initiative/{approved,active,measuring}/*.json` — priority ordered by `focus_lock=true` first, then `impact_rank` ascending. If the user picks one, write `WAI-State.json._session_state.active_initiative_id = <slug>`. If skipped or no initiatives exist, set `active_initiative_id: null`. This choice is used at closeout (Step 5b) to group completed lugs into a bolt. If `WAI-Spoke/wakeup-brief.json` contains a `continuation_menu` field, surface those open initiatives + pending savepoints as ranked options **before** any new-initiative path — finish-before-start is the default.
+
+**3b.1 — Continuation Menu (BASHER command surface — finish-before-start, surfaced FIRST):** Before the soft prompt above, if the wakeup brief carries a `continuation_menu` (computed by `generate_wakeup_brief.py` → `build_continuation_menu`: `{initiatives:[…top 3, sorted focus_lock then impact_rank…], pending_savepoints:[…]}`), DISPLAY it as the first option set so resumable work is claimed before anything new is started:
+
+```
+▸ Continue where you left off  (finish-before-start)
+  {each pending_savepoint}  ⚑ Resume savepoint: {lug_id} — {resume_note}
+  {each initiative, top 3}   ◴ {label}  [{state}{· focus-locked if focus_lock}]  impact {impact_rank}
+  [N] new / freeform
+```
+
+On the user's pick:
+- **Savepoint** → resume via the `savepoint` intent path (read the lug, set `_savepoint.status = "resumed"`, adopt its `initiative_id` as the focus lock).
+- **Initiative** → claim it: run `/wai-initiative pin <id>` (→ the resolved `initiative_nav.py pin <id>`, which sets the focus lock) and write `WAI-State.json._session_state.active_initiative_id = <id>`. The agent MUST then stay on that initiative for the session — out-of-silo items become `notation`/`deferred` lugs (same focus-lock rule as a resumed savepoint).
+- **[N] new / freeform** → fall through to the soft prompt (3b).
+
+Engine note: the durable focus-lock write is performed by `initiative_nav.py pin` (`implement-initiative-nav-lifecycle-v1`, Phase 1). The pin shellout is guarded — `/wai-initiative` resolves the engine path (`managed/tools/` then `hub/local/scripts/`) and skips silently if absent.
 
 **4. Work Queue Interactive Mode:** After vibe prompt, if `_work_queue.items` has `>=1` ready item, display top-3 by weighted ROI (initiative impact × lug ROI).
 

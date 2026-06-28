@@ -47,7 +47,7 @@ WAI gives you persistent memory, structured work tracking, and cross-session con
 - **Claude Code** — also read `CLAUDE.md`
 - **Gemini CLI** — also read `GEMINI.md`
 - **GitHub Copilot** — also read `WAI-Spoke/copilot-instructions.md`
-- **Tool manipulation** — Basher owns tool/config changes. Route `.mcp.json`, tool advisor output, provider coverage files such as `QWEN.md`, and similar changes to Basher via lugs unless the user explicitly directs local application.
+- **Tool ownership (author vs distribute)** — Distributed tool/config — everything under `WAI-Harness/spoke/managed/**` (tools, schemas, templates, `.claude/` hooks/commands/agents/workflows/settings) plus `MANIFEST.json`, `.mcp.json`, and provider files — has two roles. The **canonical master source is authored at the hub / canonical home (mywheel)**. **Basher owns distribution** — managed→live redeploy, fleet fan-out, and the re-cut mechanics. A spoke does NOT edit the distributed source locally: it proposes a change via a lug (to the hub to author, and/or to Basher to distribute). Apply changes directly **only when purely local** — files under `WAI-Harness/spoke/local/**` (state, lugs, sessions, savepoints, runtime). When in doubt, route it. This is how we maintain the wheel.
 
 ## Core Rules
 

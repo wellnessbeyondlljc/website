@@ -1,0 +1,19 @@
+{
+  "impl_completions_since_last_scout": 2,
+  "stats": {
+    "total_runs": 2,
+    "total_lugs_completed": 2,
+    "total_teachings_adopted": 0,
+    "total_tokens_used": 11819
+  },
+  "last_run_at": "2026-06-26T19:02:53.312594+00:00",
+  "last_run_summary": {
+    "lugs_completed": 1,
+    "teachings_adopted": 0,
+    "signals_cleared": 0,
+    "advisors_run": [],
+    "tokens_used": 5189,
+    "gastown_pending": false,
+    "errors": []
+  }
+}

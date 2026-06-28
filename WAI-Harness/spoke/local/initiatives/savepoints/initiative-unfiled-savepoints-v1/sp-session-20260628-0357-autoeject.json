@@ -1,0 +1,50 @@
+{
+  "id": "sp-session-20260628-0357-autoeject",
+  "slug": "autoeject",
+  "session_id": "session-20260628-0357",
+  "initiative_id": "initiative-unfiled-savepoints-v1",
+  "claiming_session_id": null,
+  "status": "auto-eject",
+  "degraded": true,
+  "schema_version": 2,
+  "harness_mode": "v4",
+  "git_sha": "9b796f3",
+  "git_branch": "main",
+  "work_done": [
+    {
+      "what": "Session ended without /wai-closeout; no per-turn summaries were recoverable from the track.",
+      "evidence": "auto-eject from /home/mario/projects/client-work/wellnessbeyondlljc-website/WAI-Harness/spoke/local/sessions",
+      "verified": false
+    }
+  ],
+  "where_we_are": "AUTO-EJECT: this session ended without a savepoint or closeout. State below is machine-reconstructed from the track tail, in_progress lugs, and git status \u2014 treat as a lead, not a contract.",
+  "first_actions": [
+    {
+      "order": 1,
+      "action": "Ask if verify list answered; apply + add VERIFY.md",
+      "command_or_target": null,
+      "depends_on": null,
+      "needs_authorization": null
+    }
+  ],
+  "in_progress_lugs": [],
+  "uncommitted_files": 297,
+  "honest_flags": [
+    {
+      "flag": "AUTO-GENERATED savepoint (status=auto-eject, degraded=true). It was written by the Stop-hook safety net, not authored by the session. work_done/first_actions are reconstructed and may be incomplete or wrong.",
+      "why_it_matters": "A degraded-but-durable resume lead beats total loss, but do not trust it as a full resume contract \u2014 verify against git history and the in_progress lugs.",
+      "where_recorded": null
+    }
+  ],
+  "deferred": [],
+  "pending_handoffs": [],
+  "blockers_and_human_gates": [],
+  "open_questions": [],
+  "paper_trail": {
+    "topics": [
+      "auto-eject"
+    ],
+    "decisions": []
+  },
+  "created_by": "auto_eject_savepoint.py"
+}

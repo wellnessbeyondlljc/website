@@ -1,0 +1,4 @@
+{"ts": "2026-06-26T18:34:09.328381Z", "op_type": "lug_pickup", "lug_id": "coverage-eval-20260626-180202", "outcome": "success", "delta": "", "teaching_candidate": false}
+{"ts": "2026-06-26T18:35:44.866115Z", "op_type": "lug_complete", "lug_id": "coverage-eval-20260626-180202", "outcome": "success", "delta": "", "teaching_candidate": false}
+{"ts": "2026-06-26T19:01:32.242319Z", "op_type": "lug_pickup", "lug_id": "scout-refine-20260626T183409", "outcome": "success", "delta": "", "teaching_candidate": false}
+{"ts": "2026-06-26T19:02:53.309978Z", "op_type": "lug_complete", "lug_id": "scout-refine-20260626T183409", "outcome": "success", "delta": "", "teaching_candidate": false}

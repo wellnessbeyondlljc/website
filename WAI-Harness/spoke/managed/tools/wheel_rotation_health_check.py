@@ -22,6 +22,42 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+# ---------------------------------------------------------------------------
+# Spoke-base resolution (base-aware)
+# ---------------------------------------------------------------------------
+# PRE-FIX every spoke-local path blindly appended "WAI-Spoke" -> on a v4-only spoke
+# the whole rotation check read/wrote a nonexistent tree and silently no-op'd
+# (impl-fix-p2-v3noop-sweep-v1). Working-state categories (WAI-State.json, sessions,
+# lugs, pathgraph) live under the resolved base (WAI-Harness/spoke/local on v4);
+# advisors are a SIBLING (WAI-Harness/spoke/advisors on v4) so they resolve via
+# advisors_dir(). Hub paths (hub_path / "WAI-Spoke" / ...) are real and untouched.
+
+def _spoke_base(spoke_path: Path) -> Path:
+    """Working-state base for the spoke (lugs/sessions/state/pathgraph), base-aware."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_path))
+        if root and mode != "none":
+            return Path(root)
+    except Exception:
+        pass
+    return Path(spoke_path) / "WAI-Spoke"  # last-resort v3 fallback
+
+
+def _advisors_base(spoke_path: Path) -> Path:
+    """Advisors live beside the working base, not under it (v4: WAI-Harness/spoke/advisors)."""
+    try:
+        from wai_paths import advisors_dir
+        adv = advisors_dir(str(spoke_path))
+        if adv:
+            return Path(adv)
+    except Exception:
+        pass
+    return Path(spoke_path) / "WAI-Spoke" / "advisors"  # last-resort v3 fallback
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -79,7 +115,7 @@ def _find_ap_log(spoke_path: Path, ap_log_override: Optional[str]) -> Tuple[Opti
         return None, None
 
     # 2. activity-log.jsonl — last non-empty line
-    activity_log = spoke_path / "WAI-Spoke" / "advisors" / "autopilot" / "activity-log.jsonl"
+    activity_log = _advisors_base(spoke_path) / "autopilot" / "activity-log.jsonl"
     if activity_log.exists():
         try:
             raw = activity_log.read_text(encoding="utf-8").strip().splitlines()
@@ -97,7 +133,7 @@ def _find_ap_log(spoke_path: Path, ap_log_override: Optional[str]) -> Tuple[Opti
             pass
 
     # 3. Glob sessions/*/autopilot-summary.json — newest mtime
-    session_pattern = spoke_path / "WAI-Spoke" / "sessions"
+    session_pattern = _spoke_base(spoke_path) / "sessions"
     if session_pattern.exists():
         candidates = list(session_pattern.glob("*/autopilot-summary.json"))
         if candidates:
@@ -108,7 +144,7 @@ def _find_ap_log(spoke_path: Path, ap_log_override: Optional[str]) -> Tuple[Opti
                 pass
 
     # 4. scan_state.json last_run_at as minimal stub
-    scan_state = spoke_path / "WAI-Spoke" / "advisors" / "autopilot" / "scan_state.json"
+    scan_state = _advisors_base(spoke_path) / "autopilot" / "scan_state.json"
     if scan_state.exists():
         try:
             data = json.loads(scan_state.read_text(encoding="utf-8"))
@@ -135,7 +171,7 @@ def _resolve_hub_path(spoke_path: Path, hub_path_arg: Optional[str]) -> Optional
     """Return hub path from argument or from WAI-State.json wheel.hub_path."""
     if hub_path_arg:
         return Path(hub_path_arg)
-    state_file = spoke_path / "WAI-Spoke" / "WAI-State.json"
+    state_file = _spoke_base(spoke_path) / "WAI-State.json"
     if state_file.exists():
         try:
             state = json.loads(state_file.read_text(encoding="utf-8"))
@@ -149,7 +185,7 @@ def _resolve_hub_path(spoke_path: Path, hub_path_arg: Optional[str]) -> Optional
 
 def _get_spoke_id(spoke_path: Path) -> str:
     """Read wheel.spoke_id from WAI-State.json, fallback to 'unknown'."""
-    state_file = spoke_path / "WAI-Spoke" / "WAI-State.json"
+    state_file = _spoke_base(spoke_path) / "WAI-State.json"
     if state_file.exists():
         try:
             state = json.loads(state_file.read_text(encoding="utf-8"))
@@ -175,9 +211,9 @@ def check_V1(ap_entry: Dict[str, Any], spoke_path: Path) -> Tuple[bool, str]:
     We check: (a) recommendations-current.json exists at all, and (b) generated_at is within 48h.
     A present recommendations file means the navigator ran before this AP run.
     """
-    nav_file = spoke_path / "WAI-Spoke" / "advisors" / "navigator" / "recommendations-current.json"
+    nav_file = _advisors_base(spoke_path) / "navigator" / "recommendations-current.json"
     if not nav_file.exists():
-        return False, "recommendations-current.json not found in WAI-Spoke/advisors/navigator/"
+        return False, "recommendations-current.json not found in advisors/navigator/"
 
     try:
         nav_data = json.loads(nav_file.read_text(encoding="utf-8"))
@@ -333,7 +369,7 @@ def check_V4_detail(ap_entry: Dict[str, Any], hub_path: Optional[Path]) -> Tuple
 
 def check_V5(spoke_path: Path, v4_refresh_ts_str: Optional[str]) -> Tuple[bool, str]:
     """V5: recommendations-current.json generated_at > hub refresh timestamp."""
-    nav_file = spoke_path / "WAI-Spoke" / "advisors" / "navigator" / "recommendations-current.json"
+    nav_file = _advisors_base(spoke_path) / "navigator" / "recommendations-current.json"
     if not nav_file.exists():
         return False, "recommendations-current.json not found"
 
@@ -373,7 +409,7 @@ def check_V6(ap_entry: Dict[str, Any], spoke_path: Path) -> Tuple[bool, str]:
     start_ts_str = ap_entry.get("run_at") or ap_entry.get("start_ts") or ap_entry.get("completed_at")
     start_ts = _parse_iso(start_ts_str)
 
-    history_file = spoke_path / "WAI-Spoke" / "pathgraph" / "history.jsonl"
+    history_file = _spoke_base(spoke_path) / "pathgraph" / "history.jsonl"
     if not history_file.exists():
         return False, f"pathgraph/history.jsonl not found at {history_file}"
 
@@ -426,7 +462,7 @@ def _write_bug_lug(
     """Write a bug lug for a failing core checkpoint — only if one doesn't already exist today."""
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     lug_id = f"bug-rotation-check-{checkpoint_id}-{today}"
-    bug_dir = spoke_path / "WAI-Spoke" / "lugs" / "bytype" / "bug" / "open"
+    bug_dir = _spoke_base(spoke_path) / "lugs" / "bytype" / "bug" / "open"
     bug_file = bug_dir / f"{lug_id}.json"
 
     if bug_file.exists():
@@ -565,7 +601,7 @@ def _run_checks(
 
 def _write_result(spoke_path: Path, result: Dict[str, Any]) -> Path:
     """Write rotation-check-latest.json and return its path."""
-    health_dir = spoke_path / "WAI-Spoke" / "advisors" / "health"
+    health_dir = _advisors_base(spoke_path) / "health"
     health_dir.mkdir(parents=True, exist_ok=True)
     out_path = health_dir / "rotation-check-latest.json"
     out_path.write_text(json.dumps(result, indent=2) + "\n")

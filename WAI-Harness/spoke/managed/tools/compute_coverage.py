@@ -93,11 +93,27 @@ def aggregate_coverage(lugs):
     }
 
 
+def _lug_base(spoke_path):
+    """The dir whose lugs/bytype holds the live lugs, base-aware. PRE-FIX this blindly
+    appended 'WAI-Spoke' -> on a v4 spoke it scanned a nonexistent path and coverage/cert
+    was always 0 despite real lugs (impl-fix-p1-silent-dead-v4-paths-v1)."""
+    p = Path(spoke_path)
+    if p.name in ("WAI-Spoke", "local"):
+        return p
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import wai_paths
+        base, mode = wai_paths.resolve_wai_root(str(p))
+        if base and mode != "none":
+            return Path(base)
+    except Exception:
+        pass
+    return p / "WAI-Spoke"  # last-resort v3 fallback
+
+
 def read_coverage(spoke_path="."):
     """Scan the lug tree for v4 lugs and aggregate. Graceful: zeroed structure if none."""
-    spoke = Path(spoke_path)
-    if spoke.name != "WAI-Spoke":
-        spoke = spoke / "WAI-Spoke"
+    spoke = _lug_base(spoke_path)
     lugs = []
     for f in glob.glob(str(spoke / "lugs" / "bytype" / "**" / "*.json"), recursive=True):
         try:

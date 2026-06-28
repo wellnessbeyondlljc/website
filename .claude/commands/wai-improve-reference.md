@@ -1,4 +1,5 @@
 # WAI Improve — Reference
+> Fast path: load `wai-improve-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 **Companion to `wai-improve.md`.** Contains templates, examples, and verbose specs. Load on-demand — not loaded at wakeup.
 

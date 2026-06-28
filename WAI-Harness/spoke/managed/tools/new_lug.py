@@ -25,13 +25,39 @@ from pathlib import Path
 
 # auto-stamped (never author-supplied) vs author-required content fields
 AUTO_FIELDS = ("schema_version", "rev", "created_at", "updated_at",
-               "context_snapshot", "triggering_session")
+               "context_snapshot", "triggering_session", "origin")
 REQUIRED_CONTENT = ("situation",)  # title/id/type are positional; situation is the key content field
+
+# origin (worktree/branch/sha) is stamped via lug_utils.resolve_worktree_origin so a
+# lug always records the worktree it lives in — see lug_worktree_map.py for the
+# cross-worktree reconciler that consumes it. Import is soft so new_lug stays usable
+# even if tools/ isn't on sys.path (falls back to a path-only origin).
+try:
+    from lug_utils import resolve_worktree_origin
+except Exception:  # pragma: no cover - import-path fallback
+    def resolve_worktree_origin(spoke_path="."):
+        return {"worktree": None, "worktree_name": None, "branch": None,
+                "git_sha": None, "stamped_at": None}
 
 
 def _spoke(spoke_path):
+    """Resolve the lug-store root (holds lugs/, WAI-State.json, runtime/).
+
+    v4 stores it at <root>/WAI-Harness/spoke/local; v3 used <root>/WAI-Spoke.
+    A bare append of WAI-Spoke (the old behavior) created phantom WAI-Spoke/
+    trees in v4 spokes — resolve the real store instead.
+    """
     p = Path(spoke_path)
-    return p if p.name == "WAI-Spoke" else (p / "WAI-Spoke")
+    # already pointing at a store root (legacy WAI-Spoke, or any dir with lugs/)
+    if p.name == "WAI-Spoke" or (p / "lugs").is_dir():
+        return p
+    v4 = p / "WAI-Harness" / "spoke" / "local"
+    if v4.exists():
+        return v4
+    legacy = p / "WAI-Spoke"
+    if legacy.exists():
+        return legacy
+    return v4  # default new spokes to the v4 layout, never phantom WAI-Spoke
 
 
 def resolve_triggering_session(spoke_path="."):
@@ -107,6 +133,7 @@ def build_v4_lug(lug_id, lug_type, title, spoke_path=".", now_iso=None, **fields
         "updated_at": now,
         "context_snapshot": resolve_context_snapshot(spoke_path),
         "triggering_session": resolve_triggering_session(spoke_path),
+        "origin": resolve_worktree_origin(spoke_path),
         # author-fillable skeleton (kept explicit, never "TBD")
         "perceive": fields.get("perceive", []),
         "execute": fields.get("execute", []),

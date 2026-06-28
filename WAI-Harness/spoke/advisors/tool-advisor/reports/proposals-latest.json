@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-18T20:47:18.247007+00:00",
+  "generated_at": "2026-06-28T03:57:46.967663+00:00",
   "count": 1,
   "note": "These proposals require human review before applying. None are auto-applied.",
   "proposals": [
@@ -11,5 +11,6 @@
       "risk": "low",
       "requires_human_review": true
     }
-  ]
+  ],
+  "_auto_routed": []
 }

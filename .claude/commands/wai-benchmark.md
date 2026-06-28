@@ -64,4 +64,4 @@ Typical: 75-90 (steady state)
 Individual wheels do NOT run benchmarks.
 Only framework development uses this to measure Wheelwright effectiveness.
 
-See lug: benchmark-design-v1 (WAI-Spoke/lugs/active/WAI-Lugs-active.jsonl or WAI-Spoke/WAI-LugIndex.jsonl for lookup)
+See lug: benchmark-design-v1 (search `WAI-Spoke/lugs/bytype/` or `WAI-Spoke/WAI-LugIndex.jsonl` for lookup)

@@ -16,9 +16,11 @@ This controls how many lugs this session may auto-claim at once.
 
 ## Protocol
 
+> **Runtime base** is the active harness: `WAI-Harness/spoke/local/runtime/` on v4 spokes (legacy v3 spokes only: `WAI-Spoke/runtime/`). Never write the v3 path on a v4 spoke — it resurrects a `WAI-Spoke/` phantom (P12 savepoint-circuit breaker).
+
 1. Accept a positive integer argument.
 2. Determine the current session key.
-3. Update `WAI-Spoke/runtime/ozi-sessions/<session-key>.json` with:
+3. Update `WAI-Harness/spoke/local/runtime/ozi-sessions/<session-key>.json` with:
    - `max_parallel: <n>`
 4. Preserve the current `auto_mode` value.
 5. Confirm the new budget.

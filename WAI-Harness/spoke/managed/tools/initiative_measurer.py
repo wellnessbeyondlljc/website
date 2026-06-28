@@ -37,7 +37,33 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent
 
-HEADLESS_LOG = _REPO_ROOT / "WAI-Spoke" / "advisors" / "headless" / "logs" / "nightly.log"
+sys.path.insert(0, str(_HERE))
+from wai_paths import resolve_wai_root, advisors_dir  # noqa: E402  (v3/v4 resolver); sibling tools import this way
+
+
+def _base(spoke_root) -> Path:
+    """Spoke working base, v4-aware. PRE-FIX this blindly appended 'WAI-Spoke' -> on a
+    v4 spoke it read/wrote a nonexistent tree (silent no-op). Now resolves to
+    WAI-Harness/spoke/local on a v4 spoke (impl-fix-p2-v3noop-sweep-v1)."""
+    root, mode = resolve_wai_root(str(spoke_root))
+    if root and mode != "none":
+        return Path(root)
+    return Path(spoke_root) / "WAI-Spoke"  # last-resort v3 fallback
+
+
+def _advisors_base(spoke_root) -> Path:
+    """Advisors live at the sibling location in v4 (WAI-Harness/spoke/advisors), not
+    under the working base. Falls back to WAI-Spoke/advisors on v3."""
+    adv = advisors_dir(str(spoke_root))
+    if adv:
+        return Path(adv)
+    return Path(spoke_root) / "WAI-Spoke" / "advisors"
+
+
+def _headless_log(spoke_root) -> Path:
+    return _advisors_base(spoke_root) / "headless" / "logs" / "nightly.log"
+
+
 SUPABASE_REST = os.environ.get("SUPABASE_REST", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -54,7 +80,7 @@ def now_iso() -> str:
 
 def _load_initiatives(spoke_root: str) -> list:
     """Load all initiative per-file objects from bytype/initiative/**/*.json."""
-    base = Path(spoke_root) / "WAI-Spoke" / "initiatives" / "bytype" / "initiative"
+    base = _base(spoke_root) / "initiatives" / "bytype" / "initiative"
     initiatives = []
     if not base.exists():
         return initiatives
@@ -111,7 +137,7 @@ def _move_initiative_file(initiative: dict, new_lifecycle: str) -> None:
 
 def _load_themes(spoke_root: str) -> dict:
     """Load themes from WAI-Spoke/health/themes.json."""
-    themes_path = Path(spoke_root) / "WAI-Spoke" / "health" / "themes.json"
+    themes_path = _base(spoke_root) / "health" / "themes.json"
     if not themes_path.exists():
         return {}
     try:
@@ -122,7 +148,7 @@ def _load_themes(spoke_root: str) -> dict:
 
 def _load_impact_ranking(spoke_root: str) -> list:
     """Load impact ranking from WAI-Spoke/health/impact-ranking.json."""
-    ranking_path = Path(spoke_root) / "WAI-Spoke" / "health" / "impact-ranking.json"
+    ranking_path = _base(spoke_root) / "health" / "impact-ranking.json"
     if not ranking_path.exists():
         return []
     try:
@@ -140,7 +166,7 @@ def all_epics_complete(initiative: dict, repo_root: Path) -> bool:
     epics = initiative.get("epics", [])
     if not epics:
         return False
-    completed_dir = repo_root / "WAI-Spoke" / "lugs" / "bytype" / "epic" / "completed"
+    completed_dir = _base(repo_root) / "lugs" / "bytype" / "epic" / "completed"
     for epic_id in epics:
         if not (completed_dir / f"{epic_id}.json").exists():
             return False
@@ -151,16 +177,17 @@ def all_epics_complete(initiative: dict, repo_root: Path) -> bool:
 # Nightly run counting
 # ---------------------------------------------------------------------------
 
-def count_nightly_runs_since(since_iso: str) -> int:
+def count_nightly_runs_since(since_iso: str, spoke_root: str = "") -> int:
     """Count nightly log entries after since_iso by scanning the nightly log."""
-    if not HEADLESS_LOG.exists():
+    headless_log = _headless_log(spoke_root or str(_REPO_ROOT))
+    if not headless_log.exists():
         return 0
     since_dt = datetime.datetime.fromisoformat(since_iso.rstrip("Z")).replace(
         tzinfo=datetime.timezone.utc
     )
     count = 0
     try:
-        for line in HEADLESS_LOG.read_text().splitlines():
+        for line in headless_log.read_text().splitlines():
             line = line.strip()
             if not line:
                 continue
@@ -333,7 +360,7 @@ def run(dry_run: bool = False, force_measure: str = "", spoke_root: str = "") ->
         window_days = gate.get("measurement_window_days", 7)
         measuring_since = init.get("measuring_started_at", now_iso())
 
-        runs_collected = count_nightly_runs_since(measuring_since)
+        runs_collected = count_nightly_runs_since(measuring_since, spoke_root)
         print(f"[measurer] {iid}: {runs_collected}/{runs_required} runs collected")
 
         if runs_collected < runs_required and not force_measure:

@@ -18,7 +18,24 @@ import json
 import os
 import sys
 
-DEFAULT_LUGS_ROOT = "WAI-Spoke/lugs/bytype"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_lugs_root(spoke_root="."):
+    """The lugs/bytype root, base-aware. On a v4 spoke this resolves under
+    WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke path made every
+    scope check fail-closed (lug never found) on v4 (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return os.path.join(root, "lugs", "bytype")
+    except Exception:
+        pass
+    return os.path.join("WAI-Spoke", "lugs", "bytype")  # last-resort v3 fallback
+
+
+DEFAULT_LUGS_ROOT = _default_lugs_root()
 
 
 def _find_lug(lug_id, lugs_root):

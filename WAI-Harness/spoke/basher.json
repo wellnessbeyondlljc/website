@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "spoke": {
+    "wheel_id": "wellnessbeyondlljc-website",
+    "display_name": "Wellness Beyond LLC Website",
+    "short_name": "wbl",
+    "tab_label": "wbl",
+    "alias": "cdwbl",
+    "description": "Client website project (Wellness Beyond LLC)",
+    "environment_tier": "client"
+  },
+  "environment": {
+    "path_entries": [],
+    "aliases": [
+      {
+        "name": "cdwbl",
+        "value": "cd /home/mario/projects/client-work/wellnessbeyondlljc-website",
+        "purpose": "Quick navigation to wellnessbeyondlljc-website spoke",
+        "scope": "global",
+        "introduced_by": "basher-spoke-init",
+        "restore_criticality": "low"
+      }
+    ],
+    "bashrc_entries": []
+  },
+  "hooks": [],
+  "tooling": {
+    "required": []
+  },
+  "restore": {
+    "priority": 99,
+    "restore_order": [],
+    "verify_cmd": "",
+    "notes": "Manifest added 2026-06-27 to complete WAI init (spoke had managed canon + local/ but no basher.json, so restore skipped it and global hooks errored). See lugs/incoming."
+  },
+  "propagation": {
+    "hooks": "self",
+    "aliases": "self",
+    "path_entries": "self",
+    "bashrc_entries": "self"
+  },
+  "provenance": {
+    "created_at": "2026-06-27T20:40:00Z",
+    "created_by": "basher-spoke-init",
+    "last_modified_at": "2026-06-27T20:40:00Z",
+    "last_modified_by": "basher-spoke-init"
+  },
+  "wiring": {
+    "harness_master": "/home/mario/projects/wheelwright/mywheel/WAI-Harness",
+    "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub",
+    "harness_master_valid": true,
+    "hub_path_valid": true,
+    "checked_at": "2026-06-27T20:40:00Z"
+  }
+}

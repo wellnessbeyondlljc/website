@@ -1,6 +1,6 @@
 # WAI Signal Capture
 
-**A signal is a patch-now alert broadcast to all spokes.** Lifecycle: emitted → broadcast to all spokes → framework absorbs → teaching posted → cleared fleet-wide.
+**A signal is a patch-now alert routed to the framework only.** Lifecycle: emitted → routed to framework (`routed_to: "FRAMEWORK"`) → framework resolves → teaching posted → distributed fleet-wide. Spokes never receive raw signals.
 
 ---
 
@@ -67,12 +67,12 @@ During the session, watch for decisions or learnings with impact >= 8:
   "id": "signal-<YYYYMMDD-HHMM>-<brief-slug>",
   "type": "signal",
   "schema_version": 2,
+  "routed_to": "FRAMEWORK",
   "title": "<what was decided/learned>",
   "description": "<why it matters>",
   "risk_score": "<1-10: 1-4=NORMAL, 5-7=HIGH, 8-10=CRITICAL>",
   "flavor": "patch",
   "patch": "<behavioral directive — plain language: if X, do Y instead of Z>",
-  "target": "all-spokes",
   "source_spoke": "<wheel.name from WAI-State.json>",
   "created_by": "<who decided>",
   "created_at": "<iso>",
@@ -97,10 +97,31 @@ During the session, watch for decisions or learnings with impact >= 8:
 - 8: Significant protocol or pattern established
 - < 8: Normal decisions, no signal needed
 
+### Escalation Gate
+
+**Run this gate before writing any signal.** All three must be YES to proceed.
+
+| # | Question | If NO → |
+|---|----------|---------|
+| 1 | Does this affect **all active spokes** immediately? | Write a lug instead |
+| 2 | Is `risk_score >= 8`? | Write a lug instead |
+| 3 | Is it NOT already in CLAUDE.md anti-patterns? | No action needed |
+
+**Fallback routing table** (when gate says NO):
+
+| Observation type | Route |
+|-----------------|-------|
+| Single-spoke bug or fix | LOCAL impl lug → `bytype/implementation/open/` |
+| Framework protocol gap | FRAMEWORK impl lug → `bytype/implementation/open/` |
+| Behavioral pattern already in CLAUDE.md | No action |
+| Fleet-wide behavioral patch, all three gate questions YES | Signal lug (`routed_to: "FRAMEWORK"`) → `WAI-Spoke/signals/inbound/` |
+
+**Default assumption:** write a lug. The gate flips you to a signal — not the other way around.
+
 ### Proactive Logging
 
-Don't wait for user to ask — log signals as they happen. The user can review
-and remove any that don't warrant permanent record.
+Run the gate first. Only log a signal after all three gate questions answer YES.
+When in doubt, write a lug.
 
 ## Context
 

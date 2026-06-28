@@ -69,6 +69,10 @@ Prompt **once per session**: "This work involves architectural decisions. I'm ru
 
 Model switches recorded in `WAI-State.json` under `model_log`.
 
+## Plan Validation Gate
+
+When this gate produces an implementation plan (epic + child lugs), run **`/wai-plan-validation`** before showing it to the user: each child lug must have complete PEV, a testable `verify`, explicit `acceptance_criteria`, and explicit `blocked_by` for in-plan dependencies. Refine any failing lug in place — never present a plan with `[gap]` placeholders.
+
 ## Related Skills
 
 - /wai-rules — Show scope boundaries

@@ -21,7 +21,9 @@ It should avoid broad user-interaction prompts because this session is acting as
 
 ## Protocol
 
-1. Read the current session runtime config from `WAI-Spoke/runtime/ozi-sessions/<session-key>.json`.
+> **Runtime base** is the active harness: `WAI-Harness/spoke/local/runtime/` on v4 spokes (legacy v3 spokes only: `WAI-Spoke/runtime/`). Never write the v3 path on a v4 spoke — it resurrects a `WAI-Spoke/` phantom (P12 savepoint-circuit breaker).
+
+1. Read the current session runtime config from `WAI-Harness/spoke/local/runtime/ozi-sessions/<session-key>.json`.
 2. Show:
    - session key
    - auto mode on/off

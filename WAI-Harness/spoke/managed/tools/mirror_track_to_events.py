@@ -22,6 +22,15 @@ import datetime
 _HERE      = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 
+# Resolve the active spoke working base (v4: WAI-Harness/spoke/local; v3: WAI-Spoke).
+# _REPO_ROOT is WAI-Harness/spoke/managed, so the spoke root is three dirnames up.
+sys.path.insert(0, _HERE)
+from wai_paths import resolve_wai_root  # noqa: E402  harness-mode root resolver
+
+_SPOKE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_REPO_ROOT)))
+_root, _mode = resolve_wai_root(_SPOKE_ROOT)
+_BASE = _root if (_root and _mode != "none") else os.path.join(_SPOKE_ROOT, "WAI-Spoke")
+
 # Tool names that map to interesting activity event types
 _TOOL_CATEGORY_MAP = {
     "Edit":         "code_edit",
@@ -131,11 +140,11 @@ def main():
     # Resolve track path
     track_path = args.track_path
     if not track_path and args.session_id:
-        track_path = os.path.join(_REPO_ROOT, f"WAI-Spoke/sessions/{args.session_id}/track.jsonl")
+        track_path = os.path.join(_BASE, "sessions", args.session_id, "track.jsonl")
 
     if not track_path:
         # Try latest session
-        sessions_dir = os.path.join(_REPO_ROOT, "WAI-Spoke/sessions")
+        sessions_dir = os.path.join(_BASE, "sessions")
         if os.path.isdir(sessions_dir):
             sessions = sorted(os.listdir(sessions_dir), reverse=True)
             if sessions:
@@ -150,7 +159,7 @@ def main():
     # Resolve wheel_id
     wheel_id = args.wheel_id
     if not wheel_id:
-        state_path = os.path.join(_REPO_ROOT, "WAI-Spoke/WAI-State.json")
+        state_path = os.path.join(_BASE, "WAI-State.json")
         if os.path.exists(state_path):
             state = json.load(open(state_path))
             wheel_id = state.get("wheel", {}).get("wheel_id", "")

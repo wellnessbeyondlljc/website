@@ -1,0 +1,229 @@
+{
+  "_doc": "P12 path-parity gate baseline \u2014 known unpaired v3-husk-path resolvers. Gate fails only on NEW additions. Re-run path_parity_check.py --baseline after an intentional change.",
+  "count": 68,
+  "unpaired": {
+    ".claude/commands/wai-chat-to-track.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-full.md": [
+      "runtime",
+      "savepoints",
+      "sessions"
+    ],
+    ".claude/commands/wai-harness-adopt.md": [
+      "runtime",
+      "savepoints",
+      "sessions"
+    ],
+    ".claude/commands/wai-health.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-knowme.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-lug-schema.md": [
+      "runtime"
+    ],
+    ".claude/commands/wai-reference-slim.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-reference.md": [
+      "runtime",
+      "sessions"
+    ],
+    ".claude/commands/wai-task-complete.md": [
+      "runtime"
+    ],
+    ".claude/commands/wai-tool-maximizer-gemini-reference.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-track-generate-reference.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-track-generate.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-track-rebuild-slim.md": [
+      "sessions"
+    ],
+    ".claude/commands/wai-track-rebuild.md": [
+      "runtime",
+      "sessions"
+    ],
+    ".claude/commands/wai-track.md": [
+      "runtime",
+      "sessions"
+    ],
+    ".claude/commands/wai-wayfinder.md": [
+      "runtime"
+    ],
+    ".claude/commands/wai.md": [
+      "runtime"
+    ],
+    ".claude/hooks/post-tool-use.sh": [
+      "sessions"
+    ],
+    ".claude/hooks/pre-compact.sh": [
+      "runtime"
+    ],
+    "shared/codebase/skills/historian.yaml": [
+      "sessions"
+    ],
+    "shared/codebase/skills/track-encapsulation.yaml": [
+      "sessions"
+    ],
+    "shared/codebase/tools/historian_scan.py": [
+      "sessions"
+    ],
+    "shared/codebase/tools/qwen_advisor.py": [
+      "runtime",
+      "sessions"
+    ],
+    "shared/codebase/tools/wai-chain.sh": [
+      "runtime"
+    ],
+    "shared/codebase/tools/wai_validate.py": [
+      "runtime"
+    ],
+    "templates/commands/wai-chat-to-track.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-full.md": [
+      "runtime",
+      "savepoints",
+      "sessions"
+    ],
+    "templates/commands/wai-harness-adopt.md": [
+      "runtime",
+      "savepoints",
+      "sessions"
+    ],
+    "templates/commands/wai-health.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-knowme.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-lug-schema.md": [
+      "runtime"
+    ],
+    "templates/commands/wai-reference-slim.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-reference.md": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/commands/wai-task-complete.md": [
+      "runtime"
+    ],
+    "templates/commands/wai-tool-maximizer-gemini-reference.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-track-generate-reference.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-track-generate.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-track-rebuild-slim.md": [
+      "sessions"
+    ],
+    "templates/commands/wai-track-rebuild.md": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/commands/wai-track.md": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/commands/wai-wayfinder.md": [
+      "runtime"
+    ],
+    "templates/commands/wai.md": [
+      "runtime"
+    ],
+    "templates/spoke/.claude/hooks/flush_buffer.py": [
+      "runtime"
+    ],
+    "templates/spoke/.claude/hooks/pre-compact.sh": [
+      "runtime"
+    ],
+    "templates/spoke/.claude/hooks/stop-track-flush.sh": [
+      "runtime"
+    ],
+    "templates/spoke/.claude/hooks/synthesize_turn.py": [
+      "runtime"
+    ],
+    "templates/spoke/hooks/session-start.sh": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/spoke/skills/chat-to-track/wai-chat-to-track.md": [
+      "sessions"
+    ],
+    "templates/spoke/skills/closeout/wai-closeout.md": [
+      "runtime"
+    ],
+    "templates/spoke/skills/track-generate/wai-track-generate-reference.md": [
+      "sessions"
+    ],
+    "templates/spoke/skills/track-generate/wai-track-generate.md": [
+      "sessions"
+    ],
+    "templates/spoke/skills/wai/wai-reference.md": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/spoke/skills/wai/wai.md": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/spoke/wai-enter.sh": [
+      "runtime",
+      "sessions"
+    ],
+    "templates/spoke/wai-exit.sh": [
+      "runtime"
+    ],
+    "tools/burn_panel.py": [
+      "sessions"
+    ],
+    "tools/change_registry.py": [
+      "runtime"
+    ],
+    "tools/compass_report.py": [
+      "runtime"
+    ],
+    "tools/emit_activity_event.py": [
+      "runtime"
+    ],
+    "tools/initiative_lease.py": [
+      "runtime"
+    ],
+    "tools/lug_lease.py": [
+      "runtime"
+    ],
+    "tools/mirror_track_to_events.py": [
+      "sessions"
+    ],
+    "tools/observability_dashboard.py": [
+      "runtime"
+    ],
+    "tools/ozi_headless.py": [
+      "runtime"
+    ],
+    "tools/spoke_cleanup.py": [
+      "sessions"
+    ],
+    "tools/wai-chain.sh": [
+      "runtime"
+    ],
+    "tools/wai_validate.py": [
+      "runtime"
+    ],
+    "tools/wheel_rotation_health_check.py": [
+      "sessions"
+    ]
+  }
+}

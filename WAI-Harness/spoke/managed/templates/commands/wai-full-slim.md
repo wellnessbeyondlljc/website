@@ -30,7 +30,7 @@ Is <wai-session-init> in context AND brief is FRESH?
 
 ## Tool Calls Required (full path)
 
-1. Read `WAI-Spoke/WAI-State.json`
+1. Read `{BASE}/WAI-State.json` (resolve `{BASE}` via ceremony-lib; never hardcode WAI-Spoke/)
 2. Read active lugs (`bytype/*/open/`, `*/in_progress/`)
 3. Read hub signals inbox
 4. Read session track (if exists)

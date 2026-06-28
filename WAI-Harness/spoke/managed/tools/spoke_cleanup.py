@@ -47,8 +47,24 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from lug_utils import get_lug_id, get_lug_type, get_lug_status, get_lug_title
+import wai_paths  # harness-mode root resolver (v3/v4-aware)
 
-SPOKE_DIR = "WAI-Spoke"
+
+def _spoke_base(spoke_root="."):
+    """The spoke working base, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke meant every phase
+    no-op'd against a nonexistent tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return root
+    except Exception:
+        pass
+    return "WAI-Spoke"  # last-resort v3 fallback
+
+
+SPOKE_DIR = _spoke_base()
 LUGS_DIR = os.path.join(SPOKE_DIR, "lugs")
 BYTYPE_DIR = os.path.join(LUGS_DIR, "bytype")
 ACTIVE_FILE = os.path.join(LUGS_DIR, "active", "WAI-Lugs-active.jsonl")
@@ -495,11 +511,28 @@ def phase_7():
         print(f"  WAI-LugIndex.jsonl  [{count} entries, {size:,} bytes]")
 
 
+def _is_v4_only(root="."):
+    """True when this spoke runs on the v4 harness with no legacy WAI-Spoke/ tree.
+    This restructure tool only ever operated on WAI-Spoke/; on v4 it is a no-op."""
+    _, mode = wai_paths.resolve_wai_root(root)
+    return mode == "v4" and not os.path.isdir(os.path.join(root, SPOKE_DIR))
+
+
 def main():
     global dry_run
     parser = argparse.ArgumentParser(description="WAI Spoke Cleanup — restructure WAI-Spoke/ into clean folder hierarchy.")
     parser.add_argument("--dry-run", action="store_true", help="Show changes without writing")
     dry_run = parser.parse_args().dry_run
+
+    # v4 short-circuit: this is a v3-era restructure tool keyed entirely to WAI-Spoke/.
+    # On a v4-only spoke that tree is gone, so the phases below would silently no-op.
+    # Emit an explicit notice and exit cleanly instead (no phantom-tree work).
+    if _is_v4_only():
+        print("=== SPOKE CLEANUP: NO-OP (v4-only harness) ===")
+        print("This tool restructures the legacy WAI-Spoke/ tree, which does not exist on a")
+        print("v4-only spoke. The v4 lug store under WAI-Harness/spoke/local is already")
+        print("organized by harness_activate.py — nothing to restructure. Exiting 0.")
+        return
 
     print(f"=== SPOKE CLEANUP {'(DRY RUN)' if dry_run else ''} ===")
 

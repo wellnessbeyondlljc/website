@@ -21,9 +21,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
 BASHER_SENTINEL = ".basher-managed"
-UPGRADE_FAILURES_FILE = "WAI-Spoke/teachings/upgrade-failures.jsonl"
-BASE_VERSION_FILE = "WAI-Spoke/base_version"
+UPGRADE_FAILURES_FILE = "teachings/upgrade-failures.jsonl"
+BASE_VERSION_FILE = "base_version"
+
+
+def _spoke_base(spoke_path: Path) -> Path:
+    """Working-state base: WAI-Harness/spoke/local on v4, WAI-Spoke on v3."""
+    root, mode = resolve_wai_root(str(spoke_path))
+    if root and mode != "none":
+        return Path(root)
+    return Path(spoke_path) / "WAI-Spoke"  # last-resort v3 fallback
 
 
 def _now() -> str:
@@ -144,8 +155,9 @@ def apply_upgrade(
     base_version = consolidated.get("base_version", "")
     teachings = consolidated.get("teachings", [])
 
-    # Ensure spoke teachings dir exists
-    teachings_dir = spoke_path / "WAI-Spoke" / "teachings"
+    # Ensure spoke teachings dir exists (base-aware: v4 local / v3 WAI-Spoke)
+    base = _spoke_base(spoke_path)
+    teachings_dir = base / "teachings"
     if not dry_run:
         teachings_dir.mkdir(parents=True, exist_ok=True)
 
@@ -221,7 +233,7 @@ def apply_upgrade(
 
     # Write failure log
     if failures and not dry_run:
-        failures_path = spoke_path / UPGRADE_FAILURES_FILE
+        failures_path = base / UPGRADE_FAILURES_FILE
         failures_path.parent.mkdir(parents=True, exist_ok=True)
         with failures_path.open("a") as fh:
             for f in failures:
@@ -230,7 +242,7 @@ def apply_upgrade(
     # Update base_version if no failures
     version_written = False
     if not failures and not dry_run and base_version:
-        bv_path = spoke_path / BASE_VERSION_FILE
+        bv_path = base / BASE_VERSION_FILE
         bv_path.parent.mkdir(parents=True, exist_ok=True)
         bv_path.write_text(base_version + "\n")
         version_written = True

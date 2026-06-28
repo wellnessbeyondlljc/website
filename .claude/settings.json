@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/mario/.claude/statusline.sh",
+    "padding": 2,
+    "refreshInterval": 30
+  },
+  "_basher": {
+    "managed_by": "basher tools update",
+    "new_entries": "document value + declare scope: spoke-local or wheel-wide. Wheel-wide changes: write a lug to /home/mario/projects/basher/WAI-Spoke/lugs/incoming/"
+  }
+}

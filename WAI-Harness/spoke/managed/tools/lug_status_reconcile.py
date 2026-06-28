@@ -22,8 +22,19 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-BYTYPE = ROOT / "WAI-Spoke/lugs/bytype"
+def _resolve_root(root="."):
+    """Base-aware resolution (v4 data plane first, then v3). Returns (spoke_root, bytype_dir).
+    spoke_root anchors relative target_files; bytype_dir is the lug store to reconcile.
+    Pre-fix this pointed at the tool's own dir + a v3 path that does not exist on v4, so the
+    reconciler scanned NOTHING on v4 spokes — a silent no-op. Now it resolves the live store."""
+    r = Path(root).resolve()
+    for rel in ("WAI-Harness/spoke/local", "WAI-Spoke"):
+        if (r / rel / "lugs" / "bytype").is_dir():
+            return r, (r / rel / "lugs" / "bytype")
+    return r, (r / "WAI-Harness/spoke/local/lugs/bytype")
+
+
+ROOT, BYTYPE = _resolve_root(".")
 
 TERMINAL_STATES = {
     "completed", "c", "closed", "resolved", "done", "implemented",
@@ -186,7 +197,11 @@ def main():
     ap.add_argument("--apply", action="store_true", help="Apply changes (default is check-only)")
     ap.add_argument("--json", action="store_true", help="Emit JSON summary")
     ap.add_argument("--session", default="manual", help="Session ID for audit trail")
+    ap.add_argument("--root", default=".", help="spoke root (resolves the live lug store; default cwd)")
     args = ap.parse_args()
+
+    global ROOT, BYTYPE
+    ROOT, BYTYPE = _resolve_root(args.root)
 
     result = reconcile(apply=args.apply, session=args.session)
 

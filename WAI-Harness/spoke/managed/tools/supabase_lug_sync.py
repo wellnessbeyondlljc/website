@@ -22,6 +22,8 @@ import sys
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 SUPABASE_REST = os.environ.get("SUPABASE_REST", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 WHEEL_ID_ENV = os.environ.get("WHEEL_ID", "")
@@ -29,7 +31,26 @@ WHEEL_ID_ENV = os.environ.get("WHEEL_ID", "")
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 RETRY_QUEUE_PATH = os.path.join(_REPO_ROOT, "tools/sync_retry_queue.jsonl")
-STATE_PATH = os.path.join(_REPO_ROOT, "WAI-Spoke/WAI-State.json")
+
+
+def _state_path():
+    """Locate WAI-State.json, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local/WAI-State.json; PRE-FIX the hardcoded WAI-Spoke
+    path read a nonexistent tree so wheel_id never resolved from state
+    (impl-fix-p2-v3noop-sweep-v1). _REPO_ROOT is WAI-Harness/spoke/managed, so
+    the spoke root (the dir containing WAI-Harness/) is three levels up."""
+    spoke_root = os.path.dirname(os.path.dirname(os.path.dirname(_REPO_ROOT)))
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(spoke_root)
+        if root and mode != "none":
+            return os.path.join(root, "WAI-State.json")
+    except Exception:
+        pass
+    return os.path.join(_REPO_ROOT, "WAI-Spoke/WAI-State.json")  # v3 fallback
+
+
+STATE_PATH = _state_path()
 
 
 def _now_iso() -> str:

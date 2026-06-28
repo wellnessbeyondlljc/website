@@ -15,11 +15,29 @@ Usage:
 
 import json
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-USAGE_DIR = Path("WAI-Spoke/model-usage")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _usage_base(spoke_root="."):
+    """The dir holding model-usage/, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke path silently wrote a
+    nonexistent tree so hub collection saw nothing (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root)
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke"  # last-resort v3 fallback
+
+
+USAGE_DIR = _usage_base() / "model-usage"
 USAGE_FILE = USAGE_DIR / "usage.jsonl"
 
 

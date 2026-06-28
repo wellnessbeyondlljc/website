@@ -19,7 +19,7 @@ PRIVATE = ROOT / "tools"
 PUBLIC = ROOT / "shared" / "codebase" / "tools"
 
 # Files that must be kept in sync between tools/ and shared/codebase/tools/.
-# Does not include files that are private-only (advisor_report.py, spoke_*.py, etc.)
+# Does not include files that are private-only (spoke_*.py, etc.)
 # or migration scripts (archived).
 SHARED_FILES = [
     "advisor_context_refresh.py",
@@ -31,7 +31,6 @@ SHARED_FILES = [
     "historian_scan.py",
     "human_hours.py",
     "lathe_score.py",
-    "luci_check.py",
     "lug_utils.py",
     "pre_commit_health.py",
     "schedule_advisor.py",

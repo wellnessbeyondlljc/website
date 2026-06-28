@@ -1,4 +1,5 @@
 # WAI Lug Schema
+> Fast path: load `wai-lug-schema-slim.md` first. Load this file only when deep protocol is needed.
 
 **Lug System Protocol — task graph management, schemas, authoring, and lifecycle.**
 
@@ -26,7 +27,6 @@ WAI-Spoke/lugs/
     feature/{open,in_progress,completed}/
     bug/{open,in_progress,completed}/
     implementation/{in_progress,completed}/
-    signal/{undelivered,delivered}/
     session-summary/               — all completed, no status subfolder
     other/{open,completed}/        — rare types (idea, policy, learning, etc.)
 ```
@@ -35,21 +35,21 @@ WAI-Spoke/lugs/
 |------|-------|-------|
 | Active lugs | `lugs/bytype/*/open/` and `bytype/*/in_progress/` | Scanned at wakeup |
 | Completed lugs | `lugs/bytype/{type}/completed/` | One file per lug |
-| Signals (v2) | `WAI-Spoke/signals/{inbound,processed}/` + `signals/registry.json` | Separate from work lugs — applied at session start |
+| Signals (legacy) | `WAI-Spoke/signals/{inbound,processed}/` + `signals/registry.json` | **Deprecated** — old framework-patch mechanism. Do not create new signal lugs in spoke directories. |
+| User signals | `{hub_path}/WAI-Hub/signals/incoming/` | User-action-required alerts. Written by spokes or Ozi. Read by all sessions at startup. NOT actionable by agents. |
 | Lug index | `WAI-Spoke/WAI-LugIndex.jsonl` | Lightweight lookup — on-demand only |
 | Incoming/outgoing | `WAI-Spoke/lugs/incoming/` and `outgoing/` | Delivery channel only |
-| Hub bulletin | `WAI-Hub/signals/incoming/` | High-impact lugs copied here at closeout |
+| Hub bulletin | `WAI-Hub/signals/incoming/` | User-alert signals from spokes — read at every session start |
 | Reference docs | `WAI-Spoke/reference/` | Top-level, peer to lugs/sessions/skills |
 
 **Storage rules:**
 - **New lugs** → write to `lugs/bytype/{type}/open/{id}.json`
 - **In-progress** → move to `lugs/bytype/{type}/in_progress/{id}.json`
 - **Completed** → move to `lugs/bytype/{type}/completed/{id}.json`
-- **Signals delivered** → move from `undelivered/` to `delivered/`
 - **Index** → regenerated at closeout
 - **Wakeup** → scans `bytype/*/open/` and `bytype/*/in_progress/` only
 
-`WAI-Spoke/WAI-Signals.jsonl`, `WAI-Spoke/WAI-Lugs.jsonl`, and `WAI-Spoke/lugs/active/` are all **retired**. Do not create or write to any of them.
+`WAI-Spoke/WAI-Signals.jsonl` and `WAI-Spoke/WAI-Lugs.jsonl` are **retired** (pre-v3.0 flat lug stores). Use `lugs/bytype/` for all lug operations. Do not create or write to the retired paths.
 
 ---
 
@@ -77,8 +77,14 @@ A lug is a JSON file at `WAI-Spoke/lugs/bytype/{type}/{status}/{id}.json`. The f
 | `impact` | `impact` | **Impact score** 1-10. Used by ROI scorer. Default inferred from type if absent. |
 | `effort` | `effort` | **Effort score** 1-5. Used by ROI scorer. Default inferred from type if absent. |
 | `urgency` | `urgency` | **Dispatch priority tier** 1-5 (default 3). 1=URGENT (immediate), 2=HIGH, 3=NORMAL, 4=LOW, 5=DEFER. Tiers sort before ROI — all tier-1 items dispatch before any tier-2. Backward compatible: omitted = tier 3. |
-| `rt` | `routed_to` | Routing target: `LOCAL`, `FRAMEWORK`, `SIGNAL`, or `SPOKE/{spoke_id}` for cross-spoke |
+| `rt` | `routed_to` | Routing target: `LOCAL`, `FRAMEWORK`, or `SPOKE/{spoke_id}` for cross-spoke. Signal lugs do not use `routed_to` — write directly to `{hub_path}/WAI-Hub/signals/incoming/`. |
 | `spec_id` | `spec_id` | Optional. On implementation lugs: ID of the spec lug that defines the behavior being implemented. Singular — one primary spec per impl. |
+| `suggested_skill` | `suggested_skill` | Optional. The exact skill command that resolves this lug (e.g. `/wai-foundation` for a `missing_foundation` remediation lug). When set, the wakeup work-queue surfaces it as the **first** recommended action — a one-line, copy-paste CTA, not a paragraph of file edits. |
+| `hyp` | `hypothesis` | Optional (ideation). **Why** we're doing this — the belief that motivates the work. Capture at creation when ideating with an agent so intent is shared, not implied. |
+| `lift` | `expected_lift` | Optional (ideation). The **measurable improvement expected** (e.g. "closeout cost −40%", "−4 tool calls/wakeup"). Stated as a target before the work runs. |
+| `measure` | `measure` | Optional (ideation). **How** we'll check the lift after implementing (the metric + where it's read). At closeout/review, compare actual vs `expected_lift`. |
+
+> **Ideation capture (hypothesis/expected_lift/measure):** when creating `idea`/`feature` lugs during ideation, fill these three so agent and user are aligned on *why* and can measure whether the lift landed. This is the lightweight, lug-resident form of hypothesis-grounded work — no external Realizer service required.
 
 **Title Policy:**
 - **No generic session summaries:** "Session 35 summary" is BANNED.
@@ -137,6 +143,16 @@ Alpha-sorted ensures two spokes with identical absorbed teachings produce identi
 
 Weighting the hash input ensures changing a teaching's weight invalidates its fingerprint (integrity property).
 
+### Under the base+patches model (v3+)
+
+The "series" anchor is now `_harness.base_version` and the fingerprinted units are the **patches** in `base/teachings/index.json` (each patch carries `fingerprint` + `weight`). Derivation:
+
+```
+_harness.fw_ver = MD5("{base_version}.{alpha-sorted adopted-patch fingerprints}")[:12]
+```
+
+Two spokes on the same base that adopted the same patches derive an identical `fw_ver` regardless of order — making fleet state auditable. Cutting a new base resets the patch set (and thus the fingerprint space), exactly the "series close" behaviour above. `06-verify.md` computes `fw_ver` into the ledger during adoption.
+
 ---
 
 ## Status Values
@@ -172,13 +188,14 @@ Spec lugs are stored at `WAI-Spoke/lugs/bytype/spec/{draft,active,deprecated}/{i
 | `review` | Something needing review or verification | No — add to tracker |
 | `epic` | Large multi-session effort (blocked until tasks clear) | No — add to tracker |
 | `implementation` | Execution-control lug for non-trivial planned work | No — add to tracker |
-| `signal` | Risk bulletin (impact >= 8) — patch or delivery flavor | No — store in `WAI-Spoke/signals/inbound/` (v2 schema, not bytype/) |
+| `signal` | User-action-required alert — a message from a spoke or Ozi to the human user requiring their direct decision or action. NOT a framework patch. NOT actionable by agents alone. | No — write to `{hub_path}/WAI-Hub/signals/incoming/{id}.json`; displayed at session start |
 | `foundation` | Project identity, boundaries, approach | No — defines the project |
 | `session-summary` | Completed session record (autosaves reconciled) | No — archive only |
 | `autosave` | Crash-recovery checkpoint from mid-session | Reconcile at closeout |
 | `policy` | Project rules or constraints | No — reference document |
 | `observation` | Factual observation logged for pattern detection | No — record |
 | `learning` | Cross-session insight worth preserving | No — record |
+| `hypothesis` | Proposed advisor behavior change generated by EvolutionEngine when recurrence threshold is met. Routes to lead advisor for review. Created at `bytype/other/open/hyp-{advisor}-{pattern}-{ts}.json`. | No — review required |
 | `maintenance` | Infrastructure or tooling work | No — add to tracker |
 | `core-protocol` | Framework protocol documentation | No — reference document |
 | `delivery_confirmation` | Confirms lug was delivered to target spoke | Auto-acknowledged |
@@ -187,6 +204,57 @@ Spec lugs are stored at `WAI-Spoke/lugs/bytype/spec/{draft,active,deprecated}/{i
 | `session` | Historical session record (legacy) | No — archive only |
 | `challenge` | Problem-centric anchor for idea lugs | No — append-only in WAI-Challenges.jsonl |
 | `spec` | Living documentation of a spoke behavior — primary authoritative source for what a feature does, who it serves, and how it works | No — author at creation, update whenever behavior changes |
+| `chain` | Portable, resumable work-coordination unit — groups child lugs into a claimable execution sequence with TTL-based claiming, session scoping, and deferred-child overflow. Sits between an epic (strategic) and implementation lugs (atomic). Stored at `bytype/chain/{status}/{id}.json`. | No — claimed at session startup via claim registry |
+
+---
+
+## Chain Lug
+
+A `chain` lug coordinates multi-session work with distributed claiming. Unlike epics (strategic) or implementation lugs (atomic), chains are the execution unit — each session claims one, plans what fits in budget, executes, and defers overflow.
+
+**Status values:** `open | claimed | in_progress | deferred | completed`
+
+**Required fields (in addition to standard id/type/status/created_at):**
+- `goal`: string — the Work Goal this chain accomplishes (one sentence, cross-session)
+- `execution_mode`: `sequential | parallel`
+- `children`: array of child lug IDs (ordered for sequential, unordered for parallel)
+- `completed_children`: array of child lug IDs completed in prior sessions
+- `claimed_by`: session_id or null
+- `claimed_at`: ISO-8601 or null
+- `ttl_hours`: int default 6 — claim expires at claimed_at + ttl_hours
+- `session_plan`: object — populated when claimed:
+  - `model`: model_id this session will use
+  - `budget_tokens`: token ceiling for this claim
+  - `planned_children`: child lug IDs this session will attempt
+  - `deferred_children`: child lug IDs deferred to next session
+  - `file_scope`: files this session will touch (conflict lock)
+
+**Claim registry:** Supabase `wai_claims` table (primary) or `WAI-Spoke/runtime/claims-local.json` (fallback for single-Ozi spokes without Supabase). PRIMARY KEY on `chain_id` makes claiming atomic — PK collision rejects a second concurrent claim.
+
+**Storage:** `WAI-Spoke/lugs/bytype/chain/{open,in_progress,completed}/{id}.json`
+
+## Contract Fields (Lease + Verify + Provenance)
+
+Every lug is a hole in a [pattern](wai-pattern.md) — the contract. These fields make any lug leasable (so parallel streams don't collide) and verifiable (so a pattern can certify it). The lease **generalizes the chain-claim mechanism above to lug granularity**; reuse the same `wai_claims` atomicity, do not reinvent it.
+
+**Lease fields:**
+- `held_by`: session_id holding the lease, or null
+- `held_at`: ISO-8601 claim time, or null
+- `lease_ttl_hours`: int, default `4` — lease expires at `held_at + lease_ttl_hours`
+
+**Lease rules:**
+- **Atomic claim** via `wai_claims` PK (key = `lug_id`) with `claims-local.json` fallback — a second concurrent claim is rejected by PK collision.
+- **Readers skip held lugs** — Ozi/dispatch/sub-agents route around any lug held by a *live* session (verify-before-action gate).
+- **Expiry auto-releases** at wakeup/dispatch when `held_at + lease_ttl_hours` has passed with no live holder.
+- **Bias to done over holding:** if a worker can't finish within the TTL, it emits a *partial* bolt for what it certified and releases the lease — the next worker resumes from proof, not archaeology.
+
+**Verification field:**
+- `verify_mode`: `mechanical | attested | human` — how this lug's `verify[]` criteria are certified when its pattern closes. `mechanical` runs `verify[]` as a runnable assertion; `attested` requires a named verifier (e.g. the `lug-reviewer` agent) to sign; `human` requires Mario to sign. Nothing certifies uncertified.
+
+**Provenance field:**
+- `provenance`: `{ source_lugs: [], source_teachings: [] }` — the inputs that led to this lug. Feeds the pattern's `provenance` (the versioned DNA) so any delivered work is traceable to what manifested it.
+
+See `spec-goal-chain-v1` for full schema, constraints, TTL expiry behavior, and claim/release protocol.
 
 ---
 
@@ -254,8 +322,9 @@ Spec lugs are the **primary authoritative source** for understanding what this s
 | `finding` | Investigation result or discovered fact |
 | `test` | Test specification or result |
 | `session-summary` | End-of-session record |
-| `signal` | Patch-now alert broadcast to all spokes (impact >= 8) |
+| `signal` | User-action-required alert — message from spoke/Ozi to the human user. NOT a framework patch. Stored at hub (`signals/incoming/`), shown at session start. |
 | `spec` | Living behavior specification — what a spoke feature does, who it serves, how it works |
+| `chain` | Claimable multi-session coordination unit — groups child lugs into a session-scoped execution sequence with TTL claiming and deferred-child overflow |
 
 ### work.kind Field
 
@@ -269,6 +338,8 @@ When creating a `work` lug, set `work.kind` to classify the work:
 | `implementation` | type: "implementation" | Capability rollout |
 
 **Dual-Read Compatibility:** Existing lugs with `type: "task"`, `type: "bug"`, or `type: "feature"` remain valid. Do not bulk-rewrite. New lugs should use canonical types. Treat `type: "task"` as equivalent to `type: "work", work.kind: "task"`.
+
+**Bug subtype — Scout Finding:** A bug lug produced by an automated scout job. Add these optional fields alongside standard bug fields: `scout_job_id` (stable scout id), `verification_result` `{score, passed, verification_type, details}`, `self_finding_subtype` (`confusion | refusal | null`), `repeat_fire_count` (starts 1, increment on re-fire — do not create new lugs), `run_log_ref` (activity_events row id). Full schema: `WAI-Lug-Schema-Spec.md § Bug Type: Scout Finding Subtype`.
 
 ---
 
@@ -298,11 +369,29 @@ For named lugs (foundation, epic): use human-readable IDs:
 | `priority` | `"medium"` | Use `"before_next_epic"` only when truly blocking |
 | `blocks` | `[]` | Empty array |
 | `blocked_by` | `[]` | Empty array — evaluated by dispatch (items with unresolved blockers are skipped) |
+| `files_to_create` | `[]` | Paths agent must create. Relative to project root. Sub-agent dispatch only. |
+| `files_to_edit` | `[]` | Paths agent must modify. Sub-agent dispatch only. |
+| `files_to_read` | `[]` | Paths agent reads for style/schema/context (not modified). Sub-agent dispatch only. |
+| `wave` | `null` | Wave identifier (`"A"`, `"B"`, `"C"`, …) for parallel dispatch ordering. Wave A = zero dependencies; Wave B = blocked only by Wave A; etc. |
+| `dependencies` | `[]` | Lug IDs this lug waits on (must complete before this one starts). |
+| `blocking` | `[]` | Lug IDs waiting on this one (informational — populated by planner, not author). |
 | `tags` | `[]` | Empty array |
-| `phase` | `null` | Phase membership ID (e.g. `"p1-foundation"`) — groups items for milestone tracking |
+| `phase` | `null` | Phase membership ID (e.g. `"p1-foundation"`) — groups items for milestone tracking. Cross-reference `project_ozi_directive_crew_design.md` for crew phases. |
 | `phase_order` | `null` | Numeric ordering within a phase (lower = earlier) |
 | `execute_when` | `null` | Conditional trigger — see Execute-When Gates section below |
 | `model_fit` | `"haiku"` | **Model class for execution.** Implementation and coding lugs default to `"haiku"`. Set to `"sonnet"` for work requiring reasoning, architecture decisions, or multi-file changes. Set to `"opus"` for planning-heavy or high-stakes work. Tender reads this field to route lug passes. |
+| `state` | `null` | Fine-grained sub-status within `s`, free-form string |
+| `risk_tier` | `'standard'` | One of: `low`, `standard`, `elevated`, `critical` |
+| `lead_advisor` | `null` | Crew folder slug, e.g. `delivery-manager` |
+| `consulting_advisors` | `[]` | Array of crew folder slugs |
+| `execution_mode` | `'manual'` | One of: `manual`, `subagent`, `tender`, `gastown` |
+| `model_override` | `null` | Model id that wins over model_fit when present |
+| `outcome` | `null` | One of: shipped, shipped_with_rework, abandoned, superseded. Set at completion. Null on open lugs. |
+| `gitnexus_symbols` | `[]` | Array of refactor-stable GitNexus symbol IDs touched by this lug. Populated post-implementation. |
+| `execution_substrate` | `null` | Execution substrate for automated dispatch. Set to `"gastown"` when lug qualifies for gastown batch dispatch. Evaluated at CREATE time. |
+| `gt_convoy_hint` | `null` | Optional. Brief one-sentence description for the gastown Mayor convoy context. Set alongside `execution_substrate: "gastown"`. |
+
+> **Sub-agent dispatch fields:** `files_to_create`, `files_to_edit`, `files_to_read`, `wave`, `dependencies`, and `blocking` are optional. Populate them only for lugs intended for sub-agent dispatch. Omitting them on human-executed lugs is correct.
 
 ### `gb` (gathered_by) — Model ID Required
 
@@ -468,6 +557,36 @@ if os.path.exists(nav_rec_path):
 # If recommendations absent, omit the field (Navigator not yet operational on this spoke)
 ```
 
+#### GT Candidacy Check
+
+After Navigator injection, evaluate gastown eligibility and stamp `execution_substrate` if applicable:
+
+```python
+import os
+
+# GT candidacy: eligible when all conditions met
+gt_eligible = (
+    lug.get("model_fit") == "haiku"
+    and lug.get("type") in ("work", "task", "feature", "implementation", "impl")
+    and not (lug.get("execute_when") or {}).get("manual_gate")
+    and os.path.isdir(os.path.expanduser("~/projects/gastown"))
+)
+
+if gt_eligible:
+    lug["execution_substrate"] = "gastown"
+    # Derive a one-sentence convoy hint from the lug title/one_liner
+    hint_source = lug.get("one_liner") or lug.get("title") or lug.get("t", "")
+    lug["gt_convoy_hint"] = hint_source[:120].rstrip()
+    print(f"GT candidacy: ELIGIBLE — execution_substrate set to 'gastown'")
+else:
+    reasons = []
+    if lug.get("model_fit") != "haiku": reasons.append(f"model_fit={lug.get('model_fit')} (need haiku)")
+    if lug.get("type") not in ("work", "task", "feature", "implementation", "impl"): reasons.append(f"type={lug.get('type')}")
+    if (lug.get("execute_when") or {}).get("manual_gate"): reasons.append("manual_gate=true")
+    if not os.path.isdir(os.path.expanduser("~/projects/gastown")): reasons.append("gastown not installed")
+    print(f"GT candidacy: NOT ELIGIBLE — {'; '.join(reasons) or 'unknown'}")
+```
+
 2. **DOGFOOD** — Run the naive agent test. Fix gaps before work begins.
 3. **DISCUSS** — (Optional) For high-impact lugs (impact >= 8), present strategy to user and refine.
 4. **IMPLEMENT** — Set `s: "p"`. Follow the `execute` steps. If reality diverges, update the lug first.
@@ -564,11 +683,35 @@ If found in `priority` on an existing lug, treat as P1-equivalent.
 |-------|---------|---------------------|
 | `"LOCAL"` | Stays in this spoke | `completed/` only |
 | `"FRAMEWORK"` | Framework improvement | hub teaching delivery + `completed/` |
-| `"SIGNAL"` | Patch-now alert broadcast to all spokes (impact >= 8) | hub bulletin + `WAI-Spoke/signals/inbound/` on each spoke; registry.json tracks applied |
+| `"SIGNAL"` | **Deprecated** — do not use. Signal lugs are user alerts; write directly to `{hub_path}/WAI-Hub/signals/incoming/` with no `routed_to` needed. | ignored |
 | `"SPOKE/{spoke_id}"` | Cross-spoke routing | `{hub_path}/WAI-Hub/lugs/incoming/{spoke_id}/` + completed locally |
 | `"ASSESSOR"` | Model performance telemetry | Deposited to `{hub_path}/WAI-Hub/advisors/assessor/inbox/` at closeout by `spoke-telemetry-closeout` |
 
 **Default:** If not set, assume `LOCAL`. Ozi should confirm routing before creating.
+
+#### Delivery
+
+Cross-spoke lugs are **compose-and-send**: deliver immediately after creation. Do not queue and wait for closeout.
+
+**Pre-delivery checklist** (run before every delivery):
+- `perceive` non-empty
+- `execute` non-empty
+- `verify` non-empty
+- `destination_wheel_id` set and resolvable in hub-registry.json
+- `acceptance_criteria` is a non-empty list
+- `effort_score` is a number or T-shirt size — both formats are valid fleet-wide. Numeric: 1–9. T-shirt: `XS`=1, `S`=2, `M`=3, `L`=5, `XL`=8, `XXL`=13. Tools that read `effort_score` must coerce via `_coerce_number()` — never call `float()` directly on this field.
+- `model_fit` is one of: `haiku`, `sonnet`, `opus`
+- For `impl`/`feature`/`task`: `target_files` or `files_to_edit` present
+
+If any check fails: fix the lug. Do not deliver a draft.
+
+**Delivery action** (after checklist passes):
+1. Write lug to `WAI-Spoke/lugs/outgoing/{id}.json` (local audit record)
+2. Read hub-registry.json → resolve `destination_wheel_id` to spoke path
+3. `\cp WAI-Spoke/lugs/outgoing/{id}.json {target_path}/WAI-Spoke/lugs/incoming/{id}.json`
+4. Set `delivered_at: {iso_timestamp}` and `status: delivered` in the outgoing copy
+
+**Closeout Step 9 is a sweep backstop**, not the primary delivery path. Lugs that reach closeout undelivered are considered delivery failures — they were created but not sent.
 
 ### `scope_verified_by` (Required if routed_to != LOCAL)
 
@@ -577,7 +720,7 @@ If found in `priority` on an existing lug, treat as P1-equivalent.
 ### Routing Logic at Lug Creation
 
 1. Load `_project_foundation.boundaries`
-2. Classify: LOCAL (only this project) | FRAMEWORK (affects how projects work) | SIGNAL (impact >= 8, cross-spoke) | SPOKE/{id} (belongs to another spoke) | ASSESSOR (model telemetry capture)
+2. Classify: LOCAL (only this project) | FRAMEWORK (affects how projects work — impl/task lugs that improve framework schemas, skills, or protocols) | SPOKE/{id} (belongs to another spoke) | ASSESSOR (model telemetry capture)
 3. Announce: `"Creating {type} '{title}' → {routed_to}"`
 4. Wait for user confirmation
 5. Record decision in `scope_verified_by`
@@ -591,13 +734,13 @@ When you are working in spoke A and observe work that belongs elsewhere, use thi
 
 | Situation | Correct Action | Wrong Action |
 |-----------|---------------|-------------|
-| You observe spoke B has a bug or improvement while working in spoke A | Write a lug to `{hub_path}/WAI-Hub/lugs/incoming/{spoke_b_id}/` (`routed_to: "SPOKE/{spoke_b_id}"`) | Emitting a framework signal |
-| Work that ALL active spokes must apply immediately (impact >= 8) | Framework signal (`routed_to: "SIGNAL"`) | Writing to one spoke's inbox |
-| Improvement to framework schemas, skills, or protocols | Framework impl lug to `framework/WAI-Spoke/lugs/incoming/` (`routed_to: "FRAMEWORK"`) | Writing to a specific spoke |
-| Architectural decision owned by one spoke | Lug to that spoke's inbox (`routed_to: "SPOKE/{id}"`) | Broadcasting as a signal |
+| You observe spoke B has a bug or improvement while working in spoke A | Write a lug to `{hub_path}/WAI-Hub/lugs/incoming/{spoke_b_id}/` (`routed_to: "SPOKE/{spoke_b_id}"`) | Routing to hub incoming (hub never relays to spokes) |
+| Improvement to framework schemas, skills, or protocols | Framework impl/task lug to `framework/WAI-Spoke/lugs/incoming/` (`routed_to: "FRAMEWORK"`) | Writing a signal lug |
+| Something the USER must decide or act on (not agent-resolvable) | Signal lug (`type: "signal"`) → write to `{hub_path}/WAI-Hub/signals/incoming/` | Creating an impl/task lug (user won't see it at startup) |
+| Architectural decision owned by one spoke | Lug to that spoke's inbox (`routed_to: "SPOKE/{id}"`) | Any broadcast mechanism |
 | Work only relevant to the spoke you are currently in | Local lug (`routed_to: "LOCAL"`) | Any of the above |
 
-**Anti-pattern:** Do not use framework signals for spoke-specific Tender bugs, spoke-specific architecture decisions, or implementation details that only one spoke owns. Framework signals are broadcast-to-all — they waste every other spoke's session if the work isn't universal.
+**Anti-pattern:** Do not create signal lugs for framework fixes. A gap you want the framework to address is a `task` or `implementation` lug with `routed_to: "FRAMEWORK"`. Signal lugs are for the user — things no agent can resolve without human input. `routed_to: "SIGNAL"` is deprecated; do not use.
 
 ---
 
@@ -610,14 +753,16 @@ When you are working in spoke A and observe work that belongs elsewhere, use thi
 
 ---
 
-## Signal vs Task vs Phone-Home
+## Signal vs Task vs Framework Fix
 
-| Type | Purpose | AI Execution? |
-|------|---------|--------------|
-| `task` | Track work item | NO — add to tracker |
-| `signal` | Patch-now alert (impact >= 8) | NO — store in `WAI-Spoke/signals/inbound/` (v2) |
-| `phone-home` | Request status | AUTO by learn |
-| `foundation` | Project identity | NO — defines project |
+| Type | Audience | Who acts? | Where stored? |
+|------|---------|-----------|--------------|
+| `signal` | **Human user** — something only you can decide or action | User only — agents show it, do not resolve it | `{hub_path}/WAI-Hub/signals/incoming/` |
+| `task` / `implementation` | Agent or user | Agent executes at next session | `lugs/bytype/{type}/open/` |
+| Framework fix (`routed_to: "FRAMEWORK"`) | Framework team / Ozi | Framework agent implements, publishes teaching | `lugs/bytype/{type}/open/` with `routed_to: "FRAMEWORK"` |
+| `phone-home` | Hub requesting status | AUTO by learn | Handled by spoke learn protocol |
+
+**Decision rule:** If a human must read it and choose what to do → signal. If an agent can implement it without human input → task/impl lug. If it improves the framework for all spokes → task/impl with `routed_to: "FRAMEWORK"`.
 
 ### Signal Required Fields
 
@@ -625,35 +770,45 @@ When creating a `signal` lug, include:
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `routed_to` | **Yes** | Must be `"SIGNAL"` — marks this lug for hub bulletin delivery at closeout |
-| `target` | **Yes** | Delivery destination: `"framework"`, `"hub"`, `"spokes"`, or `"spokes/{id}"` |
-| `source_spoke` | **Yes** | `wheel.name` from this spoke's WAI-State.json — enables boomerang suppression |
-| `perceive` | **Yes** | What to scan for on the target spoke — file path, config key, or behavior symptom |
-| `execute` | **Yes** | Exact patch steps the receiving spoke must apply (array of numbered strings) |
-| `verify` | **Yes** | How to confirm the patch was applied correctly |
+| `title` | **Yes** | Short, imperative — "Review Ozi dispatch queue: 3 lugs stalled >72h" |
+| `body` | **Yes** | What the user needs to know. Include context, not just symptoms. |
+| `source_spoke` | **Yes** | `wheel.name` from this spoke's WAI-State.json |
+| `created_at` | **Yes** | ISO-8601 timestamp |
+| `status` | **Yes** | `"open"` — set to `"acknowledged"` when user reads and responds |
+| `requires_decision` | No | Array of decision options if user must choose a path |
 
-A signal lug missing `routed_to` or `target` will not be delivered by closeout's primary trigger. The backlog sweep in step 9c will catch it but cannot route it correctly without `target`. Reject signal lug creation if either field is absent.
+Signals do **not** require `routed_to`, `perceive`, `execute`, or `verify` — those fields are for agent-executable lugs. A signal is a message, not a directive.
 
-`source_spoke` enables boomerang suppression: when the hub routes a signal back to its originator, wakeup Step 5 checks this field (case-insensitive contains) against `wheel.name` and discards the duplicate instead of creating a redundant local lug.
+### Signal Lifecycle
 
-PEV completeness is required because a signal is a directive, not a note. Every spoke agent must be able to apply the patch without interpretation. A signal without PEV cannot be reliably actioned fleet-wide.
+```
+created at spoke → written to hub/WAI-Hub/signals/incoming/ → shown at session start →
+user reads and acts → user or agent marks status: "acknowledged" → archived to hub/WAI-Hub/signals/processed/
+```
 
-### Teaching → Signal Loop-Close
+Signals must not accumulate. Each session start shows open signals. If a signal has no response after 7 days, Ozi may escalate with a reminder in the session brief.
 
-When the framework generates a teaching that resolves a signal, add `signal_closes: {signal-id}` to the teaching frontmatter. `session-start.sh §0.6` (loop-close) reads this field at each spoke wakeup — when the matching teaching is found in `seed/ingest/processed/`, the registry entry is removed and the signal is archived to `signals/processed/`. This closes the v2 signal lifecycle automatically without human intervention.
+### When NOT to Use a Signal
 
-### Signal Scope Gate
+- The agent can resolve it without you → use `task` lug
+- It's a framework improvement → use `task`/`implementation` with `routed_to: "FRAMEWORK"`
+- It's informational and requires no action → write a `learning` lug or memory file
+- It's fleet-wide behavior → framework publishes a teaching after implementing it
 
-Before emitting a hub signal, apply this test:
+The old "fleet-wide patch via signal" mechanism is retired. Emit a framework impl lug instead — the framework implements and publishes a teaching; spokes absorb it at wakeup.
 
-> **Does this learning apply to at least one other spoke besides the originator?**
+### Migration Note (v2 → v3 Signal Semantics)
 
-- **Yes** → emit hub signal (cross-spoke generalization)
-- **No** → write a local lug or memory instead (local pattern = local record only)
+Existing signal lugs in `WAI-Spoke/lugs/bytype/signal/` are **legacy**. Do not create new ones there.
 
-Exception: if a shared framework tool needs a fix that affects all spokes using that tool, emit a hub task lug (not a signal).
+| Old pattern | New pattern |
+|------------|------------|
+| `type: "signal"`, `routed_to: "FRAMEWORK"` (fleet patch) | `type: "task"` or `"implementation"`, `routed_to: "FRAMEWORK"` |
+| `WAI-Spoke/signals/inbound/` patch files | Deprecated — do not create new patch files there |
+| `WAI-Hub/signals/incoming/framework/` | Deprecated path — no new files |
+| New user alert to human | `type: "signal"` → write to `{hub_path}/WAI-Hub/signals/incoming/{id}.json` |
 
-This gate was established after sessions where spoke-local patterns (UX choices, internal advisor ownership, single-spoke architecture decisions) were broadcast as hub signals with no value to other spokes.
+The spoke-local `signals/` directory (`inbound/`, `processed/`, `registry.json`) is legacy infrastructure. Do not write new signal lugs there. The directory is preserved only for reading existing archived signals.
 
 ---
 
@@ -741,3 +896,33 @@ See `wai-lug-schema-reference.md` for full anti-pattern examples.
 *Lugs = Persistent memory. CLARITY > BREVITY for persistent cross-session and cross-spoke communication.*
 
 <!-- pipeline-verified-2026-03-25: skill-thrift-v1 applied -->
+
+## Crew Fields
+
+This section documents additional fields relevant to the Crew architecture, detailing their purpose, allowed values, and typical ownership. These fields are additive and optional for backward compatibility.
+
+- **`state`** (string, default: `null`): A fine-grained sub-status providing more context than the top-level `status` field. Free-form string.
+  - *Set/Read by:* Delivery Manager (Dana), Product Strategist (Pete), all sub-agents.
+
+- **`risk_tier`** (string, default: `'standard'`): Categorizes the risk associated with the lug.
+  - *Allowed values:* `low`, `standard`, `elevated`, `critical`.
+  - *Set/Read by:* Product Strategist (Pete), Architect (Archie).
+
+- **`lead_advisor`** (string, default: `null`): The designated crew advisor (by folder slug) primarily responsible for this lug.
+  - *Example:* `delivery-manager`, `product-strategist`, `architect`.
+  - *Set/Read by:* Delivery Manager (Dana).
+
+- **`consulting_advisors`** (array of strings, default: `[]`): A list of additional crew advisors (by folder slug) who should be consulted or informed about this lug.
+  - *Example:* `['ux-designer', 'security-reviewer']`.
+  - *Set/Read by:* Delivery Manager (Dana), Product Strategist (Pete), Architect (Archie).
+
+- **`execution_mode`** (string, default: `'manual'`): Specifies how the execution of this lug is intended to be carried out.
+  - *Allowed values:* `manual`, `subagent`, `tender`, `gastown`.
+  - *Set/Read by:* Delivery Manager (Dana), Architect (Archie), Tender.
+
+- **`model_override`** (string, default: `null`): An optional field to specify a particular model ID (e.g., `claude-opus-4-7`, `gemini-1.5-pro`) that should be used for executing this lug, overriding `model_fit`.
+  - *Set/Read by:* Delivery Manager (Dana), Architect (Archie).
+
+## Schema Changelog
+
+2026-05-20: +state, +risk_tier, +lead_advisor, +consulting_advisors, +execution_mode, +model_override (Phase A crew architecture, all additive)

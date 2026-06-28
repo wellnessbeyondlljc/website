@@ -23,9 +23,29 @@ import json
 import os
 import sqlite3
 import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 CG_COLS = ("id", "situation", "solution", "tier", "owner_advisor",
            "file_paths", "symbol_refs", "source", "created_at", "updated_at")
+
+
+def _managed_base(spoke_root="."):
+    """The dir holding harness.db, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local/managed; PRE-FIX the hardcoded WAI-Spoke default
+    silently targeted a nonexistent tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root) / "managed"
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke" / "managed"  # last-resort v3 fallback
+
+
+DEFAULT_DB = str(_managed_base() / "harness.db")
 
 
 def materialize_cg(db_path, entries, now_iso=None):
@@ -90,7 +110,7 @@ def _load_entries(effective_path):
 
 def main(argv):
     ap = argparse.ArgumentParser(description="Materialize the resolved CG into harness.db.")
-    ap.add_argument("--db", default="WAI-Spoke/managed/harness.db")
+    ap.add_argument("--db", default=DEFAULT_DB)
     ap.add_argument("--effective",
                     default="/home/mario/projects/wheelwright/mywheel/WAI-Harness/"
                             "spoke/managed/runtime/capabilities-effective.json")

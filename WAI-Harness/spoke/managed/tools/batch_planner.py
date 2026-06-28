@@ -34,16 +34,32 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 
 def _normalize_target_file(tf: str) -> str:
     """Strip inline comments from target_file entries: 'foo.py (new)' -> 'foo.py'."""
     return tf.split(" ")[0].strip()
 
 
+def _spoke_base(root: Path) -> Path:
+    """The spoke working base, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local; PRE-FIX this blindly appended 'WAI-Spoke' so the
+    planner scanned a nonexistent lug tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        base, mode = resolve_wai_root(str(root))
+        if base and mode != "none":
+            return Path(base)
+    except Exception:
+        pass
+    return root / "WAI-Spoke"  # last-resort v3 fallback
+
+
 def _spoke_paths(spoke_root: Optional[Path]) -> tuple[Path, Path]:
     """Return (bytype_dir, state_file) for the given spoke root (or cwd)."""
     root = spoke_root if spoke_root is not None else Path.cwd()
-    spoke = root / "WAI-Spoke"
+    spoke = _spoke_base(root)
     return spoke / "lugs" / "bytype", spoke / "WAI-State.json"
 
 

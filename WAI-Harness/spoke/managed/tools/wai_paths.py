@@ -82,16 +82,31 @@ def _normalize_mode(mode):
     return ""
 
 
-def _select_active(want, has_v3, has_v4):
+def _v4_activated(root):
+    """True if a coexist spoke has been explicitly cut over to v4. Mirrors the
+    activation signal used by .claude/hooks/harness_mode.sh (lines 42-52): a
+    `.activated` marker OR a migrated v4 local/WAI-State.json. Keeping this in
+    lockstep with the bash resolver is REQUIRED — otherwise the hooks run v4 while
+    the Python tools read/write v3, splitting state across the two trees."""
+    return (
+        os.path.exists(os.path.join(root, "WAI-Harness", "spoke", ".activated"))
+        or os.path.isfile(os.path.join(root, "WAI-Harness", "spoke", "local", "WAI-State.json"))
+    )
+
+
+def _select_active(want, has_v3, has_v4, v4_activated=False):
     """Resolve the active harness from a normalized mode want ('v4'|'v3'|'') and
-    tree presence. Overlap-safe: coexist with no explicit want defaults to v3."""
+    tree presence. Overlap-safe: an UNACTIVATED coexist spoke defaults to v3; an
+    ACTIVATED one resolves v4 (matching harness_mode.sh)."""
     if want == "v4" and has_v4:
         return "v4"
     if want == "v3" and has_v3:
         return "v3"
-    if has_v3:            # coexist OR v3-only -> v3 (legacy is what live readers use)
+    if has_v3 and has_v4:   # coexist: v4 only once explicitly activated, else v3
+        return "v4" if v4_activated else "v3"
+    if has_v3:              # v3-only
         return "v3"
-    if has_v4:            # only WAI-Harness present -> v4 (post-retirement end state)
+    if has_v4:              # only WAI-Harness present -> v4 (post-retirement end state)
         return "v4"
     return "none"
 
@@ -112,7 +127,7 @@ def detect(spoke_root="."):
 
     # detect() takes no explicit mode; honour only the $WAI_HARNESS_MODE override.
     want = _normalize_mode(None)
-    active = _select_active(want, has_v3, has_v4)
+    active = _select_active(want, has_v3, has_v4, _v4_activated(root))
     return {
         "root": root,
         "has_v3": has_v3,
@@ -132,7 +147,7 @@ def resolve_wai_root(spoke_root=".", mode=None):
     has_v3 = os.path.isdir(os.path.join(root, "WAI-Spoke"))
     has_v4 = os.path.isdir(os.path.join(root, "WAI-Harness"))
     want = _normalize_mode(mode)
-    active = _select_active(want, has_v3, has_v4)
+    active = _select_active(want, has_v3, has_v4, _v4_activated(root))
     if active == "v4":
         return os.path.join(root, "WAI-Harness", "spoke", "local"), "v4"
     if active == "v3":

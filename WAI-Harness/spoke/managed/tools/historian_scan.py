@@ -15,9 +15,38 @@ from pathlib import Path
 from collections import defaultdict
 
 # ── Config ──────────────────────────────────────────────────────────
-BASE = Path("/home/mario/projects/wheelwright/framework")
-SESSIONS_DIR = BASE / "WAI-Spoke" / "sessions"
-HISTORIAN_DIR = BASE / "WAI-Spoke" / "advisors" / "historian"
+# v4-aware (gap-003): resolve the running spoke's working base instead of a hardcoded
+# framework/WAI-Spoke path (which no longer exists post-migration). Spoke root comes
+# from $WAI_SPOKE_ROOT or cwd; wai_paths resolves v3-vs-v4 with a v4 default on
+# activated spokes. LEGACY_DIRS are the relocated legacy track stores the historian
+# must ALSO mine (internal archive + in-place residual) so forgotten history isn't lost.
+import sys as _sys
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in _sys.path:
+    _sys.path.insert(0, str(_HERE))
+try:
+    import wai_paths as _wp
+    _ROOT = Path(os.environ.get("WAI_SPOKE_ROOT", ".")).resolve()
+    _b = _wp.resolve_wai_root(str(_ROOT))[0]
+    if _b:
+        BASE = Path(_b)
+    elif (_ROOT / "WAI-Harness" / "spoke" / "local").is_dir():
+        BASE = _ROOT / "WAI-Harness" / "spoke" / "local"
+    else:
+        BASE = _ROOT / "WAI-Spoke"
+    _adv = _wp.advisors_dir(str(_ROOT))
+    HISTORIAN_DIR = Path(_adv) / "historian" if _adv else BASE / "advisors" / "historian"
+except Exception:
+    # last-resort: operate relative to cwd's v4 tree
+    BASE = Path(os.environ.get("WAI_SPOKE_ROOT", ".")).resolve() / "WAI-Harness" / "spoke" / "local"
+    HISTORIAN_DIR = BASE / "advisors" / "historian"
+
+SESSIONS_DIR = BASE / "sessions"
+# Relocated/legacy track stores to ALSO mine (internal archive + in-place residual).
+LEGACY_DIRS = [
+    BASE.parent / "archive" / "v3-snapshot" / "sessions",   # WAI-Harness/spoke/archive/v3-snapshot
+    BASE.parent.parent.parent / "WAI-Spoke" / "sessions",   # in-place residual WAI-Spoke
+]
 VECTORS_FILE = HISTORIAN_DIR / "vectors.jsonl"
 SCAN_STATE_FILE = HISTORIAN_DIR / "scan_state.json"
 PASSES_FILE = HISTORIAN_DIR / "passes.jsonl"
@@ -66,6 +95,10 @@ def jaccard(tokens_a, tokens_b):
 print("=== Historian Pattern Scan ===\n")
 
 session_dirs = sorted(SESSIONS_DIR.glob("session-*/"))
+# Also mine relocated/legacy track stores so migrated-away history isn't lost.
+for _legacy in LEGACY_DIRS:
+    if _legacy.is_dir():
+        session_dirs += sorted(_legacy.glob("session-*/"))
 items = []  # list of (text, session_id, turn, field, tokens)
 
 total_points = 0

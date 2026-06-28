@@ -86,8 +86,37 @@ LIFECYCLE_ATTENTION = {
 
 
 def _spoke(spoke_path):
+    """Resolve the spoke WORKING BASE, base-aware. On a v4 spoke this routes to
+    WAI-Harness/spoke/local instead of the nonexistent WAI-Spoke tree, so the
+    surfaces read live lugs/sessions/savepoints (impl-fix-p2-v3noop-sweep-v1)."""
     p = Path(spoke_path)
-    return p if p.name == "WAI-Spoke" else (p / "WAI-Spoke")
+    if p.name in ("WAI-Spoke", "local"):
+        return p
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import wai_paths
+        root, mode = wai_paths.resolve_wai_root(str(p))
+        if root and mode != "none":
+            return Path(root)
+    except Exception:
+        pass
+    return p / "WAI-Spoke"  # last-resort v3 fallback
+
+
+def _advisors_root(spoke):
+    """Advisors are the one category NOT under the working base. In v4 they live at
+    WAI-Harness/spoke/advisors (sibling of local); in v3 at WAI-Spoke/advisors."""
+    if spoke.name == "local" and spoke.parent.name == "spoke":
+        return spoke.parent / "advisors"
+    return spoke / "advisors"
+
+
+def _managed_root(spoke):
+    """managed/ (harness.db) is a sibling of the working base in v4
+    (WAI-Harness/spoke/managed); under WAI-Spoke in v3."""
+    if spoke.name == "local" and spoke.parent.name == "spoke":
+        return spoke.parent / "managed"
+    return spoke / "managed"
 
 
 def _parse_ts(s):
@@ -178,7 +207,7 @@ def build_now_surface(spoke, now_epoch):
                 lug_files.extend(fs)
 
     advisors = []
-    advisor_states = glob.glob(str(spoke / "advisors" / "*" / "scan_state.json"))
+    advisor_states = glob.glob(str(_advisors_root(spoke) / "*" / "scan_state.json"))
     for f in sorted(advisor_states):
         try:
             d = json.loads(Path(f).read_text())
@@ -259,7 +288,7 @@ def build_attention_surface(spoke, now_epoch):
     # (a) advisor lifecycle: rollbacks / escalations / degradations, windowed to
     # the last 24h and deduped to the most-recent event per (advisor, type) so the
     # 400+-deep rollback history cannot flood "what needs me now".
-    lifecycle = spoke / "advisors" / "lifecycle.jsonl"
+    lifecycle = _advisors_root(spoke) / "lifecycle.jsonl"
     if lifecycle.exists():
         latest = {}
         try:
@@ -387,7 +416,7 @@ def build_on_track_surface(spoke, now_epoch):
     - that is the honest signal, not a hidden gap."""
     tests = {"pass": 0, "fail": 0, "null": 0, "total": 0}
     source_ts = None
-    db = spoke / "managed" / "harness.db"
+    db = _managed_root(spoke) / "harness.db"
     if db.exists():
         try:
             import sqlite3

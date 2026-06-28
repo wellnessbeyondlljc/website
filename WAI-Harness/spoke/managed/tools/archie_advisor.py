@@ -27,12 +27,53 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import wai_paths  # noqa: E402  harness-mode root resolver
 
 SPOKE_ROOT = "."
+# NOTE: these *_PATH constants are v3-relative display labels used in finding
+# metadata (Finding.files). The actual filesystem reads/writes are resolved at
+# use-site via wai_paths so they hit the real v4 advisors tree
+# (<root>/WAI-Harness/spoke/advisors), matching the lugs idiom below.
 REGISTRY_PATH = "WAI-Spoke/advisors/registry.json"
 SCHEDULE_INDEX_PATH = "WAI-Spoke/advisors/schedule-index.json"
 WAI_STATE_PATH = "WAI-Spoke/WAI-State.json"
 ARCHIE_STATE_PATH = "WAI-Spoke/advisors/archie/scan_state.json"
 ARCHIE_RUNS_PATH = "WAI-Spoke/advisors/archie/runs.jsonl"
 # INCOMING_DIR is now resolved at call-time via wai_paths (harness-mode-aware)
+
+
+def _advisors_base(spoke_root: str = SPOKE_ROOT) -> str:
+    """Resolve the advisors dir for the active harness (v4 sibling of local,
+    or v3 fallback). Matches the wai_paths.category(...) or <v3> idiom."""
+    return wai_paths.advisors_dir(spoke_root) or os.path.join(spoke_root, "WAI-Spoke", "advisors")
+
+
+def _registry_file(spoke_root: str = SPOKE_ROOT) -> str:
+    return os.path.join(_advisors_base(spoke_root), "registry.json")
+
+
+def _schedule_index_file(spoke_root: str = SPOKE_ROOT) -> str:
+    return os.path.join(_advisors_base(spoke_root), "schedule-index.json")
+
+
+def _archie_state_file(spoke_root: str = SPOKE_ROOT) -> str:
+    return os.path.join(_advisors_base(spoke_root), "archie", "scan_state.json")
+
+
+def _archie_runs_file(spoke_root: str = SPOKE_ROOT) -> str:
+    return os.path.join(_advisors_base(spoke_root), "archie", "runs.jsonl")
+
+
+def _wai_state_file(spoke_root: str = SPOKE_ROOT) -> str:
+    base, _ = wai_paths.resolve_wai_root(spoke_root)
+    if base:
+        return os.path.join(base, "WAI-State.json")
+    return os.path.join(spoke_root, "WAI-Spoke", "WAI-State.json")
+
+
+def _as_advisor_list(data) -> list:
+    """registry.json / schedule-index.json may be a bare list (v3) or a
+    dict-wrapped {..., "advisors": [...]} object (v4). Normalize to the list."""
+    if isinstance(data, dict):
+        return data.get("advisors", [])
+    return data if isinstance(data, list) else []
 
 
 @dataclass
@@ -64,11 +105,11 @@ def completeness_scan(spoke_root: str = ".") -> list[Finding]:
     registry: list[dict] = []
     schedule_index: list[dict] = []
     try:
-        registry = json.load(open(os.path.join(spoke_root, REGISTRY_PATH)))
+        registry = _as_advisor_list(json.load(open(_registry_file(spoke_root))))
     except Exception:
         pass
     try:
-        schedule_index = json.load(open(os.path.join(spoke_root, SCHEDULE_INDEX_PATH)))
+        schedule_index = _as_advisor_list(json.load(open(_schedule_index_file(spoke_root))))
     except Exception:
         pass
 
@@ -149,7 +190,7 @@ def completeness_scan(spoke_root: str = ".") -> list[Finding]:
         ))
 
     # 2d: Synthesis never ran
-    for prompt_path in glob.glob(os.path.join(spoke_root, "WAI-Spoke/advisors/*/synthesis_prompt.md")):
+    for prompt_path in glob.glob(os.path.join(_advisors_base(spoke_root), "*", "synthesis_prompt.md")):
         synthesis_dir = Path(prompt_path).parent
         if (synthesis_dir / "synthesis_latest.json").exists():
             continue
@@ -378,7 +419,7 @@ def update_state(run_id: str, findings_count: int, duration_s: float) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # scan_state.json
-    state_path = Path(ARCHIE_STATE_PATH)
+    state_path = Path(_archie_state_file(SPOKE_ROOT))
     state_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         state = json.load(open(state_path))
@@ -392,7 +433,7 @@ def update_state(run_id: str, findings_count: int, duration_s: float) -> None:
     state_path.write_text(json.dumps(state, indent=2))
 
     # runs.jsonl
-    runs_path = Path(ARCHIE_RUNS_PATH)
+    runs_path = Path(_archie_runs_file(SPOKE_ROOT))
     runs_path.parent.mkdir(parents=True, exist_ok=True)
     with open(runs_path, "a") as f:
         f.write(json.dumps({
@@ -403,10 +444,10 @@ def update_state(run_id: str, findings_count: int, duration_s: float) -> None:
         }) + "\n")
 
     # schedule-index.json
-    si_path = Path(SCHEDULE_INDEX_PATH)
+    si_path = Path(_schedule_index_file(SPOKE_ROOT))
     try:
         index = json.load(open(si_path))
-        for entry in index:
+        for entry in _as_advisor_list(index):
             if entry.get("advisor_id") == "archie" and not entry.get("trigger"):
                 entry["last_run_at"] = now_iso
                 break
@@ -426,7 +467,7 @@ def main() -> None:
     root_path = args.path
     if root_path is None:
         try:
-            state = json.load(open(WAI_STATE_PATH))
+            state = json.load(open(_wai_state_file(SPOKE_ROOT)))
             root_path = state.get("project", {}).get("root_path") or "."
         except Exception:
             root_path = "."

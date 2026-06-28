@@ -1,0 +1,43 @@
+{
+  "id": "coverage-eval-20260626-180202",
+  "type": "implementation",
+  "title": "Coverage eval \u2014 determine advisor needs from goals + recent concerns",
+  "status": "completed",
+  "routed_to": "LOCAL",
+  "model_fit": "haiku",
+  "execution_mode": "gastown",
+  "urgency": 8,
+  "effort_score": 2,
+  "quality_score": 8,
+  "initiative": "crew-maintenance",
+  "authored_by": "ozi-autopilot-scouting",
+  "created_at": "2026-06-26T18:02:02.606622Z",
+  "coverage_eval": true,
+  "completion_summary": "Coverage evaluation complete. Analysis: Static website spoke with no active scope triggers detected. Current advisor (Sage) is a spec curator stub with no matching scope. No gaps identified for provisioning.",
+  "perceive": "Re-determine what advisors this spoke has versus what its current goals and recent concerns require. Follow Ozi's Team Coverage Evaluation in WAI-Harness/spoke/advisors/ozi/context_prompt.md. Roster: WAI-Harness/spoke/advisors/registry.json. Hub scope patterns: /home/mario/projects/wheelwright/hub/WAI-Hub/advisors/octo/advisor-recommendation-patterns.json.",
+  "execute": [
+    "1. Read WAI-Harness/spoke/advisors/registry.json (roster + last_run_at) and WAI-Harness/spoke/advisors/departments.json (active departments).",
+    "2. Read WAI-Harness/spoke/local/WAI-State.json for project goals/identity and scan the last 30 open lugs' titles for recent concerns/keywords.",
+    "3. Read /home/mario/projects/wheelwright/hub/WAI-Hub/advisors/octo/advisor-recommendation-patterns.json; match active scopes against each scope_trigger's detection_signals.",
+    "4. For each matched scope_trigger whose advisor_ids_to_check are absent from the roster, record one gap object using the field name 'domain' (not 'scope') set to the scope_trigger string. Example gap: {\"domain\": \"deployment_automation\", \"suggested_template\": \"engineering-advisor\", \"priority\": 3, \"justification\": \"one line reason\", \"proposal_status\": \"pending\"}.",
+    "5. Read WAI-Harness/spoke/advisors/ozi/scan_state.json (create {} if absent). Write back the ENTIRE file with a top-level 'team_coverage' key \u2014 do NOT write last_coverage_eval_at, active_scopes, or gaps_detected at the root. Required structure: {\"team_coverage\": {\"last_coverage_eval_at\": \"<now ISO8601>\", \"active_scopes\": [<scope_trigger strings>], \"gaps_detected\": [<gap objects from step 4>]}, <...preserve other existing top-level keys...>}.",
+    "6. Do NOT provision advisors here. Recommendations become user-review lugs on the next scouting pass."
+  ],
+  "verify": "team_coverage.last_coverage_eval_at updated to today; gaps_detected[] reflects the current roster-vs-goals analysis with a justification per gap; no advisor directories were created.",
+  "acceptance_criteria": [
+    "team_coverage.last_coverage_eval_at is present and set to execution date",
+    "team_coverage.gaps_detected[] is populated with analysis results (including justification per gap)",
+    "WAI-Harness/spoke/advisors/ozi/scan_state.json was written/updated with the team_coverage object",
+    "No advisor directories were provisioned"
+  ],
+  "execution_substrate": "gastown",
+  "s": "completed",
+  "updated_at": "2026-06-26T18:35:44.869546+00:00",
+  "workflow": {
+    "current_owner": "ozi-autopilot",
+    "assigned_at": "2026-06-26T18:34:09.328367+00:00",
+    "updated_at": "2026-06-26T18:34:09.328378+00:00",
+    "dispatch_method": "autopilot-subprocess",
+    "completed_at": "2026-06-26T18:35:44.866366+00:00"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "2.0",
+  "spoke_id": "wellnessbeyondlljc-website",
+  "generated_at": "2026-06-28T03:50:20.663528+00:00",
+  "priority_sequence": [
+    "teachings",
+    "refinement",
+    "work",
+    "scouting"
+  ],
+  "matrix": {
+    "teachings": {
+      "autonomous": [],
+      "attended": []
+    },
+    "refinement": {
+      "autonomous": [],
+      "attended": []
+    },
+    "work": {
+      "autonomous": [],
+      "attended": []
+    },
+    "scouting": {
+      "autonomous": [],
+      "attended": []
+    }
+  },
+  "counts": {
+    "teachings": {
+      "autonomous": 0,
+      "attended": 0
+    },
+    "refinement": {
+      "autonomous": 0,
+      "attended": 0
+    },
+    "work": {
+      "autonomous": 0,
+      "attended": 0
+    },
+    "scouting": {
+      "autonomous": 0,
+      "attended": 0
+    }
+  },
+  "totals": {
+    "autonomous": 0,
+    "attended": 0
+  }
+}

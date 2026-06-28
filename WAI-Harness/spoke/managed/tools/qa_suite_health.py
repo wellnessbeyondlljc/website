@@ -108,8 +108,22 @@ def compute_qa_health(lugs, now=None, stale_days=DEFAULT_STALE_DAYS):
 
 
 def _spoke(spoke_path):
+    """Base whose lugs/bytype holds the live lugs, base-aware. PRE-FIX it blindly appended
+    'WAI-Spoke' -> on a v4 spoke QA health scanned a nonexistent path and was always empty
+    (impl-fix-p1-silent-dead-v4-paths-v1)."""
+    import os
     p = Path(spoke_path)
-    return p if p.name == "WAI-Spoke" else (p / "WAI-Spoke")
+    if p.name in ("WAI-Spoke", "local"):
+        return p
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import wai_paths
+        base, mode = wai_paths.resolve_wai_root(str(p))
+        if base and mode != "none":
+            return Path(base)
+    except Exception:
+        pass
+    return p / "WAI-Spoke"
 
 
 def read_qa_health(spoke_path=".", now=None, stale_days=DEFAULT_STALE_DAYS):

@@ -1,0 +1,17 @@
+{
+  "name": "Wellness Beyond #LLJC",
+  "short_name": "Wellness #LLJC",
+  "description": "Building resilience, teaching compassion, and empowering youth and families facing grief, trauma, bullying, and life's difficult moments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a09",
+  "theme_color": "#0c0a09",
+  "icons": [
+    {
+      "src": "/assets/img/logo-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

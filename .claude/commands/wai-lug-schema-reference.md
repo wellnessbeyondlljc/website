@@ -1,4 +1,5 @@
 # WAI Lug Schema — Reference
+> Fast path: load `wai-lug-schema-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 **Companion to `wai-lug-schema.md`.** Contains examples, schemas, and verbose specs. Load on-demand — not loaded at wakeup.
 
@@ -463,7 +464,7 @@ Each advisor declares its data sources in scan_state.json:
       "fields_needed": ["field3"],
       "adequacy": "good|partial|missing"
     }
-  ]
+]
 }
 ```
 
@@ -478,3 +479,7 @@ Each advisor declares its data sources in scan_state.json:
 ```
 
 Gap lugs are routed to the team responsible for the data source.
+
+---
+
+Refer to `wai-lug-schema.md` for newly added Crew Fields (state, risk_tier, lead_advisor, consulting_advisors, execution_mode, model_override).

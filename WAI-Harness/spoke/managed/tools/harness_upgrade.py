@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -177,17 +178,37 @@ def apply(master_managed, target_managed, manifest):
     return written
 
 
-def upgrade(master_managed, target_managed, dry_run=False):
+def upgrade(master_managed, target_managed, dry_run=False, expect_version=None):
     """The full verify-apply-verify loop. Returns a structured report.
 
     Safety: the master must self-verify (every file's md5 matches its own MANIFEST)
     BEFORE anything is applied — a corrupt/half-cut master is never distributed.
     This is the floor that makes a real cutover safe to automate.
+
+    Version gate: when expect_version is set, the master's harness_version MUST match
+    or the upgrade ABORTS (writes nothing) — the version analog of the corruption gate.
+    This stops a 'pull vX' from silently bringing vY (the CSRP-4.2.0 desync class:
+    impl-harness-couple-version-cut-and-adoption-gate-v1).
     """
     manifest = load_manifest(master_managed)
     home_map = compute_home_map(master_managed, target_managed)
     report = {"dry_run": dry_run, "home_map": home_map,
               "changes_pending": len(home_map["add"]) + len(home_map["change"])}
+
+    # version gate (beside the corruption gate; surfaced on dry-run too so a preview
+    # reveals a version desync / premature adoption before anything is applied)
+    actual_version = manifest.get("harness_version")
+    report["master_version"] = actual_version
+    if expect_version is not None and actual_version != expect_version:
+        report["verify_version"] = {"ok": False, "expected": expect_version, "actual": actual_version}
+        report["applied"] = 0
+        report["verify_post"] = None
+        report["ok"] = False
+        report["aborted"] = (f"master at {actual_version}, expected {expect_version} — "
+                             "refusing (version desync / premature adoption)")
+        return report
+    if expect_version is not None:
+        report["verify_version"] = {"ok": True, "expected": expect_version, "actual": actual_version}
 
     # verify-master gate (skipped on dry-run since dry-run writes nothing anyway,
     # but still reported so a preview surfaces a bad master)
@@ -211,7 +232,7 @@ def upgrade(master_managed, target_managed, dry_run=False):
     return report
 
 
-def pull(spoke_root, master_root=None, side="spoke", dry_run=False):
+def pull(spoke_root, master_root=None, side="spoke", dry_run=False, expect_version=None):
     """Pull-on-spin-up entry point — the session-start self-update.
 
     Cheap by design: computes the home-map first and returns a no-op when the
@@ -232,19 +253,89 @@ def pull(spoke_root, master_root=None, side="spoke", dry_run=False):
     master_managed = _resolve_managed(master_root, side)
     if not (Path(master_managed) / MANIFEST_NAME).exists():
         return {"pulled": 0, "status": "no-master", "current": None}
+    # Version gate FIRST: a spoke told to pull vX against a vY master must abort loudly,
+    # not silently bring vY — independent of whether it is current/behind/dry-run.
+    if expect_version is not None:
+        actual_version = load_manifest(master_managed).get("harness_version")
+        if actual_version != expect_version:
+            return {"pulled": 0, "status": "version-desync", "current": False, "ok": False,
+                    "master_version": actual_version, "expected": expect_version,
+                    "aborted": (f"master at {actual_version}, expected {expect_version} — "
+                                "refusing (version desync / premature adoption)")}
     target_managed = _resolve_managed(wh, side)
     hm = compute_home_map(master_managed, target_managed)
     pending = len(hm["add"]) + len(hm["change"])
     if pending == 0:
-        return {"pulled": 0, "status": "current", "current": True}
+        # Managed is current — but the ACTIVE slash-command dir can still have drifted
+        # (P0 of initiative-optimize-ceremonies-v1: operators ran stale ceremonies).
+        # Re-deploy is cheap + idempotent (copies only on diff).
+        return {"pulled": 0, "status": "current", "current": True,
+                "commands_deployed": _deploy_active_commands(spoke_root),
+                "master_version": load_manifest(master_managed).get("harness_version")}
     if dry_run:
         return {"pulled": 0, "status": "behind", "pending": pending,
-                "current": False, "dry_run": True, "home_map": hm}
-    rep = upgrade(master_managed, target_managed, dry_run=False)
-    return {"pulled": rep.get("applied", 0),
-            "status": "upgraded" if rep.get("ok") else "failed",
-            "current": bool(rep.get("ok")), "ok": rep.get("ok"),
-            "verify_post": rep.get("verify_post"), "aborted": rep.get("aborted")}
+                "current": False, "dry_run": True, "home_map": hm,
+                "master_version": load_manifest(master_managed).get("harness_version")}
+    rep = upgrade(master_managed, target_managed, dry_run=False, expect_version=expect_version)
+    out = {"pulled": rep.get("applied", 0),
+           "status": "upgraded" if rep.get("ok") else "failed",
+           "current": bool(rep.get("ok")), "ok": rep.get("ok"),
+           "verify_post": rep.get("verify_post"), "aborted": rep.get("aborted")}
+    # Deploy + migrate atomically: once a managed upgrade lands, run the one-shot,
+    # idempotent LOCAL data migrations the new managed code expects (e.g. relocating
+    # legacy savepoints to the initiative-scoped home). Best-effort: a migration
+    # failure is reported but never turns a good file-sync into a failed pull.
+    if out["ok"] and out["pulled"]:
+        out["local_migrations"] = _post_upgrade_local_migrations(spoke_root, master_managed)
+    # Refresh the active slash-command dir from the freshly-pulled canonical so the
+    # operator never invokes a stale ceremony (idempotent; best-effort).
+    out["commands_deployed"] = _deploy_active_commands(spoke_root)
+    return out
+
+
+def _deploy_active_commands(spoke_root):
+    """Best-effort: sync <spoke_root>/.claude/commands from the managed canonical via
+    deploy_commands.py. Never raises — a deploy failure must not break a good pull."""
+    try:
+        import importlib
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        deploy_commands = importlib.import_module("deploy_commands")
+        rep = deploy_commands.deploy(str(spoke_root), dry_run=False)
+        return {"synced": len(rep.get("copied", [])), "pruned": len(rep.get("pruned", [])),
+                "ok": rep.get("ok", False)}
+    except Exception as e:  # noqa: BLE001 — best-effort, never fatal
+        return {"ok": False, "error": str(e)[:120]}
+
+
+def _post_upgrade_local_migrations(spoke_root, master_managed):
+    """Run idempotent LOCAL data migrations after a managed upgrade lands.
+
+    Keeps the file-sync (apply()) strictly managed-only; this is the deliberate,
+    gated step that brings a spoke's LOCAL data into the shape the freshly-applied
+    managed code expects. Each migrator is idempotent (a no-op when nothing legacy
+    remains) and isolated (one failure never blocks the others or the pull).
+    """
+    results = {}
+    sp_migrate = Path(master_managed) / "tools" / "savepoint_migrate.py"
+    if sp_migrate.exists():
+        try:
+            r = subprocess.run([sys.executable, str(sp_migrate),
+                                "--root", str(spoke_root), "--json"],
+                               capture_output=True, text=True, timeout=120)
+            rep = json.loads(r.stdout) if r.stdout.strip() else {"ok": False, "errors": ["no output"]}
+            ver = subprocess.run([sys.executable, str(sp_migrate),
+                                  "--root", str(spoke_root), "--verify", "--json"],
+                                 capture_output=True, text=True, timeout=60)
+            rep["post_verify"] = json.loads(ver.stdout) if ver.stdout.strip() else None
+            results["savepoint_migrate"] = {
+                "relocated": rep.get("relocated"),
+                "initiatives_created": rep.get("initiatives_created"),
+                "clean": (rep.get("post_verify") or {}).get("clean"),
+                "ok": rep.get("ok"),
+            }
+        except Exception as e:  # noqa: BLE001 — best-effort, must not break pull
+            results["savepoint_migrate"] = {"ok": False, "error": str(e)}
+    return results
 
 
 # Lug taxonomy + core dirs for the EMPTY per-spoke local skeleton (mirrors
@@ -362,6 +453,8 @@ def main(argv):
     g.add_argument("--generated-at", default="1970-01-01T00:00:00Z")
     g.add_argument("--owner", default="framework")
     g.add_argument("--write", action="store_true")
+    g.add_argument("--skip-lint", action="store_true",
+                   help="skip the v3-path cut gate (escape hatch; default runs it on --write)")
 
     for name in ("home-map", "upgrade"):
         s = sub.add_parser(name, help=f"{name} master -> target")
@@ -370,6 +463,8 @@ def main(argv):
         s.add_argument("--side", default="spoke", choices=["spoke", "hub"])
         if name == "upgrade":
             s.add_argument("--dry-run", action="store_true")
+            s.add_argument("--expect-version", default=None,
+                           help="abort (write nothing) if the master harness_version != this")
 
     p = sub.add_parser("pull", help="pull-on-spin-up: bring this spoke's managed current from master (cheap no-op when current)")
     p.add_argument("--spoke-root", default=".")
@@ -377,6 +472,8 @@ def main(argv):
                    help="master path; default resolves via $WAI_HARNESS_MASTER -> .harness-master -> built-in")
     p.add_argument("--side", default="spoke", choices=["spoke", "hub"])
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--expect-version", default=None,
+                   help="abort (write nothing) if the master harness_version != this — guards against a 'pull vX' silently bringing vY")
 
     v = sub.add_parser("verify", help="verify a managed root against its MANIFEST")
     v.add_argument("--managed", required=True)
@@ -395,6 +492,24 @@ def main(argv):
         return 0 if rep["ok"] else 1
 
     if args.cmd == "manifest":
+        # CUT GATE: before WRITING a manifest, run the v3-path lint so a new v3-noop
+        # soft-feature can never be cut into the distributed harness (the version analog
+        # of the corruption/version gates, for the path-bug class). Escape: --skip-lint.
+        # (impl-harness-parity-gate-at-cut-v1)
+        if args.write and not args.skip_lint:
+            try:
+                import v3_path_lint as _lint
+                rep = _lint.lint(args.managed)
+                if not rep["ok"]:
+                    print("CUT REFUSED — v3-path lint found NEW WAI-Spoke/ sole-path reference(s):",
+                          file=sys.stderr)
+                    for rel, hits in rep["violations"].items():
+                        print(f"  {rel}: L{hits[0][0]}: {hits[0][1]}", file=sys.stderr)
+                    print("  Fix (route through wai_paths) or allowlist a genuine v3 fallback, "
+                          "then re-cut. Override with --skip-lint.", file=sys.stderr)
+                    return 1
+            except Exception as e:  # lint must not hard-break a cut on its own error
+                print(f"[manifest] v3-path lint skipped ({e})", file=sys.stderr)
         m = build_manifest(args.managed, version=args.version,
                            default_owner=args.owner, generated_at=args.generated_at)
         if args.write:
@@ -414,14 +529,15 @@ def main(argv):
     if args.cmd == "upgrade":
         master = _resolve_managed(args.master, args.side)
         target = _resolve_managed(args.target, args.side)
-        rep = upgrade(master, target, dry_run=args.dry_run)
+        rep = upgrade(master, target, dry_run=args.dry_run, expect_version=args.expect_version)
         print(json.dumps(rep, indent=2))
         return 0 if rep["ok"] else 1
 
     if args.cmd == "pull":
-        rep = pull(args.spoke_root, args.master, side=args.side, dry_run=args.dry_run)
+        rep = pull(args.spoke_root, args.master, side=args.side, dry_run=args.dry_run,
+                   expect_version=args.expect_version)
         print(json.dumps(rep, indent=2))
-        return 0 if rep.get("status") not in ("failed",) else 1
+        return 0 if rep.get("status") not in ("failed", "version-desync") else 1
 
     if args.cmd == "verify":
         managed = _resolve_managed(args.managed, args.side)

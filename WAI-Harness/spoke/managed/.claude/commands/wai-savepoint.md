@@ -20,25 +20,55 @@ Resolve these once; every path below is relative to them, so this ceremony works
 v4-only (`WAI-Harness/spoke/local`), v3-only (`WAI-Spoke`), and coexist spokes alike.
 
 ```bash
-BASE=$(python3 WAI-Harness/spoke/managed/tools/wai_paths.py --root . --json 2>/dev/null \
-  | python3 -c "import json,sys; print(json.load(sys.stdin).get('_base') or '')")
-[ -z "$BASE" ] && { [ -d WAI-Harness/spoke/local ] && BASE="WAI-Harness/spoke/local" || BASE="WAI-Spoke"; }
-TOOLS="WAI-Harness/spoke/managed/tools"; [ -d "$TOOLS" ] || TOOLS="tools"
+# Shared preamble (P1: ceremony-lib) — single source of truth for harness-mode resolution.
+source WAI-Harness/spoke/managed/shared/ceremony-lib.sh && ceremony_init   # exports $BASE + $TOOLS
 ```
 
-In Python snippets, resolve the same base:
+In Python snippets, resolve the same base via the shared lib:
 
 ```python
-import json, subprocess
-BASE = (json.loads(subprocess.run(["python3","WAI-Harness/spoke/managed/tools/wai_paths.py","--root",".","--json"],
-        capture_output=True, text=True).stdout or "{}").get("_base")
-        or ("WAI-Harness/spoke/local" if __import__("os").path.isdir("WAI-Harness/spoke/local") else "WAI-Spoke"))
+import sys; sys.path.insert(0, "WAI-Harness/spoke/managed/shared")
+from ceremony_lib import resolve_base, resolve_tools
+BASE, TOOLS = resolve_base(), resolve_tools()
 ```
 
 Do NOT hardcode `WAI-Spoke/` — on a v4-only spoke it does not exist. Use `{BASE}/…` for all
 data-tree paths (state, lugs, sessions, savepoints, runtime, bolts) and `{TOOLS}/…` for tools.
 
 All mechanical work runs in a **sub-agent** dispatched from the main session. The main session contributes exactly one reasoning turn: the input strings. Everything else is deterministic JSON/git work that runs fresh.
+
+**Step 0.4 (main session): CSRP notice check — concurrent-session awareness BEFORE you commit**
+
+Run the read-and-warn pre-step so you never savepoint in ignorance of another lane advancing/pushing main or your work being unmerged:
+
+```bash
+WAI-Harness/spoke/managed/tools/csrp_notice_check.sh --base {BASE}
+```
+
+Exit `10` = it surfaced `notice-session-reconcile-*` / `notice-remote-mod-*` / `impl-csrp-*`: acknowledge each (commit + guidance shown), and reconcile before committing if any flags this lane's work unmerged/unpushed. Exit `0` = proceed. (impl-ozi-csrp-incoming-check-savepoint-closeout-v1)
+
+**Step 0.5 (main session): CSRP-aware mode — AUTOMATIC, never prompt** (spec-csrp-aware-savepoint-closeout-mode-v1)
+
+```bash
+WAI-Harness/spoke/managed/tools/csrp_mode.sh --base {BASE}   # -> {"csrp_aware": bool, "reason": "..."}
+```
+If `csrp_aware:true`, apply the git contract for the rest of the savepoint (operator sees only a one-line trigger note, no decision): NEVER `git add -A`/`commit -a` (scope via `commit-mine.sh`, verify staged set); if canonical home is a different master (`is_master:false`), push the **session branch** and let the reconciler integrate — do not merge into a dogfood main; write state to the gitignored local store; surface incoming notices first. `csrp_aware:false` → normal savepoint, unchanged.
+
+**Step 0.6 (main session): Lane absorption check — AUTOMATIC, never prompt**
+
+A lane whose opening session is **not open** (heartbeat stale beyond the open window — it ended/stalled) is a candidate for **absorption**: its committed work should be reconciled into this tree and its stale lane cleared, rather than left as a phantom competitor. Run:
+
+```bash
+WAI-Harness/spoke/managed/tools/converge_closeout.py candidates --base {BASE} --session-id {SESSION_ID}
+```
+
+Exit `10` = absorption candidates exist (their openers are gone). Absorb them — reconcile committed work, commit-to-branch any uncommitted, reap stale lanes, then re-verify:
+
+```bash
+WAI-Harness/spoke/managed/tools/converge_closeout.py converge --base {BASE} --session-id {SESSION_ID} --repo {REPO}
+```
+
+Exit `0` = no candidates, proceed. NEVER absorb an OPEN lane — only sessions that aren't running. `{SESSION_ID}` is this session's CC session id (the lane key).
 
 **Step 1 (main session): Compose the savepoint strings**
 
@@ -139,9 +169,16 @@ Read {BASE}/WAI-State.json. Then in order:
    Run: git rev-parse HEAD (store as GIT_SHA, 8 chars is fine)
    Run: git rev-parse --abbrev-ref HEAD (store as GIT_BRANCH)
 
-5. WRITE SAVEPOINT FILE
+5. WRITE SAVEPOINT FILE  (INITIATIVE-SCOPED HOME — a savepoint is a CHILD OF AN INITIATIVE)
    sp_id = "sp-{session_id}-{slug}"
-   sp_path = f"{BASE}/savepoints/{sp_id}.json"
+   init_dir = initiative_id if initiative_id else "initiative-unfiled-savepoints-v1"
+   sp_path = f"{BASE}/initiatives/savepoints/{init_dir}/{sp_id}.json"
+   # Ensure the initiative exists so the reference resolves. If {init_dir} has no
+   # record in {BASE}/initiatives/, create a minimal one (lifecycle_state=dormant,
+   # status=open) via: python3 {TOOLS}/initiative_store.py is invoked by the
+   # savepoint_migrate path; for a NEW savepoint just create the dir and, if no
+   # initiative record exists, write a minimal one. NEVER write to {BASE}/savepoints/
+   # (the legacy loose home — retired; savepoint_migrate.py relocates any stragglers).
 
    If initiative_id is set, build focus_directive:
    focus_directive = "Stay on the {silo_label} initiative ({initiative_id}). Any discovery outside this silo gets a notation lug — do not act on it directly."
@@ -178,17 +215,32 @@ Read {BASE}/WAI-State.json. Then in order:
      "conflicts": []
    }
 
-6. UPDATE WAI-STATE.JSON POINTER
-   Read _savepoint from WAI-State.json.
-   If _savepoint has "active_ids" key (new pointer format):
-     - Append {sp_id} to active_ids
-     - Set count = len(active_ids)
-   Else (old payload format or empty):
-     - Replace entirely with: {"active_ids": ["{sp_id}"], "count": 1}
-   
+6. DECLARE ON THE INITIATIVE + UPDATE POINTERS
+
+   6a. PIN via {BASE}/initiatives/current.json (the active pending savepoint):
+       {
+         "initiative_id": "{init_dir}",
+         "pinned_at": "<ISO UTC>",
+         "session": "{session_id}",
+         "savepoint_id": "{sp_id}",
+         "savepoint_status": "pending"
+       }
+
+   6b. DEMOTE WAI-State.json `_savepoint` to a WAKEUP POINTER (never payload):
+       {
+         "lug_id": {lug_id},
+         "savepoint_id": "{sp_id}",
+         "initiative_id": "{init_dir}",
+         "status": "pending",
+         "resume_note": "{resume_note}",
+         "canonical_path": "initiatives/savepoints/{init_dir}/{sp_id}.json",
+         "_note": "wakeup-surface pointer; canonical savepoint is the initiative-scoped child"
+       }
+       (The heavy work_done/work_context payload lives ONLY in the savepoint file, never here.)
+
    Also set: _session_state.next_session_recommendation = "{resume_note}"
    Also set: _session_state.last_savepoint = "{session_id}"
-   
+
    Write WAI-State.json.
 
 7. APPEND TRACK EVENT
@@ -219,6 +271,33 @@ Read {BASE}/WAI-State.json. Then in order:
 Output exactly: "Savepoint staged: {sp_id} | {UNCOMMITTED_COUNT} files uncommitted (main session commits + pushes next)"
 ```
 
+**Step 2b (main session): VALIDATE the resume contract — HARD GATE before any commit**
+
+A savepoint with a thin/invalid resume contract is worse than none (the next session resumes on bad state). Validate the staged savepoint file BEFORE committing:
+
+```bash
+python3 {TOOLS}/validate_savepoint.py --base {BASE} --savepoint {sp_file}
+```
+
+- exit 0 → contract valid; proceed to Step 2.9.
+- exit non-zero → **STOP. Do NOT commit.** Fix the fields the validator names (workspace, non-empty paper-trail when lugs were touched, resolvable deferred/handoff refs) and re-run. Never commit an invalid savepoint.
+
+**Step 2.9 (main session): CSRP convergence — lane-aware savepoint (converge competitors into ONE verified tree)**
+
+If concurrent sessions exist, become a candidate convergence LEAD before committing (CSRP P6, `impl-csrp-p6-convergent-closeout-v1`). Zero-cost no-op when you are the only session.
+
+```bash
+python3 {TOOLS}/converge_closeout.py converge --base {BASE} --session-id {cc_sid} --repo . --my-worktree {wt_name}
+```
+
+Branch on the JSON:
+- `lead:false, reason:"no-competitors"` → proceed to Step 3 unchanged (zero cost).
+- `lead:false, reason:"not-lead"` → another lead is converging; close your **OWN lane only** (commit scoped via `commit-mine.sh`, do not merge to main). Proceed to Step 3 for the own-lane commit.
+- `lead:true, ok:true` → competitors converged + the unified HEAD re-verified (`verify.status: green`); proceed to Step 3 to persist the single tree.
+- `lead:true, ok:false` (verify `RED`) → **STOP. Do NOT commit.** The unified tree failed its test gate (integration breakage convergence exists to catch); the merge-lock is RETAINED. Fix-forward on `main` until green, then re-run. Never savepoint a red unified tree. (Lease auto-expires — no deadlock on crash.)
+
+This is **unify-then-VERIFY**: convergence is not done until the merged tree passes the test gate on the unified HEAD.
+
 **Step 3 (main session, after sub-agent completes): COMMIT + PUSH, then report**
 
 A savepoint that is not committed AND pushed is not a safe eject. The MAIN session (never the sub-agent) now durably persists it:
@@ -230,6 +309,18 @@ git push origin main
 ```
 
 If the push is rejected (no remote, auth, or non-fast-forward), report the exact error and the local commit SHA — never silently leave a savepoint unpushed.
+
+**Step 3b (main session): No-Loose-Ends Gate — a savepoint must leave NO stranded work**
+
+```bash
+python3 {TOOLS}/dead_end_scan.py --root . --json
+```
+
+`clean: true` → report. `clean: false` → an untracked-source orphan, uncommitted file,
+unpushed commit, or untracked stash means the eject is NOT safe: commit it (scoped),
+capture it in a lug, or discard-with-reason before reporting success. Never report a
+savepoint complete with session-scope dead-ends outstanding. (`branches_ahead` is a
+fleet note, not a blocker.)
 
 Then output exactly:
 
@@ -245,8 +336,10 @@ Next: {resume_note}
 
 ## Savepoint File Schema
 
-Location: `{BASE}/savepoints/sp-{session_id}-{slug}.json`
-Completed: `{BASE}/savepoints/completed/sp-{session_id}-{slug}.json`
+Location: `{BASE}/initiatives/savepoints/{initiative_id}/sp-{session_id}-{slug}.json`
+Completed: `{BASE}/initiatives/savepoints/{initiative_id}/completed/sp-{session_id}-{slug}.json`
+(No `initiative_id`? It lands under `{BASE}/initiatives/savepoints/initiative-unfiled-savepoints-v1/`.)
+The legacy loose home `{BASE}/savepoints/` is RETIRED — `savepoint_migrate.py` relocates any stragglers on deploy.
 
 **Status values:**
 - `pending` — created, not yet claimed by any session
@@ -257,16 +350,22 @@ Completed: `{BASE}/savepoints/completed/sp-{session_id}-{slug}.json`
 **WAI-State.json `_savepoint` is a POINTER only (never payload):**
 ```json
 "_savepoint": {
-  "active_ids": ["sp-session-20260531-0103-rfc-loop"],
-  "count": 1
+  "lug_id": "spec-...",
+  "savepoint_id": "sp-session-20260531-0103-rfc-loop",
+  "initiative_id": "initiative-...-v1",
+  "status": "pending",
+  "resume_note": "...",
+  "canonical_path": "initiatives/savepoints/initiative-...-v1/sp-session-20260531-0103-rfc-loop.json",
+  "_note": "wakeup-surface pointer; canonical savepoint is the initiative-scoped child"
 }
 ```
+The active pending savepoint is also pinned in `{BASE}/initiatives/current.json`.
 
 **Lifecycle:**
-- `/wai-savepoint` writes `savepoints/sp-*.json` with `status: "pending"` and commits
-- Next `/wai` scans `savepoints/*.json` and shows a numbered menu — no auto-resume
+- `/wai-savepoint` writes `initiatives/savepoints/{initiative_id}/sp-*.json` with `status: "pending"`, pins `current.json`, demotes `_savepoint` to a pointer, and commits
+- Next `/wai` reads the `current.json` pin + `_savepoint` pointer (and may scan `initiatives/savepoints/**` for other pending ones) — no auto-resume
 - Claim: session writes `claimed_at`, `claiming_session_id`, `status: "active"`
-- `/wai-closeout` checks lug conflicts, moves file to `savepoints/completed/`, updates pointer
+- `/wai-closeout` checks lug conflicts, moves file to the initiative's `completed/`, updates the pointer + pin
 
 **There is NO payload in WAI-State.json `_savepoint`.** If you see `status`/`work_done` fields directly on `_savepoint`, it is a stale format — migrate it.
 

@@ -10,9 +10,32 @@ required field lists, or structural rules.
 """
 
 import json
+import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _spoke_base(spoke_path) -> Path:
+    """The spoke working base holding lugs/, base-aware. On a v4 spoke this
+    resolves to WAI-Harness/spoke/local; PRE-FIX validators blindly appended
+    'WAI-Spoke' so they checked a nonexistent tree and always reported it
+    missing on a v4 spoke (impl-fix-p2-v3noop-sweep-v1). A path already pointing
+    at the base (name 'WAI-Spoke' or 'local') is used as-is."""
+    p = Path(spoke_path)
+    if p.name in ("WAI-Spoke", "local"):
+        return p
+    try:
+        from wai_paths import resolve_wai_root
+        base, mode = resolve_wai_root(str(p))
+        if base and mode != "none":
+            return Path(base)
+    except Exception:
+        pass
+    return p / "WAI-Spoke"  # last-resort v3 fallback
 
 
 # ─── Canonical Catalogs ──────────────────────────────────────────────────────
@@ -342,14 +365,11 @@ def validate_bytype_structure(spoke_path) -> List[str]:
     violations = []
     spoke_path = Path(spoke_path)
 
-    # Resolve WAI-Spoke path
-    if spoke_path.name == "WAI-Spoke":
-        wai_spoke = spoke_path
-    else:
-        wai_spoke = spoke_path / "WAI-Spoke"
+    # Resolve the spoke working base (v4: WAI-Harness/spoke/local; v3: WAI-Spoke)
+    wai_spoke = _spoke_base(spoke_path)
 
     if not wai_spoke.exists():
-        violations.append(f"WAI-Spoke/ directory not found at {spoke_path}")
+        violations.append(f"spoke working base not found at {wai_spoke}")
         return violations
 
     lugs_dir = wai_spoke / "lugs"
@@ -466,10 +486,7 @@ def validate_all_active_lugs(spoke_path) -> Dict[str, List[str]]:
     Returns dict of {lug_file_path: [violations]}.
     """
     results = {}
-    spoke_path = Path(spoke_path)
-
-    if spoke_path.name != "WAI-Spoke":
-        spoke_path = spoke_path / "WAI-Spoke"
+    spoke_path = _spoke_base(spoke_path)
 
     bytype = spoke_path / "lugs" / "bytype"
     if not bytype.exists():

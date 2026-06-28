@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "spoke_id": "wellnessbeyondlljc-website",
+  "generated_at": "2026-06-28T03:50:20.661919+00:00",
+  "has_work": false,
+  "work_summary": {
+    "teachings_pending": 0,
+    "initiatives_active": 0,
+    "lugs_dispatchable": 0,
+    "lugs_open_total": 0,
+    "lugs_needs_refinement": 0,
+    "scout_jobs_pending": 0,
+    "signals_undelivered": 0
+  },
+  "dispatchable_lug_ids": [],
+  "skip_recommendation": true,
+  "skip_reason": "no dispatchable work"
+}

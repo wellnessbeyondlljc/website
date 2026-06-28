@@ -1,4 +1,5 @@
 # WAI Claude Maximizer — Reference
+> Fast path: load `wai-claude-maximizer-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 On-demand knowledge base for CC optimization. **Do not load at wakeup.** Load only when generating a specific fix.
 
@@ -220,7 +221,7 @@ Configure in `~/.claude/settings.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "bash /home/YOUR_USERNAME/.claude/statusline-command.sh"
+    "command": "bash /home/mario/.claude/statusline-command.sh"
   }
 }
 ```

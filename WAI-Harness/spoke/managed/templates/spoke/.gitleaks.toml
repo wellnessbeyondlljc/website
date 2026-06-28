@@ -1,0 +1,22 @@
+# Gitleaks config for WAI spokes (Fable MR-2).
+# Used automatically by the pre-commit hook when `gitleaks` is installed
+# (gitleaks reads .gitleaks.toml at the repo root). Extends the upstream default
+# rules; add spoke-specific allowlist paths/regexes below rather than disabling rules.
+title = "WAI fleet gitleaks baseline"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths and values that are safe by construction across WAI spokes."
+paths = [
+  '''\.env\.template$''',
+  '''\.env\.example$''',
+  '''\.env\.sample$''',
+  '''(^|/)reviews/''',          # Fable review docs quote redacted/historical findings
+  '''(^|/)WAI-Harness/.*/teachings.*''',
+]
+regexes = [
+  '''(?i)(your|example|placeholder|redacted|changeme|dummy|<[^>]+>)''',
+  '''x{8,}''',
+]

@@ -26,12 +26,37 @@ import urllib.error
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / 'WAI-Spoke'))
+
+sys.path.insert(0, str(PROJECT_ROOT / 'tools'))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
+
+def _spoke_base():
+    """Resolve the live spoke working-base (v4: WAI-Harness/spoke/local; v3:
+    WAI-Spoke), independent of nesting depth. PRE-FIX this blindly appended
+    'WAI-Spoke' to PROJECT_ROOT -> on a v4 spoke it seeded/verified a nonexistent
+    tree and every count came back 0 (impl-fix-p2-v3noop-sweep-v1)."""
+    start = Path(__file__).resolve()
+    # Prefer the nearest ancestor that is a real v4 spoke root.
+    for anc in start.parents:
+        if (anc / 'WAI-Harness' / 'spoke' / 'local').is_dir():
+            base, mode = resolve_wai_root(str(anc))
+            if base and mode != 'none':
+                return Path(base)
+    # Last-resort v3 fallback: nearest ancestor holding a WAI-Spoke tree.
+    for anc in start.parents:
+        if (anc / 'WAI-Spoke').is_dir():
+            return anc / 'WAI-Spoke'
+    return PROJECT_ROOT / 'WAI-Spoke'
+
+
+SPOKE_BASE = _spoke_base()
+sys.path.insert(0, str(SPOKE_BASE))
 
 from db.local_cache import LocalCache
 
 WHEEL_ID = 'a055479fb9bf'
-CACHE_PATH = PROJECT_ROOT / 'WAI-Spoke/historian/cache.db'
+CACHE_PATH = SPOKE_BASE / 'historian/cache.db'
 
 
 def _supabase_upsert_batch(rows, table, rest_url, key):
@@ -82,7 +107,7 @@ def _scalar(v):
 
 
 def seed_lugs(cache: LocalCache, verbose=False, supabase_enabled=False) -> tuple[int, int]:
-    pattern = str(PROJECT_ROOT / 'WAI-Spoke/lugs/bytype/**/*.json')
+    pattern = str(SPOKE_BASE / 'lugs/bytype/**/*.json')
     files = glob.glob(pattern, recursive=True)
     ok = errors = 0
     supabase_rows = []
@@ -127,7 +152,7 @@ _TRACKS_COLUMNS = ('id', 'wheel_id', 'session_id', 'turn_index', 'ts',
 
 
 def seed_tracks(cache: LocalCache, verbose=False, supabase_enabled=False) -> tuple[int, int]:
-    sessions_dir = PROJECT_ROOT / 'WAI-Spoke/sessions'
+    sessions_dir = SPOKE_BASE / 'sessions'
     if not sessions_dir.exists():
         return 0, 0
     ok = errors = 0
@@ -187,7 +212,7 @@ def seed_tracks(cache: LocalCache, verbose=False, supabase_enabled=False) -> tup
 
 
 def seed_sessions(cache: LocalCache, verbose=False, supabase_enabled=False) -> tuple[int, int]:
-    sessions_dir = PROJECT_ROOT / 'WAI-Spoke/sessions'
+    sessions_dir = SPOKE_BASE / 'sessions'
     if not sessions_dir.exists():
         return 0, 0
     ok = errors = 0
@@ -284,7 +309,7 @@ def verify(cache: LocalCache, supabase_enabled=False):
     import json as _json
     # Disk counts — use unique IDs (dedup is correct; primary key is id)
     lug_ids = set()
-    for f in glob.glob(str(PROJECT_ROOT / 'WAI-Spoke/lugs/bytype/**/*.json'), recursive=True):
+    for f in glob.glob(str(SPOKE_BASE / 'lugs/bytype/**/*.json'), recursive=True):
         try:
             d = _json.load(open(f))
             lid = d.get('id', d.get('i'))
@@ -293,11 +318,11 @@ def verify(cache: LocalCache, supabase_enabled=False):
         except Exception:
             pass
     lug_files = len(lug_ids)
-    session_dirs = len([d for d in (PROJECT_ROOT / 'WAI-Spoke/sessions').iterdir() if d.is_dir()]) if (PROJECT_ROOT / 'WAI-Spoke/sessions').exists() else 0
+    session_dirs = len([d for d in (SPOKE_BASE / 'sessions').iterdir() if d.is_dir()]) if (SPOKE_BASE / 'sessions').exists() else 0
     # Track lines: count only parseable JSONL lines
     track_lines = 0
-    if (PROJECT_ROOT / 'WAI-Spoke/sessions').exists():
-        for sd in (PROJECT_ROOT / 'WAI-Spoke/sessions').iterdir():
+    if (SPOKE_BASE / 'sessions').exists():
+        for sd in (SPOKE_BASE / 'sessions').iterdir():
             tf = sd / 'track.jsonl'
             if tf.exists():
                 for line in open(tf):

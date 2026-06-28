@@ -49,8 +49,58 @@ def _parse_iso(s):
         return None
 
 
+def _existing_ancestor(p):
+    """Nearest existing directory at or above p (the lane base may not exist yet)."""
+    p = os.path.abspath(p)
+    while p and not os.path.isdir(p):
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    return p
+
+
+def _canonical_base(base):
+    """Resolve a lane data base to the MAIN worktree so the lane registry is SHARED
+    across all of a spoke's worktrees (cross-worktree liveness — concurrent-session
+    isolation AC3). A session launched inside <main>/.worktrees/<n> passes
+    base=<that worktree>/WAI-Harness/spoke/local; its registry MUST live in
+    <main>/WAI-Harness/spoke/local, or the two sessions get divergent (gitignored,
+    CWD-relative) registries and can't see each other. Falls back to base unchanged
+    when git can't resolve a SEPARATE main worktree (single tree, non-git, or any
+    error) — so the main-tree case is byte-identical to before."""
+    ab = os.path.abspath(base)
+    try:
+        anchor = _existing_ancestor(ab)
+        wt_root = _git_out(anchor, "rev-parse", "--show-toplevel")
+        if not wt_root:
+            return ab
+        main_root = repo_root(anchor)
+        if not main_root or os.path.abspath(main_root) == os.path.abspath(wt_root):
+            return ab  # already the main worktree (or single tree): unchanged
+        rel = os.path.relpath(ab, wt_root)
+        if rel.startswith(".."):
+            return ab  # base is not under the worktree root: don't rewrite
+        return os.path.join(main_root, rel)
+    except Exception:
+        return ab
+
+
+def _worktree_of_base(base):
+    """If `base` lives inside <root>/.worktrees/<name>/..., return <name> (the session
+    worktree this lane runs in) so convergence can link a lane to its branch. Else None
+    (a lane in the main tree)."""
+    ab = os.path.abspath(base)
+    parts = ab.split(os.sep)
+    try:
+        i = parts.index(WORKTREES_DIR)
+        return parts[i + 1] if i + 1 < len(parts) else None
+    except ValueError:
+        return None
+
+
 def _registry_path(base):
-    return os.path.join(base, LANES_REGISTRY)
+    return os.path.join(_canonical_base(base), LANES_REGISTRY)
 
 
 def _load_registry(base):
@@ -131,12 +181,19 @@ def lane_register(base, cc_sid, transcript="", create=True):
         wai = _allocate_wai_session(base, lanes, cc_sid, now)
         meta = {"wai_session": wai, "started_at": _iso(now),
                 "last_seen": _iso(now), "transcript": transcript}
+        wt = _worktree_of_base(base)
+        if wt:
+            meta["worktree"] = wt   # link the lane to its source worktree (CSRP P6 convergence)
         lanes[cc_sid] = meta
         created = True
     else:
         meta["last_seen"] = _iso(now)
         if transcript:
             meta["transcript"] = transcript
+        if "worktree" not in meta:
+            wt = _worktree_of_base(base)
+            if wt:
+                meta["worktree"] = wt
     wai = meta["wai_session"]
     # Ensure the lane's directories exist (track dir + private runtime dir).
     sess_dir = os.path.join(base, "sessions", wai)
@@ -478,6 +535,17 @@ def _cmd_lane_reap(argv):
     return 0
 
 
+def _cmd_lane_unregister(argv):
+    ap = argparse.ArgumentParser(prog="lane-unregister")
+    ap.add_argument("--base", required=True)
+    ap.add_argument("--session", required=True, help="cc_sid lane key to remove")
+    a = ap.parse_args(argv)
+    before = a.session in _load_registry(a.base)["lanes"]
+    lane_unregister(a.base, a.session)
+    print(json.dumps({"unregistered": a.session, "was_present": before}))
+    return 0
+
+
 def _cmd_lanes(argv):
     ap = argparse.ArgumentParser(prog="lanes")
     ap.add_argument("--base", required=True)
@@ -542,6 +610,7 @@ _SUBCOMMANDS = {
     "lane-register": _cmd_lane_register,
     "lane-resolve": _cmd_lane_register,  # alias: same idempotent register/lookup
     "lane-reap": _cmd_lane_reap,
+    "lane-unregister": _cmd_lane_unregister,
     "lanes": _cmd_lanes,
     "ownership": _cmd_ownership,
     "wt-new": _cmd_wt_new,

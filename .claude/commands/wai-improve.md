@@ -1,4 +1,5 @@
 # WAI Improve
+> Fast path: load `wai-improve-slim.md` first. Load this file only when deep protocol is needed.
 
 **Improvement Idea Protocol — capture, evaluate, and prioritize system improvement ideas in the context of this spoke.**
 

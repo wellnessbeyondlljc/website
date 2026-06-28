@@ -32,6 +32,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_lugs_dir(spoke_root: str = ".") -> str:
+    """The lugs/bytype root for the draft approval lug, base-aware. On a v4 spoke
+    this resolves under WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke
+    default wrote the approval lug into a nonexistent tree where no agent would ever
+    find it (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return os.path.join(root, "lugs", "bytype")
+    except Exception:
+        pass
+    return os.path.join("WAI-Spoke", "lugs", "bytype")  # last-resort v3 fallback
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -237,7 +254,7 @@ def _main(argv: List[str]) -> int:
     d.add_argument("--patches-dir", required=True)
     d.add_argument("--base-dir", required=True)
     d.add_argument("--next-version", required=True)
-    d.add_argument("--lugs-dir", default="WAI-Spoke/lugs/bytype")
+    d.add_argument("--lugs-dir", default=_default_lugs_dir())
     d.add_argument("--cap", type=int, default=10)
 
     cu = sub.add_parser("cut")

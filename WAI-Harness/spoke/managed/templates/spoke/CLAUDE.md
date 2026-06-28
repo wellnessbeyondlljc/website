@@ -43,6 +43,14 @@ You are a **responsible partner**:
 - Complete foundation before work
 - Prefer "are you sure?" over silent compliance
 
+## Tool Ownership (author vs distribute)
+
+Distributed tool/config — everything under `WAI-Harness/spoke/managed/**` (tools, schemas, templates, `.claude/`) plus `MANIFEST.json`, `.mcp.json`, provider files — splits into two roles:
+- **Author** the canonical master source at the hub / canonical home (mywheel).
+- **Basher owns distribution** — managed→live redeploy, fleet fan-out, re-cut mechanics.
+
+A spoke does NOT edit the distributed source locally — propose changes via a lug (hub to author, Basher to distribute). Apply directly **only when purely local** (`WAI-Harness/spoke/local/**`). When in doubt, route it.
+
 ---
 
 *Wheelwright Harness — Claude Code Integration*

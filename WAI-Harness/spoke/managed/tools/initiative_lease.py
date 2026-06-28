@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,8 +40,21 @@ from typing import Any, Dict, List, Optional
 
 DEFAULT_TTL_HOURS = 8
 
-_FRAMEWORK_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_STORE = _FRAMEWORK_ROOT / "WAI-Spoke" / "runtime" / "initiative-claims.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
+# Spoke repo root: tools/ -> managed -> spoke -> WAI-Harness -> ROOT
+_SPOKE_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _default_store() -> Path:
+    """runtime/initiative-claims.json under the active base (v4 local / v3 WAI-Spoke)."""
+    root, mode = resolve_wai_root(str(_SPOKE_ROOT))
+    base = Path(root) if (root and mode != "none") else _SPOKE_ROOT / "WAI-Spoke"
+    return base / "runtime" / "initiative-claims.json"
+
+
+_DEFAULT_STORE = _default_store()
 
 _LOCK_TIMEOUT_SECONDS = 5.0
 _LOCK_POLL_SECONDS = 0.02

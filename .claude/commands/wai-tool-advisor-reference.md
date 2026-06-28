@@ -1,4 +1,5 @@
 # Tool Advisor Reference
+> Fast path: load `wai-tool-advisor-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 ## Advisor Architecture
 
@@ -113,7 +114,7 @@ templates/commands/
 
 ## Remediation Matrix
 
-The advisor classifies all changes into three tiers. This is encoded in `REMEDIATION_MATRIX` in `tools/tool_advisor.py`.
+The advisor classifies all changes into three tiers. This is encoded in `REMEDIATION_MATRIX` in `/home/mario/projects/basher/tools/tool_advisor.py`.
 
 | Tier | Auto-apply | Examples |
 |------|-----------|---------|
@@ -130,7 +131,7 @@ Proposal items are written to `WAI-Spoke/advisors/tool-advisor/reports/proposals
 ### From Legacy Commands
 - `wai-claude-maximizer.md` → redirects to `wai-tool-advisor` (already done)
 - `wai-tool-maximizer-gemini.md` → redirects to `wai-tool-advisor` (already done)
-- `cc-advisor` history → migrate with `python3 tools/tool_advisor.py --migrate-cc-advisor`
+- `cc-advisor` history → migrate with `python3 /home/mario/projects/basher/tools/tool_advisor.py --migrate-cc-advisor`
 
 ### For New Tools
 1. Add tool to source-registry.json

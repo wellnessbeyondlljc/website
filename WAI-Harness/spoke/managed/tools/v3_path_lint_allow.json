@@ -1,0 +1,11 @@
+{
+  "_purpose": "Ratchet allowlist for v3_path_lint.py. A file here may carry WAI-Spoke/ refs (tracked debt); a file NOT here with a v3-only WAI-Spoke/ ref FAILS the cut. Burn this down as the sweep fixes each tool \u2014 never add without a fix plan.",
+  "_seeded": "s132 2026-06-19; burned down s134 2026-06-22 (33 tools rerouted via wai_paths)",
+  "allow": {
+    ".claude/hooks/post-tool-use.sh": "KNOWN-DEBT (initiative-soft-feature-remediation-v1): Basher-owned .claude hook; v3-noop reroute routed to Basher (mywheel-as-master distributes). Drop after hook fix.",
+    ".claude/hooks/pre-compact.sh": "KNOWN-DEBT (initiative-soft-feature-remediation-v1): Basher-owned .claude hook; v3-noop reroute routed to Basher (mywheel-as-master distributes). Drop after hook fix.",
+    "tools/hygiene.py": "NOT-A-DEFECT: this IS the v3->v4 self-heal redirect tool (AC22); its WAI-Spoke/WAI-Harness tokens are mapping constants, not spoke-base resolution. Allowlisted to document; no reroute needed.",
+    "tools/teaching_delivery_init.py": "NOT-A-DEFECT: sole ref is the legitimate hub teachings tree (hub/WAI-Spoke/hub/teachings); not a spoke-base no-op.",
+    "tools/compass_report.py": "DEFERRED (separate scope): hub-vantage tool whose cross-spoke fleet glob (*/WAI-Spoke/runtime/...) is v3-stale -> a hub-side fleet-scan fix, out of P2 spoke-base scope. Tracked for follow-up."
+  }
+}

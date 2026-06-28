@@ -13,8 +13,26 @@ import datetime
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
-DEFAULT_DB = "WAI-Spoke/managed/harness.db"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _managed_base(spoke_root="."):
+    """The dir holding harness.db, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local/managed; PRE-FIX the hardcoded WAI-Spoke default silently
+    read a nonexistent tree (impl-fix-p2-v3noop-sweep-v1). Mirrors db_writer._managed_base."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root) / "managed"
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke" / "managed"  # last-resort v3 fallback
+
+
+DEFAULT_DB = str(_managed_base() / "harness.db")
 # raw/trace event types that get aggregated + pruned past the window
 RAW_TYPES = ("gate", "test", "workflow_step", "provider_usage", "dispatch_audit")
 # durable types are never pruned (lug_state, bolt, decision, verdict, session, migration,

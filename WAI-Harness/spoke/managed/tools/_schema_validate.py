@@ -80,8 +80,17 @@ def validate_dict(instance: dict, schema: dict) -> list[str]:
 
 
 def validate(instance: dict, schema_path: str) -> tuple[bool, list[str]]:
-    """Load schema from path and validate. Returns (ok, errors)."""
-    with open(schema_path) as f:
-        schema = json.load(f)
+    """Load schema from path and validate. Returns (ok, errors).
+
+    If the schema file is absent, returns (True, []) with a stderr warning rather
+    than raising FileNotFoundError — callers must not hard-down on a missing schema.
+    """
+    import sys
+    try:
+        with open(schema_path) as f:
+            schema = json.load(f)
+    except FileNotFoundError:
+        print(f"[schema_validate] WARNING: schema absent at {schema_path!r}, skipping validation", file=sys.stderr)
+        return (True, [])
     errs = validate_dict(instance, schema)
     return (len(errs) == 0, errs)

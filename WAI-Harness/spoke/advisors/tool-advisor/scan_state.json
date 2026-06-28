@@ -3,15 +3,15 @@
   "advisor_name": "Cross-Tool Configuration Advisor",
   "version": "1.0.0",
   "mission_statement": "Keep Claude, Gemini, Codex/OpenAI, and Qwen integrations lean, non-recursive, and safe across spokes",
-  "last_audit_at": "2026-06-18T20:47:18.247007+00:00",
+  "last_audit_at": "2026-06-28T03:57:46.967663+00:00",
   "last_audit_session": null,
   "last_observed_session": null,
   "sessions_since_last_audit": 0,
   "audit_pending": false,
   "audit_reason": "",
   "last_drift_at": null,
-  "total_audits": 5,
-  "auto_applied_count": 8,
+  "total_audits": 8,
+  "auto_applied_count": 11,
   "current_score": 2,
   "score_by_area": {
     "Claude": "pass",
@@ -31,13 +31,13 @@
     }
   ],
   "last_findings": [],
-  "last_fingerprint": "59fdb5daf997e8c52d37dae4bd25a6f6b2d2df288e6acae02b49b528b6b378cd",
+  "last_fingerprint": "ea11ff5e7c1b4aa4b17cc359579ff079d87bb64f6fbce12331f635081fef3853",
   "fingerprint_entries": {
     "AGENTS.md": "missing",
-    "CLAUDE.md": "2d5aa88a3f6db17ad415af84c870f4820a7022b04a5bf7cca1da13e42abc22c3",
+    "CLAUDE.md": "a5bc9f4fcd86082d5a9902fa1bfd4d8f5933f0b17b04881e30f6d376762fbd3c",
     "GEMINI.md": "missing",
     "QWEN.md": "missing",
-    ".claude/settings.json": "missing",
+    ".claude/settings.json": "0beeaa78848aae18701061f69b32afd49c6e1991ba41e1e2dea077a346caf87c",
     ".gemini/settings.json": "missing",
     ".geminiignore": "missing",
     ".qwen/settings.json": "missing",
@@ -55,5 +55,6 @@
     "templates/spoke/.claude/settings.json": "missing",
     "templates/claude/settings.json": "missing",
     "bootstrap/spoke-upgrade.sh": "missing"
-  }
+  },
+  "last_auto_routed_count": 0
 }

@@ -15,8 +15,26 @@ if len(sys.argv) < 2:
 
 import json, re, os, datetime, glob
 
+
+def _base(spoke_root):
+    """Resolve the spoke working base, base-aware. On a v4 spoke this routes to
+    WAI-Harness/spoke/local instead of the nonexistent WAI-Spoke tree, so the
+    Cartographer observation lands on the live tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import wai_paths
+        root, mode = wai_paths.resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return root
+    except Exception:
+        pass
+    return os.path.join(str(spoke_root), "WAI-Spoke")  # last-resort v3 fallback
+
+
+_BASE = _base(".")
+
 track_path = sys.argv[1]
-observations_dir = "WAI-Spoke/cartographer/observations"
+observations_dir = os.path.join(_BASE, "cartographer/observations")
 os.makedirs(observations_dir, exist_ok=True)
 
 # Load track events
@@ -63,7 +81,7 @@ lug_progression = sum(
 
 # Session metadata from WAI-State
 try:
-    state = json.load(open("WAI-Spoke/WAI-State.json"))
+    state = json.load(open(os.path.join(_BASE, "WAI-State.json")))
 except Exception:
     state = {}
 
@@ -92,7 +110,7 @@ provider = (
 
 # Dominant work type — priority-ordered rules from active lugs + vibe
 active_lugs = []
-for path in glob.glob("WAI-Spoke/lugs/bytype/*/in_progress/*.json"):
+for path in glob.glob(os.path.join(_BASE, "lugs/bytype/*/in_progress/*.json")):
     try:
         active_lugs.append(json.load(open(path)))
     except Exception:

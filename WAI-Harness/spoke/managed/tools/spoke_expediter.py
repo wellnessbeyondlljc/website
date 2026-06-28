@@ -38,18 +38,35 @@ from lug_utils import get_lug_id, get_lug_type, get_lug_status, get_lug_title, r
 import wai_paths  # noqa: E402  harness-mode root resolver (single source of truth)
 
 
+def _v4_activated(spoke_path):
+    """True when the spoke is v4-activated — has WAI-Harness/spoke/local or the
+    .activated marker. Used to keep fallbacks from writing to a phantom WAI-Spoke."""
+    sp = os.path.join(str(spoke_path), "WAI-Harness", "spoke")
+    return os.path.isdir(os.path.join(sp, "local")) or os.path.exists(os.path.join(sp, ".activated"))
+
+
 def _base(spoke_path):
     """Return the active working base (WAI-Spoke in v3; WAI-Harness/spoke/local in v4).
-    Falls back to WAI-Spoke if no tree is detected (legacy behaviour unchanged)."""
+    Falls back to the v4 local tree on activated spokes — NEVER a phantom WAI-Spoke
+    (that fallback created dead advisor trees fleet-wide; close-the-loop gap-001/002)."""
     b, _ = wai_paths.resolve_wai_root(str(spoke_path))
-    return b or os.path.join(str(spoke_path), "WAI-Spoke")
+    if b:
+        return b
+    if _v4_activated(spoke_path):
+        return os.path.join(str(spoke_path), "WAI-Harness", "spoke", "local")
+    return os.path.join(str(spoke_path), "WAI-Spoke")
 
 
 def _advisors_dir(spoke_path):
     """Return the advisors directory (sibling in v4: WAI-Harness/spoke/advisors;
-    nested in v3: WAI-Spoke/advisors). Falls back to WAI-Spoke/advisors."""
+    nested in v3: WAI-Spoke/advisors). Falls back to the v4 advisors dir on activated
+    spokes — never a phantom WAI-Spoke/advisors."""
     d = wai_paths.advisors_dir(str(spoke_path))
-    return d or os.path.join(str(spoke_path), "WAI-Spoke", "advisors")
+    if d:
+        return d
+    if _v4_activated(spoke_path):
+        return os.path.join(str(spoke_path), "WAI-Harness", "spoke", "advisors")
+    return os.path.join(str(spoke_path), "WAI-Spoke", "advisors")
 
 
 def now():
@@ -143,7 +160,12 @@ def load_focus_lock_ids(spoke_path: str) -> set:
     for init in idx.get("initiatives", []):
         if not init.get("focus_lock"):
             continue
-        if init.get("lifecycle_state", "proposed") not in active_states:
+        # Active if EITHER lifecycle_state OR status says so. Spokes record
+        # initiatives with status:"active" and lifecycle_state:null, so a
+        # lifecycle_state-only check skipped focus-locked initiatives and
+        # dropped their lugs (mirrors the count_initiatives_active fix).
+        if (init.get("lifecycle_state", "proposed") not in active_states
+                and init.get("status") not in active_states):
             continue
         for epic_id in init.get("epics", []):
             # Find epic file in bytype/epic/
@@ -542,9 +564,12 @@ def count_initiatives_active(spoke_path):
     except (json.JSONDecodeError, OSError):
         return 0
     active = {"approved", "active", "measuring"}
+    # An initiative is ACTIVE if EITHER lifecycle_state OR status says so. Spokes
+    # record their initiatives with status:"active" and lifecycle_state:null, so a
+    # lifecycle_state-only check counted 0 active fleet-wide and starved autopilot.
     return sum(
         1 for i in d.get("initiatives", [])
-        if i.get("lifecycle_state", "proposed") in active
+        if i.get("lifecycle_state", "proposed") in active or i.get("status") in active
     )
 
 
@@ -716,6 +741,7 @@ def run_hygiene_scout(spoke_path, scored, trigger_reason="manual", dry_run=False
 
     refine_lug = None
     if groomable:
+        report_path = os.path.join(_advisors_dir(spoke_path), "expediter", "expeditions", f"{report_id}.json")
         refine_lug = {
             "id": refine_id,
             "type": "implementation",
@@ -740,7 +766,7 @@ def run_hygiene_scout(spoke_path, scored, trigger_reason="manual", dry_run=False
                 f"{len(judgment)} need human judgment — surface those, do not guess."
             ),
             "execute": [
-                f"1. Read WAI-Spoke/advisors/expediter/expeditions/{report_id}.json — the findings list.",
+                f"1. Read {report_path} — the findings list.",
                 "2. For each finding with auto_groomable=true: open the target lug and complete the fields named in its evidence (perceive/execute/verify/acceptance_criteria) by making explicit what the lug already implies — chase the expected path, add no new scope.",
                 "3. Re-run `python3 tools/spoke_expediter.py --spoke-path .` and confirm each refined target now passes the quality threshold.",
                 "4. For findings under needs_user_judgment: write ONE concise needs-you note lug summarizing what decision is required (only if the list is non-empty). Do not fabricate a resolution. Include the report's findings_by_producer — if one job produced many incomplete artifacts, name it so the producing job can be improved at the source.",
@@ -888,7 +914,7 @@ def build_work_queue(spoke_path, scored, threshold, spoke_id):
         lug_id = s.get("id", "")
 
         # Row: teachings
-        if ty in ("teaching",) or s.get("safe_to_auto_adopt") is not None:
+        if ty == "teaching":
             col = "autonomous" if s.get("safe_to_auto_adopt") else "attended"
             matrix["teachings"][col].append(_item(s))
             continue

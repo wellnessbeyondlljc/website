@@ -1,0 +1,54 @@
+{
+  "id": "scout-refine-20260626T183409",
+  "type": "implementation",
+  "status": "completed",
+  "title": "Auto-refinement from scout-report-20260626T183409: satisfy 1 declared expectations",
+  "routed_to": "LOCAL",
+  "model_fit": "haiku",
+  "execution_mode": "gastown",
+  "urgency": 5,
+  "effort_score": 2,
+  "quality_score": 8,
+  "initiative": "expediter-ready-queue",
+  "authored_by": "session-d5cfedfd.expediter-scout",
+  "authored_kind": "agent",
+  "created_at": "2026-06-26T18:34:09.297320+00:00",
+  "scout_refinement": true,
+  "report_ref": "scout-report-20260626T183409",
+  "outcome_verification": {
+    "satisfied_targets": [
+      {
+        "id": "coverage-eval-20260626-180202",
+        "field_completed": "acceptance_criteria",
+        "final_quality_score": 9.0,
+        "result": "PASS"
+      }
+    ],
+    "escalated_targets": [],
+    "summary": "1/1 auto-groomable findings satisfied. Target coverage-eval-20260626-180202 now passes quality check (9/10). No fields were invented; acceptance_criteria inferred from verify statement and execute steps."
+  },
+  "perceive": "Scout expedition scout-report-20260626T183409 found 1 artifacts whose OWN declared expectation is unmet. Refine the 1 auto-groomable ones so each satisfies what it already declares (do not invent new scope). 0 need human judgment \u2014 surface those, do not guess.",
+  "execute": [
+    "1. Read /home/mario/projects/client-work/wellnessbeyondlljc-website/WAI-Harness/spoke/advisors/expediter/expeditions/scout-report-20260626T183409.json \u2014 the findings list.",
+    "2. For each finding with auto_groomable=true: open the target lug and complete the fields named in its evidence (perceive/execute/verify/acceptance_criteria) by making explicit what the lug already implies \u2014 chase the expected path, add no new scope.",
+    "3. Re-run `python3 tools/spoke_expediter.py --spoke-path .` and confirm each refined target now passes the quality threshold.",
+    "4. For findings under needs_user_judgment: write ONE concise needs-you note lug summarizing what decision is required (only if the list is non-empty). Do not fabricate a resolution. Include the report's findings_by_producer \u2014 if one job produced many incomplete artifacts, name it so the producing job can be improved at the source.",
+    "5. Mark this lug complete with outcome_verification recording which targets were satisfied and which were escalated."
+  ],
+  "verify": "Each auto_groomable target in scout-report-20260626T183409 now passes score_lug_quality above threshold; any judgment items produced a single needs-you note; no scope was invented.",
+  "acceptance_criteria": [
+    "Every auto-groomable finding's declared expectation is now satisfied",
+    "Judgment-required findings are surfaced to the user, not guessed",
+    "outcome_verification records satisfied vs escalated targets"
+  ],
+  "execution_substrate": "gastown",
+  "s": "completed",
+  "updated_at": "2026-06-26T19:02:53.312299+00:00",
+  "workflow": {
+    "current_owner": "ozi-autopilot",
+    "assigned_at": "2026-06-26T19:01:32.242299+00:00",
+    "updated_at": "2026-06-26T19:01:32.242313+00:00",
+    "dispatch_method": "autopilot-subprocess",
+    "completed_at": "2026-06-26T19:02:53.310314+00:00"
+  }
+}

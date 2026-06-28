@@ -19,6 +19,29 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _patterns_base(spoke_root="."):
+    """The patterns/ dir, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local/patterns; PRE-FIX the hardcoded WAI-Spoke defaults
+    read/wrote a nonexistent tree so metrics silently no-op'd
+    (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return os.path.join(root, "patterns")
+    except Exception:
+        pass
+    return os.path.join(spoke_root, "WAI-Spoke", "patterns")  # v3 fallback
+
+
+_PATTERNS = _patterns_base()
+_DEFAULT_EVENTS = os.path.join(_PATTERNS, "gate-log.jsonl")
+_DEFAULT_FLOW_DEFS = os.path.join(_PATTERNS, "flow-definitions")
+_DEFAULT_OUT = os.path.join(_PATTERNS, "flow-metrics.jsonl")
+
 
 def _read_jsonl(path):
     if not os.path.exists(path):
@@ -83,9 +106,9 @@ def _current_versions(flow_defs_dir):
     return cur
 
 
-def run(events_path="WAI-Spoke/patterns/gate-log.jsonl",
-        flow_defs_dir="WAI-Spoke/patterns/flow-definitions",
-        out_path="WAI-Spoke/patterns/flow-metrics.jsonl", now_iso=None):
+def run(events_path=_DEFAULT_EVENTS,
+        flow_defs_dir=_DEFAULT_FLOW_DEFS,
+        out_path=_DEFAULT_OUT, now_iso=None):
     events = _read_jsonl(events_path)
     metrics = compute(events)
     current = _current_versions(flow_defs_dir)
@@ -118,9 +141,9 @@ def run(events_path="WAI-Spoke/patterns/gate-log.jsonl",
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="compute per-flow gate metrics + baselines")
-    ap.add_argument("--events-path", default="WAI-Spoke/patterns/gate-log.jsonl")
-    ap.add_argument("--flow-defs-dir", default="WAI-Spoke/patterns/flow-definitions")
-    ap.add_argument("--out-path", default="WAI-Spoke/patterns/flow-metrics.jsonl")
+    ap.add_argument("--events-path", default=_DEFAULT_EVENTS)
+    ap.add_argument("--flow-defs-dir", default=_DEFAULT_FLOW_DEFS)
+    ap.add_argument("--out-path", default=_DEFAULT_OUT)
     ap.add_argument("--now-iso", default=None)
     a = ap.parse_args(argv)
     res = run(a.events_path, a.flow_defs_dir, a.out_path, a.now_iso)

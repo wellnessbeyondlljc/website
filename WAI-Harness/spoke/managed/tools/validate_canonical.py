@@ -24,15 +24,34 @@ A violation is {object, dimension, rule, severity, detail}.
 """
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-SPEC_REL = "WAI-Spoke/lugs/bytype/spec/active/spec-canonical-object-contract-v1.json"
+SPEC_REL = "lugs/bytype/spec/active/spec-canonical-object-contract-v1.json"
 OPEN_STATUSES = {"open", "o"}
 INPROGRESS_STATUSES = {"in-progress", "in_progress", "p"}
 DONE_STATUSES = {"closed", "resolved", "c", "done", "completed"}
 MODEL_FITS = {"haiku", "sonnet", "opus"}
+
+
+def _base(spoke_path):
+    """Resolve the spoke working base, base-aware. On a v4 spoke this routes to
+    WAI-Harness/spoke/local instead of the nonexistent WAI-Spoke tree, so the
+    validator actually scans live lugs (impl-fix-p2-v3noop-sweep-v1)."""
+    p = Path(spoke_path).resolve()
+    if p.name in ("WAI-Spoke", "local"):
+        return p
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import wai_paths
+        root, mode = wai_paths.resolve_wai_root(str(p))
+        if root and mode != "none":
+            return Path(root)
+    except Exception:
+        pass
+    return p / "WAI-Spoke"  # last-resort v3 fallback
 
 
 def _load_json(path):
@@ -45,7 +64,7 @@ def _load_json(path):
 def _all_lug_ids(spoke):
     """Every lug id known to the spoke (any type/status) — for cross-link resolution."""
     ids = set()
-    for f in (spoke / "WAI-Spoke/lugs").rglob("*.json"):
+    for f in (spoke / "lugs").rglob("*.json"):
         d = _load_json(f)
         if isinstance(d, dict):
             lid = d.get("id") or d.get("i")
@@ -56,7 +75,7 @@ def _all_lug_ids(spoke):
 
 def _active_spec_ids(spoke):
     ids = set()
-    for f in (spoke / "WAI-Spoke/lugs/bytype/spec/active").glob("*.json"):
+    for f in (spoke / "lugs/bytype/spec/active").glob("*.json"):
         d = _load_json(f)
         if isinstance(d, dict) and d.get("id"):
             ids.add(d["id"])
@@ -265,18 +284,19 @@ def validate_spec(path, spec):
 
 
 def run(spoke):
-    spoke = Path(spoke).resolve()
-    contract = _load_json(spoke / SPEC_REL)
+    spoke_root = Path(spoke).resolve()
+    base = _base(spoke_root)  # working base (v4: WAI-Harness/spoke/local), base-aware
+    contract = _load_json(base / SPEC_REL)
     if not contract:
         return [{"object": "<contract>", "path": SPEC_REL, "dimension": "behavior",
                  "rule": "contract_present", "severity": "error",
                  "detail": "canonical contract spec not found"}], 0
     lug_rules = contract.get("contract", {}).get("lug", {})
-    lug_ids = _all_lug_ids(spoke)
-    spec_ids = _active_spec_ids(spoke)
+    lug_ids = _all_lug_ids(base)
+    spec_ids = _active_spec_ids(base)
 
     violations, checked = [], 0
-    lugs_root = spoke / "WAI-Spoke/lugs"
+    lugs_root = base / "lugs"
     for f in lugs_root.rglob("*.json"):
         d = _load_json(f)
         if not isinstance(d, dict):
@@ -285,7 +305,9 @@ def run(spoke):
         if "/spec/" in str(f):
             violations.extend(validate_spec(f, d))
         else:
-            violations.extend(validate_lug(f, d, lug_rules, spoke, lug_ids, spec_ids))
+            # referenced-file existence is checked against the spoke ROOT (lug
+            # target_files are repo-root-relative), not the working base.
+            violations.extend(validate_lug(f, d, lug_rules, spoke_root, lug_ids, spec_ids))
     return violations, checked
 
 

@@ -1,0 +1,38 @@
+{
+  "id": "scout-report-20260626T183409",
+  "type": "scout_report",
+  "status": "open",
+  "title": "Scout expedition report (1 unmet expectations; trigger: forced (--hygiene/--all))",
+  "routed_to": "LOCAL",
+  "authored_by": "session-d5cfedfd.expediter-scout",
+  "authored_kind": "agent",
+  "created_at": "2026-06-26T18:34:09.297243+00:00",
+  "scout_report": true,
+  "trigger": "forced (--hygiene/--all)",
+  "scanned": {
+    "open_lugs": 1,
+    "findings": 1
+  },
+  "principle": "Chase each artifact's declared expectation and verify it is satisfied. No invented work.",
+  "findings": [
+    {
+      "target": "coverage-eval-20260626-180202",
+      "expectation": "declares a complete, verifiable definition (perceive/execute/verify + acceptance_criteria)",
+      "evidence": "missing: acceptance_criteria",
+      "auto_groomable": true,
+      "produced_by": "ozi-autopilot-scouting",
+      "source_spoke": null,
+      "target_created_at": "2026-06-26T18:02:02.606622Z"
+    }
+  ],
+  "findings_by_producer": {
+    "ozi-autopilot-scouting": 1
+  },
+  "verification_debt_reported": {
+    "deployed_unverified": 0,
+    "spec_drift": 0,
+    "abandoned": 0
+  },
+  "auto_refinement_lug": "scout-refine-20260626T183409",
+  "needs_user_judgment": []
+}

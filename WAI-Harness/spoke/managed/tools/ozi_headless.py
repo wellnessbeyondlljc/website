@@ -40,6 +40,11 @@ try:
     _QC_AVAILABLE = True
 except ImportError:
     _QC_AVAILABLE = False
+try:
+    from wai_paths import resolve_wai_root as _resolve_wai_root, advisors_dir as _advisors_dir
+except ImportError:
+    _resolve_wai_root = None
+    _advisors_dir = None
 
 MODEL_MAP = {
     "haiku": "claude-haiku-4-5-20251001",
@@ -65,6 +70,26 @@ class OziHeadlessRunner:
         self.state: Dict[str, Any] = {}
         self.events: List[Dict[str, Any]] = []
         self.run_id: str = ""
+
+    def _base(self) -> Path:
+        """Spoke working base, v4-aware. PRE-FIX every path was built as
+        self.spoke_path / 'WAI-Spoke' / ... -> on a v4 spoke OHR scanned/wrote a
+        nonexistent tree and the whole headless run no-oped (0 lugs, empty state,
+        impl-fix-p2-v3noop-sweep-v1). Now resolves WAI-Harness/spoke/local on v4."""
+        if _resolve_wai_root:
+            root, mode = _resolve_wai_root(str(self.spoke_path))
+            if root and mode != "none":
+                return Path(root)
+        return self.spoke_path / "WAI-Spoke"  # last-resort v3 fallback
+
+    def _advisors(self) -> Path:
+        """Advisors are the sibling case (WAI-Harness/spoke/advisors on v4), not under
+        the working base. Falls back to WAI-Spoke/advisors on v3."""
+        if _advisors_dir:
+            adv = _advisors_dir(str(self.spoke_path))
+            if adv:
+                return Path(adv)
+        return self.spoke_path / "WAI-Spoke" / "advisors"
 
     def run(self) -> Dict[str, Any]:
         self.run_id = datetime.now(timezone.utc).isoformat()
@@ -97,7 +122,7 @@ class OziHeadlessRunner:
             from wai_ozi_config import OziConfig  # type: ignore
             from wai_ozi_scanner import OziScanner  # type: ignore
 
-            config = OziConfig(str(self.spoke_path / "WAI-Spoke"))
+            config = OziConfig(str(self._base()))
             scanner = OziScanner(config)
             queue = scanner.scan_work_queue()
             self.state["ready_count"] = len(queue.get("ready", []))
@@ -109,7 +134,7 @@ class OziHeadlessRunner:
             self.state.setdefault("blocked_count", 0)
             self.state.setdefault("stalled_count", 0)
 
-        schedule_file = self.spoke_path / "WAI-Spoke" / "advisors" / "schedule-index.json"
+        schedule_file = self._advisors() / "schedule-index.json"
         if schedule_file.exists():
             try:
                 self.state["advisor_schedules"] = json.loads(schedule_file.read_text())
@@ -134,7 +159,7 @@ class OziHeadlessRunner:
             from wai_ozi_config import OziConfig  # type: ignore
             from wai_ozi_scanner import OziScanner  # type: ignore
 
-            config = OziConfig(str(self.spoke_path / "WAI-Spoke"))
+            config = OziConfig(str(self._base()))
             scanner = OziScanner(config)
             abandoned = scanner.scan_abandoned_sessions()
         except Exception as exc:
@@ -163,7 +188,7 @@ class OziHeadlessRunner:
                 + f"\n\nSession context:\n{sess.rewarm_hint}"
                 + "\n\nComplete the outstanding goals. Do not ask for user input. "
                 + "For each goal you complete, write a goal_completed event to "
-                + "WAI-Spoke/runtime/track-buffer.json: "
+                + f"{(self._base() / 'runtime' / 'track-buffer.json')}: "
                 + '{"event": "goal_completed", "goal_id": "<id>", "outcome": "<summary>", "ts": "<ISO-8601 UTC>"}. '
                 + "Report: what you completed and any artifacts created."
             )
@@ -199,8 +224,7 @@ class OziHeadlessRunner:
                     "ozi_session_id": self.run_id,
                 }
                 marker_path = (
-                    self.spoke_path
-                    / "WAI-Spoke"
+                    self._base()
                     / "sessions"
                     / sess.session_id
                     / "OZI_COMPLETED.json"
@@ -223,7 +247,7 @@ class OziHeadlessRunner:
         if not self.advisor_scouting:
             return []
 
-        schedule_file = self.spoke_path / "WAI-Spoke" / "advisors" / "schedule-index.json"
+        schedule_file = self._advisors() / "schedule-index.json"
         if not schedule_file.exists():
             print("[ohr] advisor_scouting: schedule-index.json not found — skipping", file=sys.stderr)
             return []
@@ -263,7 +287,7 @@ class OziHeadlessRunner:
                 continue
 
             # Find advisor context_prompt.md
-            advisor_dir = self.spoke_path / "WAI-Spoke" / "advisors" / advisor_id
+            advisor_dir = self._advisors() / advisor_id
             context_prompt_path = advisor_dir / "context_prompt.md"
             if not context_prompt_path.exists():
                 print(f"[ohr] advisor_scouting: {advisor_id}: no context_prompt.md — skipping", file=sys.stderr)
@@ -304,7 +328,7 @@ class OziHeadlessRunner:
                             if not all(k in lug for k in ("id", "type", "title")):
                                 continue
                             lug_type = lug.get("type", "task")
-                            out_dir = self.spoke_path / "WAI-Spoke" / "lugs" / "bytype" / lug_type / "open"
+                            out_dir = self._base() / "lugs" / "bytype" / lug_type / "open"
                             out_dir.mkdir(parents=True, exist_ok=True)
                             (out_dir / f"{lug['id']}.json").write_text(json.dumps(lug, indent=2))
                             lugs_created += 1
@@ -377,14 +401,14 @@ class OziHeadlessRunner:
 
     def _phase2_signal_triage(self) -> None:
         signal_dir = (
-            self.spoke_path / "WAI-Spoke" / "lugs" / "bytype" / "signal" / "undelivered"
+            self._base() / "lugs" / "bytype" / "signal" / "undelivered"
         )
         if not signal_dir.exists():
             return
 
-        outbox_dir = self.spoke_path / "WAI-Spoke" / "lugs" / "outbox"
+        outbox_dir = self._base() / "lugs" / "outbox"
         delivered_dir = (
-            self.spoke_path / "WAI-Spoke" / "lugs" / "bytype" / "signal" / "delivered"
+            self._base() / "lugs" / "bytype" / "signal" / "delivered"
         )
         hub_processed = self.spoke_path.parent / "hub" / "WAI-Spoke" / "processed"
 
@@ -465,7 +489,7 @@ class OziHeadlessRunner:
         if not gastown_lugs:
             return
         queue_path = (
-            self.spoke_path / "WAI-Spoke" / "advisors" / "autopilot" / "gastown_queue.json"
+            self._advisors() / "autopilot" / "gastown_queue.json"
         )
         queue_path.parent.mkdir(parents=True, exist_ok=True)
         queue_data = {
@@ -506,7 +530,7 @@ class OziHeadlessRunner:
         return str(sid) if sid else "ozi-headless"
 
     def _claims_store(self) -> str:
-        return str(self.spoke_path / "WAI-Spoke" / "runtime" / "claims-local.json")
+        return str(self._base() / "runtime" / "claims-local.json")
 
     def _unmet_preconditions(self, lug: Dict[str, Any]) -> List[str]:
         """Declared 'file:<path>' preconditions that do not hold. Others advisory."""
@@ -567,7 +591,7 @@ class OziHeadlessRunner:
         return True, "passed"
 
     def _load_eligible_lugs(self) -> List[Dict[str, Any]]:
-        bytype = self.spoke_path / "WAI-Spoke" / "lugs" / "bytype"
+        bytype = self._base() / "lugs" / "bytype"
         if not bytype.exists():
             return []
 
@@ -627,7 +651,7 @@ class OziHeadlessRunner:
         return eligible
 
     def _is_resolved(self, lug_id: str) -> bool:
-        bytype = self.spoke_path / "WAI-Spoke" / "lugs" / "bytype"
+        bytype = self._base() / "lugs" / "bytype"
         if not bytype.exists():
             return False
         for type_dir in bytype.iterdir():
@@ -687,7 +711,7 @@ class OziHeadlessRunner:
     def _build_prompt(self, lug: Dict[str, Any]) -> str:
         lug_id = lug.get("id", "")
         lug_type = lug.get("type") or "task"
-        lug_path = lug.get("_lug_path", f"WAI-Spoke/lugs/bytype/{lug_type}/open/{lug_id}.json")
+        lug_path = lug.get("_lug_path", str(self._base() / "lugs" / "bytype" / lug_type / "open" / f"{lug_id}.json"))
         title = lug.get("title", lug_id)
         perceive = lug.get("perceive", "")
         execute = lug.get("execute", "")
@@ -712,7 +736,7 @@ class OziHeadlessRunner:
             "2. Follow the PEV contract: perceive -> execute -> verify\n"
             "3. Scope rule: Work only on the assigned lug. If you find other issues while working:\n"
             "   - Trivial + clearly correct (< 5 min, no judgment calls, no lug lifecycle changes): fix it and document what you did in your resolution note.\n"
-            "   - Non-trivial, requires judgment, or touches other lugs: create a finding or impl lug in WAI-Spoke/lugs/bytype/{type}/open/ and continue your primary task.\n"
+            f"   - Non-trivial, requires judgment, or touches other lugs: create a finding or impl lug in {self._base() / 'lugs' / 'bytype'}/{{type}}/open/ and continue your primary task.\n"
             "   - NEVER close, move, or overwrite a lug file you were not assigned. NEVER change execution_mode, status, or routed_to on any lug except your assigned lug.\n"
             "4. Resolution note: Before moving your lug to completed/, write a concise resolution field summarizing: what you did, what you found, and any side-fix or follow-up lug created.\n"
             "5. When complete: verify all acceptance criteria are met, then move lug to completed/ and set status to completed.\n"
@@ -754,7 +778,7 @@ class OziHeadlessRunner:
             return
         try:
             # Derive wheel_id from WAI-State.json
-            state_path = self.spoke_path / "WAI-Spoke" / "WAI-State.json"
+            state_path = self._base() / "WAI-State.json"
             wheel_id = ""
             if state_path.exists():
                 try:
@@ -783,10 +807,10 @@ class OziHeadlessRunner:
 
     def _phase5_closeout(self, run_id: str) -> None:
         activity_log_path = (
-            self.spoke_path / "WAI-Spoke" / "advisors" / "headless" / "activity-log.jsonl"
+            self._advisors() / "headless" / "activity-log.jsonl"
         )
         scan_state_path = (
-            self.spoke_path / "WAI-Spoke" / "advisors" / "headless" / "scan_state.json"
+            self._advisors() / "headless" / "scan_state.json"
         )
 
         try:

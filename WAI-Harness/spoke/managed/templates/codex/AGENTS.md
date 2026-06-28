@@ -21,6 +21,7 @@ Default optimization rules:
 - Do not read `CLAUDE.md` unless the task touches Claude-specific hooks or config.
 - Do not preload large WAI history/runtime files.
 - Prefer targeted file reads over scanning entire `WAI-Spoke/` trees.
+- **Tool ownership (author vs distribute)** — Distributed tool/config — everything under `WAI-Harness/spoke/managed/**` (tools, schemas, templates, `.claude/` hooks/commands/agents/workflows/settings) plus `MANIFEST.json`, `.mcp.json`, and provider files — has two roles. The **canonical master source is authored at the hub / canonical home (mywheel)**. **Basher owns distribution** — managed→live redeploy, fleet fan-out, and the re-cut mechanics. A spoke does NOT edit the distributed source locally: it proposes a change via a lug (to the hub to author, and/or to Basher to distribute). Apply changes directly **only when purely local** — files under `WAI-Harness/spoke/local/**` (state, lugs, sessions, savepoints, runtime). When in doubt, route it. This is how we maintain the wheel.
 ## Codex Wakeup Output
 
 - During `/wai`, return the completed WAI Point briefing itself, not a transcript of the checks you ran.

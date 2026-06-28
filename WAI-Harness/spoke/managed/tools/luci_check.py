@@ -22,8 +22,31 @@ _a = _p.parse_args()
 SPOKE_PATH = Path(_a.spoke_path)
 TIER_OVERRIDE = _a.tier
 
-LUCI_CONFIG = SPOKE_PATH / "WAI-Spoke/advisors/luci/scan_state.json"
-STATE_FILE = SPOKE_PATH / "WAI-Spoke/WAI-State.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wai_paths import resolve_wai_root, advisors_dir  # noqa: E402  (v3/v4 resolver)
+
+
+def _spoke_base(spoke_root: Path) -> Path:
+    """Working-state base: WAI-Harness/spoke/local on v4, WAI-Spoke on v3.
+    State + lugs live here. Advisors are a sibling tree (see _advisors_base)."""
+    root, mode = resolve_wai_root(str(spoke_root))
+    if root and mode != "none":
+        return Path(root)
+    return Path(spoke_root) / "WAI-Spoke"  # last-resort v3 fallback
+
+
+def _advisors_base(spoke_root: Path) -> Path:
+    """Advisors tree: WAI-Harness/spoke/advisors on v4, WAI-Spoke/advisors on v3."""
+    adir = advisors_dir(str(spoke_root))
+    if adir:
+        return Path(adir)
+    return Path(spoke_root) / "WAI-Spoke" / "advisors"
+
+
+SPOKE_BASE = _spoke_base(SPOKE_PATH)
+
+LUCI_CONFIG = _advisors_base(SPOKE_PATH) / "luci/scan_state.json"
+STATE_FILE = SPOKE_BASE / "WAI-State.json"
 
 
 def load_config():
@@ -77,15 +100,15 @@ def check_code_health(spoke_path):
     else:
         results.append({"check": "tests", "status": "skip", "detail": "No tests/ directory"})
 
-    # Check for JSON validity of key files
-    for json_file in ["WAI-Spoke/WAI-State.json"]:
-        path = spoke_path / json_file
+    # Check for JSON validity of key files (base-aware: v4 local / v3 WAI-Spoke)
+    base = _spoke_base(spoke_path)
+    for label, path in [("WAI-State.json", base / "WAI-State.json")]:
         if path.exists():
             try:
                 json.loads(path.read_text())
-                results.append({"check": f"json:{json_file}", "status": "pass"})
+                results.append({"check": f"json:{label}", "status": "pass"})
             except json.JSONDecodeError as e:
-                results.append({"check": f"json:{json_file}", "status": "fail", "detail": str(e)})
+                results.append({"check": f"json:{label}", "status": "fail", "detail": str(e)})
 
     # Check git status
     try:
@@ -139,7 +162,7 @@ def create_bug_lug(spoke_path, check_result):
         }
     }
 
-    bug_dir = spoke_path / "WAI-Spoke/lugs/bytype/bug/open"
+    bug_dir = _spoke_base(spoke_path) / "lugs/bytype/bug/open"
     bug_dir.mkdir(parents=True, exist_ok=True)
     (bug_dir / f"{lug_id}.json").write_text(json.dumps(lug, indent=2) + "\n")
     return lug_id

@@ -2,7 +2,7 @@
   "id": "spec-cross-spoke-sovereignty-v1",
   "type": "spec",
   "status": "completed",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "created_at": "2026-05-29T00:00:00Z",
   "gb": "claude-sonnet-4-6",
   "fw_ver": "2.0.264",
@@ -13,7 +13,7 @@
     "label": "Spoke Sovereignty: Cross-Spoke Change Protocol"
   },
   "title": "Spoke Sovereignty: Cross-Spoke Change Protocol",
-  "what": "Defines the invariant that agents operating within a spoke must never directly write, edit, or delete files that live in another spoke's directory tree. All cross-spoke changes must travel as properly-formed lugs delivered to the target spoke's incoming/. This rule applies symmetrically to the framework spoke itself. AMENDED v1.1: a cross-spoke change does not travel as just ANY lug \u2014 it travels as a COMPLETE change-lug carrying a full account (reason + what-was-done + files_changed + commit) plus external-session attribution (resolve_attribution, kind=user|agent). The receiving spoke verifies and incorporates it per ITS OWN policies; no checklist is imposed from outside.",
+  "what": "Defines the invariant that agents operating within a spoke must never directly write, edit, or delete files that live in another spoke's directory tree. All cross-spoke changes must travel as properly-formed lugs delivered to the target spoke's incoming/. This rule applies symmetrically to the framework spoke itself. AMENDED v1.1: a cross-spoke change does not travel as just ANY lug \u2014 it travels as a COMPLETE change-lug carrying a full account (reason + what-was-done + files_changed + commit) plus external-session attribution (resolve_attribution, kind=user|agent). The receiving spoke verifies and incorporates it per ITS OWN policies; no checklist is imposed from outside. AMENDED v1.2 (SCOPE CARVE-OUT, operator directive): the prohibition covers DIRECT file edits ONLY \u2014 writing/editing/deleting another spoke's *source* files. Delivering a lug (or notice/report/signal) into another spoke's lugs/incoming/ is the EXACT OPPOSITE of a violation: it is the sanctioned channel this rule REQUIRES, and is UNCONDITIONALLY ALLOWED. An agent must NEVER pause, ask permission, or withhold a lug delivery on sovereignty or concurrency grounds; it delivers immediately (plus the outgoing/ audit copy). Gating lug delivery is itself the anti-pattern.",
   "why": "Direct cross-spoke file edits are untraceable (no lug history), undocumented (no PEV), overwritten on the next distribution run, and violate the spoke's right to accept or reject incoming changes on its own schedule. A lug-mediated change gives the target spoke full visibility, a reject path, and a recoverable audit trail. Without this rule, multi-agent sessions silently corrupt each other's state.",
   "audience": [
     "dev",
@@ -48,6 +48,10 @@
     {
       "name": "Outgoing/ is the audit trail",
       "description": "Every lug delivered to another spoke must have a corresponding copy in the sending spoke's WAI-Spoke/lugs/outgoing/ with delivered_at, target_spoke, and target_path fields. This enables: cross-spoke delivery confirmation, duplicate suppression, and post-mortem audit."
+    },
+    {
+      "name": "Lug delivery is unconditionally allowed (never gated)",
+      "description": "Delivering a properly-formed lug to another spoke's lugs/incoming/ is the sanctioned cross-spoke channel and is ALWAYS permitted. An agent must never pause, ask the operator 'should I deliver this?', or withhold a delivery because of concurrency, sovereignty, or 'is this allowed?' uncertainty. Deliver immediately in the same session, write the outgoing/ audit copy, and continue. This is the mechanism sovereignty depends on — refusing to deliver does NOT make the system safer, it strands the change. The only prohibited act is a DIRECT edit/write/delete of another spoke's source files; a lug drop is its safe, traceable, reject-able alternative. Operator standing directive (track-prompt-lab S6) — corrected repeatedly."
     },
     {
       "name": "Cross-spoke changes are COMPLETE change-lugs (with attribution)",
@@ -106,7 +110,8 @@
     "Hub incoming/ is NOT a relay for spoke-to-spoke delivery \u2014 each spoke has its own incoming/",
     "Reading (not writing) files in other spokes for context is permitted",
     "Emergency hotfixes (production system down) may bypass with explicit documentation \u2014 add a caution lug immediately after",
-    "Cross-spoke changes must be COMPLETE change-lugs (reason + change_summary + files_changed + commit + resolve_attribution authored_by/kind); prefer tools/write_change_receipt.py. The receiving spoke handles per its own policies \u2014 no externally-imposed checklist."
+    "Cross-spoke changes must be COMPLETE change-lugs (reason + change_summary + files_changed + commit + resolve_attribution authored_by/kind); prefer tools/write_change_receipt.py. The receiving spoke handles per its own policies \u2014 no externally-imposed checklist.",
+    "Lug delivery to any spoke's lugs/incoming/ is UNCONDITIONALLY allowed and must never be gated behind a permission ask or withheld on concurrency/sovereignty grounds. The prohibition is scoped to DIRECT source-file edits only."
   ],
   "tests": [
     "ct-outgoing-delivery-audit-v1"
@@ -138,6 +143,17 @@
   "execute": "If outgoing/ directory is missing: mkdir -p WAI-Spoke/lugs/outgoing/. For each violation found in git log (direct edit to foreign spoke path): 1. Compose a remediation impl lug with full PEV, target_files listing the affected foreign-spoke paths, routed_to matching the target spoke wheel_id, effort_score, model_fit. 2. Look up target spoke path in hub-registry.json wheels[].path by matching path prefix. 3. Write lug to {target_spoke_path}/WAI-Spoke/lugs/incoming/{lug_id}.json. 4. Write copy to WAI-Spoke/lugs/outgoing/{lug_id}.json with delivered_at and target_spoke fields set. If no violations: confirm the anti-pattern is present in CLAUDE.md under Anti-Patterns section (entry: 'Direct cross-spoke file edits') and the rule appears in wai-rules.md.",
   "verify": "WAI-Spoke/lugs/outgoing/ exists. No Edit or Write tool calls in this session targeted files outside the current spoke root (framework root = /home/mario/projects/wheelwright/framework/). Every cross-spoke delivery lug written this session has a corresponding entry in outgoing/ with delivered_at set. CLAUDE.md anti-pattern 'Direct cross-spoke file edits' is present and complete. Rejection lug reject-impl-advisor-schedule-eval-supabase-filter-v1 is processed (moved to completed or type changed).",
   "amendments": [
+    {
+      "version": "1.2.0",
+      "at": "2026-06-23T02:30:00Z",
+      "by": "mywheel/session-20260623-0217 (master, operator directive)",
+      "summary": "Scope carve-out: the prohibition covers DIRECT foreign-spoke source edits ONLY. Lug/notice/report/signal delivery to a spoke's incoming/ is the sanctioned channel and is UNCONDITIONALLY allowed — never gated, never asked, never withheld; deliver immediately. Added 'Lug delivery is unconditionally allowed' pattern + constraint. Resolves operator pain (track-prompt-lab S6: 'sending lugs to any spoke is ALWAYS allowed') and AC5/policy_directive of bug-live-track-rich-layer-never-fires-v1.",
+      "refs": [
+        "bug-live-track-rich-layer-never-fires-v1",
+        "feedback-never-block-cross-spoke-lug-delivery (memory)",
+        "CLAUDE.md anti-pattern: 'Gating or asking permission to deliver a lug to another spoke'"
+      ]
+    },
     {
       "version": "1.1.0",
       "at": "2026-06-04T06:50:08.395739Z",

@@ -1,3 +1,7 @@
+<!-- MANAGED BY BASHER — maintained by `basher tools update`. Do not edit this section directly.
+     New entries: (1) document value, (2) declare scope: spoke-local | wheel-wide
+     Wheel-wide changes: write a lug to /home/mario/projects/basher/WAI-Spoke/lugs/incoming/ -->
+
 # Project: wellnessbeyondlljc-website
 Stack: Node.js
 Start: `npm run dev`

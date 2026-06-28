@@ -44,13 +44,35 @@ def resolve_working_base(root, mode=None):
     return wai_paths.resolve_wai_root(root, mode)
 
 
+UNFILED_INITIATIVE = "initiative-unfiled-savepoints-v1"
+
+
 def _paths(working_base):
     return {
-        "savepoints": os.path.join(working_base, "savepoints"),
+        # Canonical (initiative-scoped) savepoint home. The legacy loose
+        # `{base}/savepoints/` home is RETIRED — writing there recreated the
+        # phantom loose dir that savepoint_migrate.py exists to clear.
+        "initiative_savepoints": os.path.join(working_base, "initiatives", "savepoints"),
+        "initiatives": os.path.join(working_base, "initiatives"),
         "lugs": os.path.join(working_base, "lugs"),
         "sessions": os.path.join(working_base, "sessions"),
         "state": os.path.join(working_base, "WAI-State.json"),
     }
+
+
+def resolve_init_dir(working_base):
+    """The initiative a fresh auto-eject belongs under: the active pinned initiative
+    (initiatives/current.json) if any, else the unfiled-savepoints bucket. Never the
+    legacy loose home."""
+    cur = os.path.join(working_base, "initiatives", "current.json")
+    try:
+        d = json.load(open(cur))
+        iid = d.get("initiative_id")
+        if iid:
+            return iid
+    except Exception:
+        pass
+    return UNFILED_INITIATIVE
 
 
 def in_progress_lugs(lugs_dir):
@@ -89,15 +111,20 @@ def next_recommendation(state_path):
 
 def savepoint_exists_for_session(savepoints_dir, session_id):
     """A savepoint already covers this session if any *.json (active or completed)
-    has claiming_session_id, claiming_session, session_id, or id matching it."""
+    has claiming_session_id, claiming_session, session_id, or id matching it.
+
+    `savepoints_dir` is the initiative-scoped root ({base}/initiatives/savepoints);
+    scan it recursively so per-initiative + completed/ subdirs are all covered. The
+    retired loose home is also swept so a pre-migration straggler still counts."""
     sid = session_id
     short = sid.split(".")[0]  # tolerate session-guard suffix (".contributor")
+    legacy_loose = os.path.join(os.path.dirname(os.path.dirname(savepoints_dir)), "savepoints")
     pats = [
-        os.path.join(savepoints_dir, "*.json"),
-        os.path.join(savepoints_dir, "completed", "*.json"),
+        os.path.join(savepoints_dir, "**", "*.json"),
+        os.path.join(legacy_loose, "*.json"),
     ]
     for pat in pats:
-        for f in glob.glob(pat):
+        for f in glob.glob(pat, recursive=True):
             try:
                 d = json.load(open(f))
             except Exception:
@@ -149,6 +176,7 @@ def detect_unfinished(working_base, root):
 
 def build_autoeject(session_id, working_base, root, signals, mode):
     p = _paths(working_base)
+    init_dir = resolve_init_dir(working_base)
     tail = track_tail(p["sessions"], session_id)
     work_done = []
     for t in tail:
@@ -166,6 +194,7 @@ def build_autoeject(session_id, working_base, root, signals, mode):
         "id": "sp-" + session_id.split(".")[0] + "-autoeject",
         "slug": "autoeject",
         "session_id": session_id,
+        "initiative_id": init_dir,
         "claiming_session_id": None,
         "status": "auto-eject",
         "degraded": True,
@@ -222,18 +251,21 @@ def run(session_id, root, mode=None, dry_run=False):
     if working_base is None:
         return {"action": "skip", "reason": "no harness root (neither WAI-Spoke nor WAI-Harness)", "mode": active}
     p = _paths(working_base)
-    existing = savepoint_exists_for_session(p["savepoints"], session_id)
+    existing = savepoint_exists_for_session(p["initiative_savepoints"], session_id)
     if existing:
         return {"action": "skip", "reason": "savepoint already exists for session", "savepoint": existing, "mode": active}
     unfinished, signals = detect_unfinished(working_base, root)
     if not unfinished:
         return {"action": "skip", "reason": "no substantive unfinished work", "mode": active, "signals": signals}
     sp = build_autoeject(session_id, working_base, root, signals, active)
-    dest = os.path.join(p["savepoints"], sp["id"] + ".json")
+    # Write to the INITIATIVE-SCOPED home (never the retired loose dir).
+    dest_dir = os.path.join(p["initiative_savepoints"], sp["initiative_id"])
+    dest = os.path.join(dest_dir, sp["id"] + ".json")
     if not dry_run:
-        os.makedirs(p["savepoints"], exist_ok=True)
+        os.makedirs(dest_dir, exist_ok=True)
         json.dump(sp, open(dest, "w"), indent=2)
-    return {"action": "wrote" if not dry_run else "would-write", "savepoint": dest, "mode": active, "signals": signals}
+    return {"action": "wrote" if not dry_run else "would-write", "savepoint": dest,
+            "initiative": sp["initiative_id"], "mode": active, "signals": signals}
 
 
 def main():

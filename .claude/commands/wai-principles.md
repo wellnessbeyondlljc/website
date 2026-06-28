@@ -94,6 +94,16 @@ Every WAI component must embody these principles. Details and examples: `wai-pri
 - Put work intent, decisions, progress, subagent prompts, and blockers in lugs
 - Trigger: any time about to call TaskCreate or write a scratch file — stop, use a lug
 
+## P12: Purposeful Objects (Circuit Contracts)
+
+**Every object declares its circuit and earns its capacity — built, present, or active is NOT productive.**
+
+- Each canonical object (lug, tool, hook, advisor, crew, scout) self-declares its contract: purpose, owner, produces → consumed_by → downstream, and the data point that proves forward movement
+- Built ≠ active ≠ productive: spend capacity only where the circuit closes (downstream value realized); starve undefined / active-unproductive / inactive objects (forward movement over motion — don't waste tokens)
+- Maintained AND monitored: the contract is declared at creation and the AP data continuously asserts it (object-contracts.json + contract_validate.py + advisor_contract_audit.py, run each Conductor cycle); a broken or active-unproductive circuit is a finding to fix or retire
+- This is how spokes evolve freely while staying canon-conformant — purpose drives ownership + continuity, which drive learning + evolution
+- Trigger: implementing any object → declare its contract first; reviewing → assert productivity from AP data, never from mere presence
+
 ---
 
 ## Principle Summary
@@ -111,6 +121,7 @@ Every WAI component must embody these principles. Details and examples: `wai-pri
 | P9 | Intuitive Design | Self-activating, self-improving |
 | P10 | Autonomy | Trust is the default — proceed, don't pause |
 | P11 | Lug-First Memory | Lugs outlive sessions; tasks and md files don't |
+| P12 | Purposeful Objects | Every object declares its circuit + earns capacity; productive ≠ present |
 
 ---
 

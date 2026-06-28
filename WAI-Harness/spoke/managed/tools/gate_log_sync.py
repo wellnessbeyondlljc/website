@@ -22,12 +22,35 @@ import json
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
-DEFAULT_DB = "WAI-Spoke/managed/harness.db"
-DEFAULT_JSONL = "WAI-Spoke/patterns/gate-log.jsonl"
-DEFAULT_PATTERNS_ROOT = "WAI-Spoke/patterns"
-DEFAULT_ADVISORS_ROOT = "WAI-Spoke/advisors"
-DEFAULT_FLOW_DEFS = "WAI-Spoke/patterns/flow-definitions"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
+
+def _spoke_base():
+    """Resolve the live spoke working-base (v4: WAI-Harness/spoke/local; v3:
+    WAI-Spoke), independent of nesting depth. PRE-FIX the DEFAULT_* constants
+    hardcoded a relative 'WAI-Spoke/...' tree -> on a v4 spoke the sync read an
+    empty/absent gate-log and routed events into a dead tree (impl-fix-p2-v3noop-sweep-v1)."""
+    start = Path(__file__).resolve()
+    for anc in start.parents:
+        if (anc / "WAI-Harness" / "spoke" / "local").is_dir():
+            base, mode = resolve_wai_root(str(anc))
+            if base and mode != "none":
+                return Path(base)
+    for anc in start.parents:
+        if (anc / "WAI-Spoke").is_dir():
+            return anc / "WAI-Spoke"
+    return start.parent.parent / "WAI-Spoke"
+
+
+_SPOKE_BASE = _spoke_base()
+DEFAULT_DB = str(_SPOKE_BASE / "managed/harness.db")
+DEFAULT_JSONL = str(_SPOKE_BASE / "patterns/gate-log.jsonl")
+DEFAULT_PATTERNS_ROOT = str(_SPOKE_BASE / "patterns")
+DEFAULT_ADVISORS_ROOT = str(_SPOKE_BASE / "advisors")
+DEFAULT_FLOW_DEFS = str(_SPOKE_BASE / "patterns/flow-definitions")
 
 GATE_COLS = ("id", "flow_id", "step_id", "session_id", "attempt",
              "disposition", "evidence", "refinement", "created_at")

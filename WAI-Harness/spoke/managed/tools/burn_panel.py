@@ -19,12 +19,49 @@ import sys
 import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_HERE)
 
-SESSIONS_DIR   = os.path.join(_REPO_ROOT, "WAI-Spoke/sessions")
-USAGE_FILE     = os.path.join(_REPO_ROOT, "WAI-Spoke/model-usage/usage.jsonl")
-LUGS_BYTYPE    = os.path.join(_REPO_ROOT, "WAI-Spoke/lugs/bytype")
-SYNC_QUEUE     = os.path.join(_REPO_ROOT, "tools/sync_retry_queue.jsonl")
+
+def _spoke_root() -> str:
+    """Walk up from this tool to the spoke ROOT. tools/ sits at
+    WAI-Harness/spoke/managed/tools in v4, so the root is several levels up — not
+    dirname(_HERE). Prefer the nearest WAI-Harness-bearing ancestor (the v4 root);
+    a stray managed/WAI-Spoke/reference dir must NOT be mistaken for the root, so
+    a WAI-Spoke-only match is a fallback used only when no WAI-Harness ancestor
+    exists (a pure v3 spoke)."""
+    d = _HERE
+    v3_root = None
+    while True:
+        if os.path.isdir(os.path.join(d, "WAI-Harness")):
+            return d  # v4 root wins
+        if v3_root is None and os.path.isdir(os.path.join(d, "WAI-Spoke")):
+            v3_root = d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return v3_root or os.path.dirname(_HERE)  # v3 root, else legacy
+        d = parent
+
+
+def _base(spoke_root: str) -> str:
+    """Resolve the spoke working base, base-aware. On a v4 spoke this routes to
+    WAI-Harness/spoke/local instead of the nonexistent WAI-Spoke tree, so the
+    burn panel reports on the live tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        sys.path.insert(0, _HERE)
+        import wai_paths
+        root, mode = wai_paths.resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return root
+    except Exception:
+        pass
+    return os.path.join(spoke_root, "WAI-Spoke")  # last-resort v3 fallback
+
+
+_BASE = _base(_spoke_root())
+
+SESSIONS_DIR   = os.path.join(_BASE, "sessions")
+USAGE_FILE     = os.path.join(_BASE, "model-usage/usage.jsonl")
+LUGS_BYTYPE    = os.path.join(_BASE, "lugs/bytype")
+SYNC_QUEUE     = os.path.join(_HERE, "sync_retry_queue.jsonl")
 
 DAY_SECONDS  = 24 * 3600
 WEEK_SECONDS = 7 * DAY_SECONDS

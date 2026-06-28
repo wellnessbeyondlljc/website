@@ -74,6 +74,11 @@ Behavioral Rules: See skill files, not inline
 - Scope drift: wai-stewardship-guard.md
 - Foundation: wai-foundation-gate.md
 
+Tool Ownership (author vs distribute):
+- Distributed tool/config (under `WAI-Harness/spoke/managed/**`, plus `MANIFEST.json`, `.mcp.json`, provider files) is authored at the hub / canonical home and distributed by Basher (managed→live redeploy, fleet fan-out).
+- Local-only changes (`WAI-Harness/spoke/local/**`) may be applied directly.
+- Otherwise route the change via a lug (hub to author, Basher to distribute).
+
 ## Related Skills
 
 - /wai — Full briefing

@@ -34,10 +34,28 @@ import wai_paths  # noqa: E402  harness-mode root resolver
 
 from _schema_validate import validate as _validate_scout  # noqa: E402
 
-SCOUTS_SPOKE_READY = _REPO_ROOT / "WAI-Spoke/scouts/spoke_local/ready"
-SCOUTS_HUB_READY = _REPO_ROOT / "WAI-Spoke/scouts/hub_universal/ready"
-SCHEMA_PATH = _REPO_ROOT / "WAI-Spoke/reference/scout-job.schema.json"
-BUG_LUG_DIR = _REPO_ROOT / "WAI-Spoke/lugs/bytype/bug/open"
+# Data dirs (scouts, bug lugs) live in the spoke's LOCAL plane, resolved base-aware from
+# the spoke root — NOT under _REPO_ROOT (the managed install dir). PRE-FIX they pointed at
+# managed/WAI-Spoke/... which does not exist on v4, so `--all-ready` found 0 scouts and the
+# wayfinder runner silently did nothing (impl-fix-p1-silent-dead-v4-paths-v1). SCHEMA_PATH is
+# a managed reference that ships under managed/reference/ (resolved via _REPO_ROOT).
+def _lugs_base(spoke_root) -> Path:
+    """The dir whose lugs/scouts live for this spoke, base-aware (v4 local, else v3)."""
+    try:
+        base, mode = wai_paths.resolve_wai_root(str(spoke_root))
+        if base and mode != "none":
+            return Path(base)
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke"
+
+
+_SPOKE_ROOT = Path(os.environ.get("WAI_SPOKE_ROOT") or os.getcwd())
+_LOCAL = _lugs_base(_SPOKE_ROOT)
+SCOUTS_SPOKE_READY = _LOCAL / "scouts/spoke_local/ready"
+SCOUTS_HUB_READY = _LOCAL / "scouts/hub_universal/ready"
+SCHEMA_PATH = _REPO_ROOT / "reference/scout-job.schema.json"
+BUG_LUG_DIR = _LOCAL / "lugs/bytype/bug/open"
 EMIT_EVENT_CLI = _HERE / "emit_activity_event.py"
 ADAPTERS_DIR = _REPO_ROOT / "hub/WAI-Hub/advisors/navigator/adapters"
 
@@ -100,8 +118,9 @@ def list_ready_scouts() -> list[Path]:
 
 def _gather_lug_list(spoke_root: Path) -> str:
     """Serialize a snapshot of open + in_progress lugs (cap 50, 8KB total)."""
-    lug_paths = sorted(spoke_root.glob("WAI-Spoke/lugs/bytype/*/open/*.json"))
-    lug_paths += sorted(spoke_root.glob("WAI-Spoke/lugs/bytype/*/in_progress/*.json"))
+    _b = _lugs_base(spoke_root)
+    lug_paths = sorted(_b.glob("lugs/bytype/*/open/*.json"))
+    lug_paths += sorted(_b.glob("lugs/bytype/*/in_progress/*.json"))
     lug_paths = lug_paths[:50]
     rows = []
     for p in lug_paths:
@@ -126,8 +145,9 @@ def _gather_lug_filter(spoke_root: Path, spec: dict) -> str:
     statuses = spec.get("statuses") or ["open", "in_progress"]
     cap = int(spec.get("cap", 50))
     lug_paths: list[Path] = []
+    _b = _lugs_base(spoke_root)
     for status in statuses:
-        lug_paths += sorted(spoke_root.glob(f"WAI-Spoke/lugs/bytype/*/{status}/*.json"))
+        lug_paths += sorted(_b.glob(f"lugs/bytype/*/{status}/*.json"))
     lug_paths = sorted(set(lug_paths))[:cap]
     rows = []
     for p in lug_paths:

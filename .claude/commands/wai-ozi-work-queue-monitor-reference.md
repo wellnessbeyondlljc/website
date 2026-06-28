@@ -1,4 +1,5 @@
 # Ozi Work Queue Monitor — Reference
+> Fast path: load `wai-ozi-work-queue-monitor-reference-slim.md` first. Load this file only when deep protocol is needed.
 
 **Companion to wai-ozi-work-queue-monitor.md.** Load on-demand.
 

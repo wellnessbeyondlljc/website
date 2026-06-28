@@ -29,6 +29,29 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
+
+def _spoke_base():
+    """Resolve the live spoke working-base (v4: WAI-Harness/spoke/local; v3:
+    WAI-Spoke), independent of nesting depth. PRE-FIX the CLI defaulted gate-log /
+    patterns-dir to a hardcoded 'WAI-Spoke/...' tree -> on a v4 spoke mining read an
+    absent gate-log (0 events) and wrote candidates into a dead path
+    (impl-fix-p2-v3noop-sweep-v1)."""
+    start = Path(__file__).resolve()
+    for anc in start.parents:
+        if (anc / "WAI-Harness" / "spoke" / "local").is_dir():
+            base, mode = resolve_wai_root(str(anc))
+            if base and mode != "none":
+                return Path(base)
+    for anc in start.parents:
+        if (anc / "WAI-Spoke").is_dir():
+            return anc / "WAI-Spoke"
+    return start.parent.parent / "WAI-Spoke"
+
 
 def _attr(contributor="historian", kind="agent"):
     """Return a {actor, kind} attribution dict (normalizes lug_utils' tuple)."""
@@ -186,10 +209,11 @@ def close_loop(pre_baseline_rate, post_events, flow_id):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="historian gate-mining pass")
-    ap.add_argument("--gate-log", default="WAI-Spoke/patterns/gate-log.jsonl")
+    _base = _spoke_base()
+    ap.add_argument("--gate-log", default=str(_base / "patterns/gate-log.jsonl"))
     ap.add_argument("--new-events", type=int, required=True)
     ap.add_argument("--sessions-since", type=int, default=0)
-    ap.add_argument("--patterns-dir", default="WAI-Spoke/advisors/historian/patterns")
+    ap.add_argument("--patterns-dir", default=str(_base / "advisors/historian/patterns"))
     a = ap.parse_args(argv)
     trig = evaluate_trigger(a.new_events, a.sessions_since)
     if not trig["run"]:

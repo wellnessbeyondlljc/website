@@ -508,42 +508,6 @@
       "auto_generated": true
     },
     {
-      "id": "cap-wai-corpus-tests-slim",
-      "name": "wai-corpus-tests-slim",
-      "kind": "command",
-      "tier": "awareness",
-      "situation": "WAI Corpus Tests \u2014 Fast Path",
-      "solution": "Use wai-corpus-tests-slim (templates/commands/wai-corpus-tests-slim.md).",
-      "owner_advisor": null,
-      "file_paths": [
-        "templates/commands/wai-corpus-tests-slim.md"
-      ],
-      "symbol_refs": [],
-      "verification_ref": null,
-      "requires_tools": [],
-      "source": "spoke",
-      "status": "present",
-      "auto_generated": true
-    },
-    {
-      "id": "cap-wai-corpus-tests",
-      "name": "wai-corpus-tests",
-      "kind": "command",
-      "tier": "awareness",
-      "situation": "WAI Corpus Tests \u2014 Skill Reference",
-      "solution": "Use wai-corpus-tests (templates/commands/wai-corpus-tests.md).",
-      "owner_advisor": null,
-      "file_paths": [
-        "templates/commands/wai-corpus-tests.md"
-      ],
-      "symbol_refs": [],
-      "verification_ref": null,
-      "requires_tools": [],
-      "source": "spoke",
-      "status": "present",
-      "auto_generated": true
-    },
-    {
       "id": "cap-wai-crew-convention-slim",
       "name": "wai-crew-convention-slim",
       "kind": "command",
@@ -1507,24 +1471,6 @@
       "owner_advisor": null,
       "file_paths": [
         "templates/commands/wai-tastegraph-export.md"
-      ],
-      "symbol_refs": [],
-      "verification_ref": null,
-      "requires_tools": [],
-      "source": "spoke",
-      "status": "present",
-      "auto_generated": true
-    },
-    {
-      "id": "cap-wai-test",
-      "name": "wai-test",
-      "kind": "command",
-      "tier": "awareness",
-      "situation": "WAI Test \u2014 Corpus Test Runner",
-      "solution": "Use wai-test (templates/commands/wai-test.md).",
-      "owner_advisor": null,
-      "file_paths": [
-        "templates/commands/wai-test.md"
       ],
       "symbol_refs": [],
       "verification_ref": null,

@@ -24,18 +24,32 @@ import os
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_HERE)
+# Spoke repo root: tools/ -> managed -> spoke -> WAI-Harness -> ROOT
+_SPOKE_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir, os.pardir, os.pardir))
 
 # Make sibling tools/ modules importable when invoked directly
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from _schema_validate import validate_dict as _validate_against_schema  # noqa: E402,F401
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
 
-SCHEMA_PATH = os.path.join(
-    _REPO_ROOT, "WAI-Spoke/reference/wayfinder-cycle-close.schema.json"
-)
-LUG_OUT_DIR = os.path.join(_REPO_ROOT, "WAI-Spoke/lugs/bytype/task/open")
+
+def _spoke_base(spoke_root: str) -> str:
+    """Working-state base: WAI-Harness/spoke/local on v4, WAI-Spoke on v3.
+    PRE-FIX this tool wrote its cycle-close lug into managed/WAI-Spoke/... — a path
+    that does not exist on a v4 spoke, so the lug silently went nowhere
+    (impl-fix-p2-v3noop-sweep-v1)."""
+    root, mode = resolve_wai_root(str(spoke_root))
+    if root and mode != "none":
+        return root
+    return os.path.join(spoke_root, "WAI-Spoke")  # last-resort v3 fallback
+
+
+_BASE = _spoke_base(_SPOKE_ROOT)
+
+SCHEMA_PATH = os.path.join(_BASE, "reference/wayfinder-cycle-close.schema.json")
+LUG_OUT_DIR = os.path.join(_BASE, "lugs/bytype/task/open")
 
 
 def _utc_now() -> datetime.datetime:

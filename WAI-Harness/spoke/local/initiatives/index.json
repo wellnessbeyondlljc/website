@@ -1,0 +1,13 @@
+{
+  "initiatives": [
+    {
+      "id": "initiative-unfiled-savepoints-v1",
+      "label": "Unfiled savepoints (needs operator triage)",
+      "description": "Auto-created bucket for legacy savepoints that carried no initiative_id. Triage and reassign or discard.",
+      "status": "open",
+      "lifecycle_state": "dormant",
+      "wake_on": "operator review of migrated savepoint"
+    }
+  ],
+  "schema_version": "work-contracts-v1"
+}

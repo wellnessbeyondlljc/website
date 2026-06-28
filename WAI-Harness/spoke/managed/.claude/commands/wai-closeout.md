@@ -7,10 +7,8 @@ value into every `{BASE}/...` path (prose, bash, and Python blocks) — exactly 
 other `{placeholder}` fields in this file (`{session_id}`, `{id}`, ...):
 
 ```bash
-BASE=$(python3 WAI-Harness/spoke/managed/tools/wai_paths.py --root . --json 2>/dev/null \
-  | python3 -c "import json,sys,os; b=json.load(sys.stdin).get('_base') or ''; print(os.path.relpath(b) if b else '')")
-[ -z "$BASE" ] && BASE="WAI-Spoke"   # fallback: no tree detected yet
-TOOLS="WAI-Harness/spoke/managed/tools"; [ -d "$TOOLS" ] || TOOLS="tools"
+# Shared preamble (P1: ceremony-lib) — single source of truth for harness-mode resolution.
+source WAI-Harness/spoke/managed/shared/ceremony-lib.sh && ceremony_init   # exports $BASE + $TOOLS
 ```
 
 Resolve `{TOOLS}` the same way and substitute it into every `{TOOLS}/...` tool call below —
@@ -21,6 +19,48 @@ v3/coexist (relative to the spoke root, so it works in both `open('{BASE}/...')`
 git-diff path-prefix checks). Cross-spoke delivery (Step 9) uses `{target_base}` — the
 TARGET spoke's base, resolved the same way with `--root {target_path}`. Never hardcode
 `WAI-Spoke/`.
+
+### 0.4 CSRP Notice Check (concurrent-session awareness — DO BEFORE COMMITTING)
+
+Never closeout in ignorance of another lane advancing main, your work being unmerged/unpushed, or a remote-mod of your master. Run the read-and-warn pre-step against the resolved base:
+
+```bash
+WAI-Harness/spoke/managed/tools/csrp_notice_check.sh --base {BASE}
+```
+
+If it exits `10`, it has surfaced `notice-session-reconcile-*` / `notice-remote-mod-*` / `impl-csrp-*` notices: **acknowledge each** (review the listed commit + guidance), and if any flags THIS lane's work as unmerged/unpushed, **defer the close and reconcile first** rather than committing blind. Exit `0` = nothing pending, proceed. (impl-ozi-csrp-incoming-check-savepoint-closeout-v1)
+
+### 0.5 CSRP-aware mode (AUTOMATIC — never prompt the operator)
+
+Per spec-csrp-aware-savepoint-closeout-mode-v1 (operator directive 2026-06-18), the git posture is auto-selected — never ask the user to choose it. Run the predicate:
+
+```bash
+WAI-Harness/spoke/managed/tools/csrp_mode.sh --base {BASE}   # -> {"csrp_aware": bool, "reason": "..."}
+```
+
+If `csrp_aware:true`, apply the **git contract** for the rest of the close (operator sees only a one-line `CSRP-aware close (trigger: <reason>)` note, no decision):
+- **NEVER** `git add -A` / `git commit -a` — stage only this session's own files (`commit-mine.sh`); verify `git diff --cached --name-only` first.
+- If this repo's canonical home is a **different master** (dogfood; `is_master:false`), **push the session branch** to origin and let the reconciler integrate it — do **NOT** `wt-finish --merge` into this dogfood's main.
+- Write savepoint/state/resume-contract to the **gitignored local store** (no commit needed); deliver lugs via the gitignored queue (writing the file IS delivery).
+- Surface + acknowledge incoming CSRP notices (Step 0.4) before any commit/record.
+
+`csrp_aware:false` (sole owner, isolated, canonical home is this repo) → normal close, unchanged.
+
+### 0.6 Lane absorption check (AUTOMATIC — never prompt)
+
+A lane whose opening session is **not open** (heartbeat stale beyond the open window — it ended/stalled) is an **absorption candidate**: reconcile its committed work into this tree and clear the stale lane, rather than leave a phantom competitor blocking future leads. Run:
+
+```bash
+WAI-Harness/spoke/managed/tools/converge_closeout.py candidates --base {BASE} --session-id {SESSION_ID}
+```
+
+Exit `10` = candidates exist (openers gone) → absorb them (reconcile committed work, commit-to-branch any uncommitted, reap, re-verify the unified tree):
+
+```bash
+WAI-Harness/spoke/managed/tools/converge_closeout.py converge --base {BASE} --session-id {SESSION_ID} --repo {REPO}
+```
+
+Exit `0` = none, proceed. NEVER absorb an OPEN lane — only sessions that aren't running. A RED unified tree retains the lock for fix-forward. `{SESSION_ID}` is this session's CC session id.
 
 ### 0. Test Gate
 
@@ -88,109 +128,15 @@ DISRUPTION_DETAILS=""
 Read `{BASE}/runtime/closeout-fingerprint.json` (if present) to detect re-closeout within the same session. Set `DELTA_CLASS` and skip flags before any step runs.
 
 ```bash
-python3 << 'PYEOF'
-import json, os, subprocess, datetime
-
-fingerprint_path = '{BASE}/runtime/closeout-fingerprint.json'
-session_guard_path = '{BASE}/runtime/session-guard.json'
-
-# Read current session ID
-current_session = None
-try:
-    current_session = json.load(open(session_guard_path)).get('session_id')
-except Exception:
-    pass
-
-# Defaults — assume FULL (no fingerprint or cross-session)
-DELTA_CLASS = "FULL"
-SKIP_VERSION_BUMP = False
-SKIP_TEST_GATE = False
-SKIP_CHANGELOG = False
-SKIP_TEACHINGS = False
-SKIP_SKILL_SYNC = False
-SKIP_TELEMETRY = False
-SKIP_BRIEFS = False
-CONVERSATION_ONLY = False
-
-if os.path.exists(fingerprint_path) and current_session:
-    fp = json.load(open(fingerprint_path))
-    same_session = fp.get('session_id') == current_session
-    if same_session:
-        SKIP_VERSION_BUMP = True  # always skip on re-closeout within same session
-        # Classify delta since last closeout
-        last_sha = fp.get('last_closeout_sha', '')
-        if last_sha:
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', last_sha, 'HEAD'],
-                capture_output=True, text=True
-            )
-            changed = [f.strip() for f in result.stdout.strip().splitlines() if f.strip()]
-            # Classify
-            state_only = all(
-                f.startswith('{BASE}/') and any(f.endswith(x) for x in ['.json', '.jsonl'])
-                for f in changed
-            )
-            has_py_sh = any(f.endswith(('.py', '.sh')) or 'tools/' in f for f in changed)
-            has_docs = any(f.endswith(('.md', '.yaml', '.yml')) for f in changed)
-            if not changed or state_only:
-                DELTA_CLASS = "MICRO"
-                SKIP_TEST_GATE = True
-                SKIP_CHANGELOG = True
-                SKIP_TEACHINGS = True
-                SKIP_SKILL_SYNC = True
-                SKIP_TELEMETRY = True
-                SKIP_BRIEFS = True
-            elif has_py_sh:
-                DELTA_CLASS = "STANDARD"
-                SKIP_CHANGELOG = False
-            elif has_docs:
-                DELTA_CLASS = "PATCH"
-                SKIP_TEACHINGS = True
-
-# CONVERSATION_ONLY: no code/doc/template changes this session
-if DELTA_CLASS != "MICRO":
-    session_start_sha = None
-    try:
-        sg_path = '{BASE}/runtime/session-guard.json'
-        if os.path.exists(sg_path):
-            session_start_sha = json.load(open(sg_path)).get('session_start_sha')
-    except Exception:
-        pass
-    if session_start_sha:
-        r = subprocess.run(
-            ['git', 'diff', '--name-only', session_start_sha, 'HEAD'],
-            capture_output=True, text=True
-        )
-        session_changed = [f.strip() for f in r.stdout.strip().splitlines() if f.strip()]
-    else:
-        r = subprocess.run(['git', 'diff', '--name-only', 'HEAD'], capture_output=True, text=True)
-        session_changed = [f.strip() for f in r.stdout.strip().splitlines() if f.strip()]
-    code_or_doc = [f for f in session_changed if
-                   f.endswith(('.py', '.sh', '.js', '.ts', '.jsx', '.tsx',
-                               '.md', '.yaml', '.yml'))
-                   or 'tools/' in f or 'templates/' in f]
-    if not code_or_doc:
-        CONVERSATION_ONLY = True
-
-SKIP_TEST_GATE = SKIP_TEST_GATE or CONVERSATION_ONLY
-
-# Export as env vars for subsequent steps
-exports = {
-    'DELTA_CLASS': DELTA_CLASS,
-    'SKIP_VERSION_BUMP': str(SKIP_VERSION_BUMP).lower(),
-    'SKIP_TEST_GATE': str(SKIP_TEST_GATE).lower(),
-    'SKIP_CHANGELOG': str(SKIP_CHANGELOG).lower(),
-    'SKIP_TEACHINGS': str(SKIP_TEACHINGS).lower(),
-    'SKIP_SKILL_SYNC': str(SKIP_SKILL_SYNC).lower(),
-    'SKIP_TELEMETRY': str(SKIP_TELEMETRY).lower(),
-    'SKIP_BRIEFS': str(SKIP_BRIEFS).lower(),
-    'CONVERSATION_ONLY': str(CONVERSATION_ONLY).lower(),
-}
-for k, v in exports.items():
-    print(f'export {k}={v}')
-print(f'[closeout] Delta class: {DELTA_CLASS} | skip_test_gate={SKIP_TEST_GATE} | conversation_only={CONVERSATION_ONLY} | skip_version_bump={SKIP_VERSION_BUMP}')
-PYEOF
+# Delta-ceremony classification (extracted + tested: tools/classify_delta_ceremony.py)
+python3 {TOOLS}/classify_delta_ceremony.py --base {BASE} --json
 ```
+
+Read the JSON and apply the SAME skip/branch decisions (identical semantics to the
+former inline block). Keys: `DELTA_CLASS` (FULL|MICRO|PATCH|STANDARD), `CONVERSATION_ONLY`,
+`SKIP_VERSION_BUMP`, `SKIP_TEST_GATE`, `SKIP_CHANGELOG`, `SKIP_TEACHINGS`, `SKIP_SKILL_SYNC`,
+`SKIP_TELEMETRY`, `SKIP_BRIEFS`. Honor `MICRO` (jump Step 10d → 11) and `CONVERSATION_ONLY`
+(short-circuit to Step 6) per the skip map below.
 
 Evaluate output with `eval $(python3 ... )` or source the exports.
 
@@ -812,61 +758,13 @@ fi
 If any goals were set this session via `goal_set` events and not all were completed, write a `session_exit_with_goals` event so the next session (or Ozi) can detect and recover outstanding work.
 
 ```bash
-python3 - <<'PYEOF'
-import json, glob, sys
-from datetime import datetime, timezone
-from pathlib import Path
-
-guard_path = '{BASE}/runtime/session-guard.json'
-try:
-    current_session_id = json.load(open(guard_path)).get('session_id', '')
-except Exception:
-    current_session_id = ''
-
-if not current_session_id:
-    sys.exit(0)
-
-track_path = Path(f'{BASE}/sessions/{current_session_id}/track.jsonl')
-if not track_path.exists():
-    sys.exit(0)
-
-goals_set = {}
-goals_done = set()
-for raw in track_path.read_text().splitlines():
-    raw = raw.strip()
-    if not raw:
-        continue
-    try:
-        entry = json.loads(raw)
-    except Exception:
-        continue
-    ev = entry.get('event', '')
-    if ev == 'goal_set':
-        gid = entry.get('goal_id', '')
-        if gid:
-            goals_set[gid] = entry
-    elif ev == 'goal_completed':
-        gid = entry.get('goal_id', '')
-        if gid:
-            goals_done.add(gid)
-
-outstanding = [gid for gid in goals_set if gid not in goals_done]
-if not outstanding:
-    print('  No outstanding goals — session_exit_with_goals not needed.')
-    sys.exit(0)
-
-print(f'  Outstanding goals: {outstanding}')
-marker = json.dumps({
-    'event': 'session_exit_with_goals',
-    'outstanding': outstanding,
-    'ts': datetime.now(timezone.utc).isoformat(),
-})
-buffer_path = Path('{BASE}/runtime/track-buffer.json')
-buffer_path.parent.mkdir(parents=True, exist_ok=True)
-buffer_path.write_text(marker + '\n')
-print(f'  Wrote session_exit_with_goals to track-buffer.json — Stop hook will commit it.')
-PYEOF
+# Outstanding-goal exit marker (extracted + tested: tools/emit_goal_exit_marker.py)
+python3 {TOOLS}/emit_goal_exit_marker.py --base {BASE}
 ```
+
+Resolves the current session, scans the track for `goal_set`/`goal_completed`, and writes
+a `session_exit_with_goals` marker to `{BASE}/runtime/track-buffer.json` ONLY if goals
+remain outstanding (no-op otherwise — Stop hook commits the marker).
 
 **Skip if:** no `goal_set` events in this session's track (session was purely reactive/advisory).
 
@@ -884,35 +782,14 @@ Run the same python block as `wai-closeout-slim.md Step 10c`. Skip if: `next_ses
 
 Check for an in-progress closeout buffer from a prior interrupted attempt in this session. If found, harvest its draft state instead of recomposing.
 
-```python
-import json, os, datetime
-from datetime import timezone
-
-staging_path = '{BASE}/runtime/closeout-staging.json'
-if os.path.exists(staging_path):
-    try:
-        s = json.load(open(staging_path))
-        if s.get('type') == 'partial':
-            print(f"[closeout] Partial staging buffer found — harvesting draft state")
-            print(f"  Prior draft: version={s.get('version','?')}, session={s.get('session_id','?')}")
-            # DRAFT_COMMIT_MESSAGE and STAGED_VERSION from s can be reused below
-    except Exception:
-        pass
-
-# Mark as partial now — updated to 'closeout' after commit (idempotent recovery point)
-try:
-    session_id = json.load(open('{BASE}/runtime/session-guard.json')).get('session_id', 'unknown')
-except Exception:
-    session_id = 'unknown'
-partial = {
-    'type': 'partial',
-    'session_id': session_id,
-    'started_at': datetime.datetime.now(timezone.utc).isoformat(),
-}
-os.makedirs('{BASE}/runtime', exist_ok=True)
-with open(staging_path, 'w') as f:
-    json.dump(partial, f, indent=2)
+```bash
+# Partial-staging recovery (extracted + tested: tools/recover_partial_staging.py)
+python3 {TOOLS}/recover_partial_staging.py --base {BASE}
 ```
+
+If the output shows `"recovered": true`, reuse the prior draft's commit message / staged
+version from `{BASE}/runtime/closeout-staging.json` instead of recomposing. (The tool also
+re-marks a fresh `partial` recovery point, idempotently.)
 
 ---
 
@@ -920,46 +797,13 @@ with open(staging_path, 'w') as f:
 
 Before the main commit, classify uncommitted files and resolve disposition. This catches teaching-adoption changes and unknown untracked files that closeout would otherwise silently omit.
 
-```python
-import subprocess, json, os, sys
-
-result = subprocess.run(['git', 'status', '--short'], capture_output=True, text=True)
-lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-
-TEACHING_PATHS = (
-    '{BASE}/seed/ingest/processed/',
-    '.claude/hooks/',
-    'CLAUDE.md',
-    'AGENTS.md',
-)
-RUNTIME_PATHS = (
-    '{BASE}/runtime/',
-    '{BASE}/advisors/',
-    'wakeup-brief.json',
-    '{BASE}/wakeup-brief.json',
-    '{BASE}/sessions/',
-)
-
-teaching_files = []
-runtime_files  = []
-unknown_files  = []
-
-for line in lines:
-    parts = line.split(None, 1)
-    if len(parts) < 2:
-        continue
-    path = parts[1].strip()
-    if ' -> ' in path:
-        path = path.split(' -> ')[-1].strip()
-    if any(path.startswith(p) or path == p for p in TEACHING_PATHS):
-        teaching_files.append(path)
-    elif any(path.startswith(p) or path == p for p in RUNTIME_PATHS):
-        runtime_files.append(path)
-    else:
-        unknown_files.append(path)
-
-print(json.dumps({'teaching': teaching_files, 'runtime': runtime_files, 'unknown': unknown_files}))
+```bash
+# Uncommitted-file classification (extracted + tested: tools/classify_git_files.py)
+python3 {TOOLS}/classify_git_files.py --base {BASE}
 ```
+
+Read the JSON: `teaching_files = .teaching`, `runtime_files = .runtime`, `unknown_files = .unknown`.
+Then proceed exactly as below — teaching: dedicated teaching commit; runtime: skip; unknown: per-file decision.
 
 **Teaching files** — auto-commit as a dedicated teaching commit before the main session commit:
 
@@ -994,6 +838,26 @@ Git audit: {N} teaching file(s) committed, {M} runtime file(s) skipped, {K_stage
 ```
 
 **Skip this step entirely if `teaching_files`, `runtime_files`, and `unknown_files` are all empty** (i.e., git status was clean before this step).
+
+---
+
+### 10i. CSRP Convergence (lane-aware closeout — converge competitors into ONE verified tree)
+
+Before the normal commit, become a candidate convergence LEAD so concurrent sessions collapse into a single tree that closes cleanly (CSRP P6, `impl-csrp-p6-convergent-closeout-v1`). Zero-cost no-op when you are the only session.
+
+```bash
+CC="{TOOLS}/converge_closeout.py"
+# cc_sid = this Claude Code session id (lane key); WT = this session's worktree name (basename of repo root if under .worktrees/, else omit --my-worktree)
+python3 "$CC" converge --base {BASE} --session-id {cc_sid} --repo . --my-worktree {wt_name} | tee /tmp/converge.json
+```
+
+Read the JSON and branch:
+- `lead:false, reason:"no-competitors"` → single session: proceed to Step 11 unchanged (zero cost).
+- `lead:false, reason:"not-lead"` → another session holds the merge-lock and is converging the fleet. Close your **OWN lane only**: commit your scoped files (`commit-mine.sh`), do NOT merge to main; the lead absorbs your committed work + lug set-union. Then proceed to Step 11 (own-lane commit).
+- `lead:true, ok:true` → you converged the competitors into one tree, re-verified the unified HEAD (`verify.status: green`), and reaped idle/dead lanes (ACTIVE competitors keep running, their committed work merged). Proceed to Step 11 to close the single tree.
+- `lead:true, ok:false` (verify `RED`) → **STOP. Do NOT commit/close.** The unified tree FAILED its test gate even though each lane was individually green — this is exactly the integration breakage convergence exists to catch. The merge-lock is RETAINED (`lead_must_fix`). Fix-forward on `main` until the suite is green, then re-run this step. Never ship a red unified tree. (The lease auto-expires, so a crash cannot deadlock the fleet.)
+
+This is the **unify-then-VERIFY** guarantee: convergence is not done until the merged tree passes the same test gate (Step 0) on the unified HEAD.
 
 ---
 
@@ -1309,6 +1173,24 @@ with open('WAI-Hub/octo-brief.json', 'w') as f:
 print('Octo brief written: WAI-Hub/octo-brief.json')
 "
 ```
+
+### 11.6. No-Loose-Ends Gate (BLOCKS the clean banner)
+
+The closeout may not declare success while work is stranded (untested/untracked/
+unreconciled — initiative-no-dead-ends-v1). Run the scan over this session's scope:
+
+```bash
+python3 {TOOLS}/dead_end_scan.py --root . --json
+```
+
+- `clean: true` → proceed to Step 12.
+- `clean: false` → for EACH finding, take exactly one disposition before the clean
+  banner: **commit** it (scope to your own files; publish-gate stays operator-gated),
+  **capture** it in a tracker lug, or **discard-with-reason** (logged). An orphan
+  `untracked_source` file or an untracked `stash` must never be left silent. Report
+  the test-gate status honestly (a bypassed/RED gate is surfaced, never reported green).
+  `branches_ahead` is a fleet/reunification note (initiative-fleet-branch-reunification-v1),
+  not a session blocker — surface it, do not block on it.
 
 ### 12. Verification
 

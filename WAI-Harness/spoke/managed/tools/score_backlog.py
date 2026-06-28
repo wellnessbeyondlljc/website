@@ -17,13 +17,23 @@ import os
 import sys
 from pathlib import Path
 
-# Path resolution: 1. ENV, 2. CWD, 3. FRAMEWORK
-if os.environ.get("WAI_SPOKE_PATH"):
-    SPOKE = Path(os.environ["WAI_SPOKE_PATH"])
-elif (Path.cwd() / "WAI-Spoke").exists():
-    SPOKE = Path.cwd() / "WAI-Spoke"
-else:
-    SPOKE = Path(__file__).parent.parent / "WAI-Spoke"
+# Path resolution: 1. ENV, 2. wai_paths base (v4 local / v3 WAI-Spoke), 3. v3 fallback
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
+
+
+def _spoke_base() -> Path:
+    if os.environ.get("WAI_SPOKE_PATH"):
+        return Path(os.environ["WAI_SPOKE_PATH"])
+    # Spoke repo root: tools/ -> managed -> spoke -> WAI-Harness -> ROOT
+    repo_root = Path.cwd() if (Path.cwd() / "WAI-Harness").exists() else Path(__file__).resolve().parents[4]
+    root, mode = resolve_wai_root(str(repo_root))
+    if root and mode != "none":
+        return Path(root)  # WAI-Harness/spoke/local on a v4 spoke
+    return repo_root / "WAI-Spoke"  # last-resort v3 fallback
+
+
+SPOKE = _spoke_base()
 
 BYTYPE = SPOKE / "lugs" / "bytype"
 

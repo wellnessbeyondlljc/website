@@ -1,4 +1,5 @@
 # Skill: Ozi Work Queue Monitor
+> Fast path: load `wai-ozi-work-queue-monitor-slim.md` first. Load this file only when deep protocol is needed.
 
 **ID:** ozi-work-queue-monitor
 **Type:** orchestrator-extension

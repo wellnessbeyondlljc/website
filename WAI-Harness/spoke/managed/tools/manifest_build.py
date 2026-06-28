@@ -137,6 +137,9 @@ def main(argv=None):
     ap.add_argument("--harness-version", default=None,
                     help="default reads the VERSION file at the WAI-Harness root (bump that to evolve)")
     ap.add_argument("--now-iso", default=None)
+    ap.add_argument("--parity-strict", action="store_true",
+                    help="fail the cut (exit 1) if path_parity_check finds a NEW unpaired "
+                         "v3-husk-path resolver vs its baseline (P12 followup #4)")
     a = ap.parse_args(argv)
     if a.verify:
         res = verify(a.managed_dir, a.manifest_path)
@@ -146,7 +149,50 @@ def main(argv=None):
     m = build(a.managed_dir, a.manifest_path, version, a.now_iso)
     print(f"[manifest_build] {len(m['files'])} managed file(s) hashed -> "
           f"{a.manifest_path or os.path.join(a.managed_dir, MANIFEST_NAME)}")
-    return 0
+    parity_rc = _run_parity_gate(a.managed_dir)
+    _run_ceremony_gates(a.managed_dir)  # advisory: ceremony drift + token budget
+    return 1 if (a.parity_strict and parity_rc != 0) else 0
+
+
+def _run_ceremony_gates(managed_dir):
+    """Run the ceremony guards AT THE CUT (initiative-optimize-ceremonies-v1):
+    token-budget (ceremonies stay lean) + drift (templates mirror canonical).
+    Advisory, best-effort — surfaced at cut so re-bloat/drift can't land silently."""
+    import subprocess
+    for tool, args in (
+        ("ceremony_token_budget.py", ["--commands", os.path.join(managed_dir, ".claude", "commands")]),
+        ("ceremony_drift_check.py", ["--root", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(managed_dir))))]),
+    ):
+        gate = os.path.join(managed_dir, "tools", tool)
+        if not os.path.isfile(gate):
+            continue
+        try:
+            r = subprocess.run([sys.executable, gate, *args], capture_output=True, text=True)
+        except OSError:
+            continue
+        out = (r.stdout or "").strip()
+        if out:
+            print(out.splitlines()[0])  # one-line summary at cut
+
+
+def _run_parity_gate(managed_dir):
+    """Run the v3->v4 path-parity regression gate AT THE CUT (P12 followup #4). Always
+    runs (advisory), so a NEW unpaired v3-husk-path is surfaced the moment it is cut;
+    --parity-strict promotes it to a hard cut failure. Best-effort: a missing gate tool
+    never breaks the manifest build."""
+    gate = os.path.join(managed_dir, "tools", "path_parity_check.py")
+    if not os.path.isfile(gate):
+        return 0
+    import subprocess
+    try:
+        r = subprocess.run([sys.executable, gate, managed_dir, "--check"],
+                           capture_output=True, text=True)
+    except OSError:
+        return 0
+    out = (r.stdout or "").strip()
+    if out:
+        print(out)
+    return r.returncode
 
 
 if __name__ == "__main__":

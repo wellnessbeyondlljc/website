@@ -119,9 +119,12 @@ def test_autoeject_writes_when_unfinished_v3(tmp_path):
     assert res["action"] == "wrote"
     sp = json.load(open(res["savepoint"]))
     assert sp["harness_mode"] == "v3"
-    # landed under the v3 savepoints dir
+    # landed under the INITIATIVE-SCOPED home (no current.json pin -> unfiled bucket),
+    # never the retired loose {base}/savepoints/ dir
     assert os.path.normpath(os.path.dirname(res["savepoint"])) == \
-        os.path.normpath(os.path.join(base, "savepoints"))
+        os.path.normpath(os.path.join(base, "initiatives", "savepoints",
+                                      "initiative-unfiled-savepoints-v1"))
+    assert sp["initiative_id"] == "initiative-unfiled-savepoints-v1"
 
 
 def test_autoeject_idempotent(tmp_path):
@@ -140,6 +143,8 @@ def test_no_autoeject_when_clean(tmp_path):
     res = _fire(root, "session-clean", "v4")
     assert res["action"] == "skip"
     assert res["reason"] == "no substantive unfinished work"
+    assert not os.path.exists(os.path.join(base, "initiatives", "savepoints",
+                              "initiative-unfiled-savepoints-v1", "sp-session-clean-autoeject.json"))
     assert not os.path.exists(os.path.join(base, "savepoints", "sp-session-clean-autoeject.json"))
 
 

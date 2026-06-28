@@ -17,6 +17,26 @@ if len(sys.argv) < 2:
 
 import json, os, datetime, glob, shutil
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver); sibling tools import this way
+except ImportError:
+    resolve_wai_root = None
+
+
+def _base(spoke_root="."):
+    """Spoke working base, v4-aware. PRE-FIX this read 'WAI-Spoke/...' -> on a v4 spoke
+    state + active lugs came from a nonexistent tree, so the assay was built from empty
+    data (silent no-op). Now resolves WAI-Harness/spoke/local (impl-fix-p2-v3noop-sweep-v1)."""
+    if resolve_wai_root:
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return root
+    return os.path.join(str(spoke_root), "WAI-Spoke")  # last-resort v3 fallback
+
+
+_BASE = _base(".")
+
 track_path = sys.argv[1]
 
 # --- Re-derive shared session context (mirrors write_cartographer_obs.py) ----
@@ -42,7 +62,7 @@ except FileNotFoundError:
 
 # Session metadata from WAI-State
 try:
-    state = json.load(open("WAI-Spoke/WAI-State.json"))
+    state = json.load(open(os.path.join(_BASE, "WAI-State.json")))
 except Exception:
     state = {}
 
@@ -73,7 +93,7 @@ provider = (
 
 # Active lugs + dominant work type
 active_lugs = []
-for path in glob.glob("WAI-Spoke/lugs/bytype/*/in_progress/*.json"):
+for path in glob.glob(os.path.join(_BASE, "lugs/bytype/*/in_progress/*.json")):
     try:
         active_lugs.append(json.load(open(path)))
     except Exception:

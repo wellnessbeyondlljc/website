@@ -10,13 +10,35 @@ Idempotent, migration-versioned creation of harness.db:
 
 Usage:
   python3 tools/create_harness_db.py [--db-path PATH] [--migrations-dir DIR]
-Defaults: --db-path WAI-Spoke/managed/harness.db  --migrations-dir managed/migrations
+Defaults: --db-path <base>/managed/harness.db (v4: WAI-Harness/spoke/local/managed)
+          --migrations-dir managed/migrations
 """
 import argparse
 import datetime
 import os
 import sqlite3
 import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+def _managed_base(spoke_root="."):
+    """The dir holding harness.db, base-aware. On a v4 spoke this resolves to
+    WAI-Harness/spoke/local/managed; PRE-FIX the hardcoded WAI-Spoke/managed default
+    silently created the db in a nonexistent tree, so materialize_cg.py (which already
+    resolves WAI-Harness/spoke/local/managed) never found it (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root) / "managed"
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke" / "managed"  # last-resort v3 fallback
+
+
+DEFAULT_DB = str(_managed_base() / "harness.db")
 
 VECTOR_DIM = 384  # bge-small/MiniLM class (spec-storage-layer-v1)
 VECTOR_TABLES = ("cg_embeddings", "session_embeddings", "pattern_embeddings")
@@ -73,7 +95,7 @@ def _try_vector_tables(con):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db-path", default="WAI-Spoke/managed/harness.db")
+    ap.add_argument("--db-path", default=DEFAULT_DB)
     ap.add_argument("--migrations-dir", default="managed/migrations")
     args = ap.parse_args(argv)
 

@@ -132,7 +132,13 @@ class OziDispatch:
         title = lug.get("title", lug.get("t", "Untitled"))
         description = lug.get("description", lug.get("summary", "No description"))
         lug_type = lug.get("type", lug.get("_fs_type", "task"))
-        file_path = lug.get("_file_path", f"WAI-Spoke/lugs/bytype/{lug_type}/open/{lug_id}.json")
+        # Base-aware fallback path: derive from the resolved spoke working base
+        # (v4: WAI-Harness/spoke/local) so the subagent is pointed at the real
+        # tree, not a dead WAI-Spoke path (impl-fix-p2-v3noop-sweep-v1).
+        default_path = str(
+            self._config.bytype_dir / lug_type / "open" / f"{lug_id}.json"
+        )
+        file_path = lug.get("_file_path", default_path)
         perceive = lug.get("perceive", "")
         execute = lug.get("execute", "")
         verify = lug.get("verify", "")

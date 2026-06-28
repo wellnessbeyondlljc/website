@@ -2,7 +2,7 @@
   "id": "sp-0cc6d5c6-0175-44b8-8098-8dbb47a349e1-built-shipped-wellness",
   "slug": "built-shipped-wellness",
   "session_id": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
-  "status": "pending",
+  "status": "resolved",
   "git_sha": "af7de2d",
   "git_branch": "main",
   "created_at": "2026-06-16T05:20:00Z",
@@ -13,7 +13,7 @@
   "silo_label": null,
   "focus_directive": null,
   "work_done": "Built and shipped the Wellness Beyond #LLJC site (two pages, light/dark themes, real logo, Bun dev server); decoded all 6 donation/social links from the brochure QR codes; pushed to wellnessbeyondlljc/website and deployed live to https://www.wellnessbeyondlljc.org via Vercel.",
-  "work_context": "First real build session for this greenfield spoke — brochure assets turned into a live two-page nonprofit website deploying through the Wellness Beyond LLJC Vercel team.",
+  "work_context": "First real build session for this greenfield spoke \u2014 brochure assets turned into a live two-page nonprofit website deploying through the Wellness Beyond LLJC Vercel team.",
   "resume_note": "Ask if verify list answered; apply + add VERIFY.md",
   "user_next_step": "Confirm the 12 verification items (esp. Zelle name/phone, #LLJC memorial wording, real domain); decide if the 'Wellness Bag' program (bags.html) is real.",
   "lug_id": null,
@@ -28,11 +28,14 @@
       "Vercel deploy via org repo wellnessbeyondlljc/website"
     ],
     "decisions": [
-      "No bags.html — Wellness Bag program not on brochure; await operator confirmation",
+      "No bags.html \u2014 Wellness Bag program not on brochure; await operator confirmation",
       "Canonical repo is wellnessbeyondlljc/website (org), not mariov96/wellnessbeyondlljc-website",
       "Light/dark logo handled via two assets, not a single transparent file"
     ]
   },
   "lug_locks": [],
-  "conflicts": []
+  "conflicts": [],
+  "_migrated_from": "savepoints/sp-0cc6d5c6-0175-44b8-8098-8dbb47a349e1-built-shipped-wellness.json",
+  "_migrated_at": "2026-06-19T18:38:33.280531+00:00",
+  "_triage": "s132 operator decision: site is done; not intending to add more"
 }

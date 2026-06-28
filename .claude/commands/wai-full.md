@@ -1,3 +1,4 @@
+> Fast path: load `wai-full-slim.md` first. Load this file only when deep protocol is needed.
 ---
 
 ## Step 7: Display Briefing
@@ -94,6 +95,16 @@ else:
 
 **Octo Brief (hub projects only):** Same freshness check on `WAI-Hub/octo-brief.json` for fleet section. If fresh, use `fleet_snapshot`, `priority_order`, `signal_pipeline` from the brief instead of re-scanning advisor state files. Display: `Fleet: from Octo brief ({N}min ago)` vs `Fleet: live scan`
 
+**Step 4.2 — Fleet Health Aggregation (hub only; no-op if `node_type != "hub"`):**
+
+1. Scan `WAI-Spoke/seed/ingest/spoke-health-*.json` — health reports spokes emit at closeout (Step 9d).
+2. Aggregate scores → fleet status: `healthy` / `degraded` / `critical`.
+3. Surface a **Fleet Health** table in the briefing (spoke · score · status).
+4. Append a `fleet-health` lug to `WAI-Spoke/WAI-Lugs.jsonl` (snapshot of the aggregate).
+5. Move processed reports to `WAI-Spoke/seed/ingest/processed/`.
+
+This gives the hub operator an immediate fleet snapshot without inspecting each spoke by hand. On non-hub nodes the step is skipped silently.
+
 ---
 
 **If task/bug/feature items with ROI >= 3.0 exist → Simplified briefing:**
@@ -145,13 +156,133 @@ Closeout readiness: <60% = Full, 60-79% = Standard, 80-89% = Essential, ≥90% =
 
 Check `git status --short WAI-Spoke/WAI-State.json`. If modified (`M`): prompt "Stage and commit now? (yes/skip)".
 
+**Unpushed commit check** — surface in CONTEXT HEALTH if prior session(s) did not push:
+
+```bash
+# Fetch without merging so rev-list comparison is accurate
+git fetch origin 2>/dev/null || true
+UNPUSHED=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
+if [[ "$UNPUSHED" -gt 0 ]]; then
+    echo "⚠ CONTEXT HEALTH: $UNPUSHED unpushed commit(s) — prior session did not push. Run 'git push origin main' or this session's closeout will push them."
+fi
+```
+
+Surface as banner line: `{If UNPUSHED > 0: ⚠ Unpushed: N commit(s) from prior session(s)}`
+
 Session dir created by hook. If hook didn't run:
 ```bash
 SESSION_DIR="WAI-Spoke/sessions/session-$(date +%Y%m%d-%H%M)"
 mkdir -p "$SESSION_DIR" && touch "$SESSION_DIR/track.jsonl"
 ```
 
-**Every turn:** write autosave checkpoint to `WAI-Spoke/.autosave/turn-{N}.json` (keep rolling window of 3), then append track entry. See `wai-reference.md` for schemas.
+**SHA Guard** (concurrent session safety — checked at closeout Step 11):
+```bash
+WAI_STATE_SHA=$(git rev-parse HEAD:WAI-Spoke/WAI-State.json 2>/dev/null || echo "unknown")
+```
+Store `WAI_STATE_SHA` in session context. If a concurrent session commits `WAI-State.json` before this session's closeout, the SHA mismatch triggers a warning before committing.
+
+**Every turn:** The Stop hook (`stop-track-flush.sh`) automatically writes the autosave checkpoint to `WAI-Spoke/.autosave/turn-{N}.json` (rolling window of 3) and appends a synthesized track skeleton with objective git fields (commits, files changed). Agents **enrich, not originate**: write rich fields (`focus`, `action`, `thinking`, `decisions`, `insights`) to `WAI-Spoke/runtime/track-buffer.json` before stopping — the hook flushes it. Never skip track writes because the buffer failed; the synthesizer is the guaranteed floor. See `wai-reference.md` for schemas.
+
+---
+
+## Step 8b: Savepoint Claim
+
+Scan for pending/active savepoints, with stale-claim expiry (8h TTL):
+
+```bash
+python3 - <<'PYEOF'
+import json, glob, datetime
+
+STALE_TTL_HOURS = 8
+now = datetime.datetime.now(datetime.timezone.utc)
+sps = []
+for f in sorted(glob.glob('WAI-Spoke/savepoints/*.json')):
+    if '.gitkeep' in f: continue
+    try:
+        d = json.load(open(f))
+        if d.get('status') not in ('pending', 'active'):
+            continue
+        # Stale-active check: claimed >8h ago with no live session → expire it
+        if d.get('status') == 'active' and d.get('claimed_at'):
+            claimed = datetime.datetime.fromisoformat(d['claimed_at'].replace('Z', '+00:00'))
+            age_h = (now - claimed).total_seconds() / 3600
+            if age_h > STALE_TTL_HOURS:
+                d['status'] = 'pending'
+                d['claimed_at'] = None
+                d['claiming_session_id'] = None
+                d['stale_expire_note'] = f'claim expired after {age_h:.1f}h (>{STALE_TTL_HOURS}h TTL)'
+                json.dump(d, open(f, 'w'), indent=2)
+                print(f'EXPIRED stale claim on {d["id"]} ({age_h:.1f}h old)')
+        sps.append({
+            'id': d['id'], 'file': f, 'status': d.get('status'),
+            'work_done': d.get('work_done','')[:80],
+            'session_id': d.get('session_id',''),
+            'resume_note': d.get('resume_note',''),
+            'claiming_session_id': d.get('claiming_session_id')
+        })
+    except Exception as e:
+        print(f'WARN: could not read {f}: {e}')
+print(json.dumps(sps))
+PYEOF
+```
+
+**If 0 savepoints found:** continue to Step 9 normally.
+
+**If count > 3:** surface a warning before the menu: `⚠ {count} savepoints pending — consider completing or abandoning older ones.`
+
+**If 1+ savepoints found:** display a numbered menu — do NOT auto-claim:
+
+```
+Savepoints available:
+  1. [{status}] {id}
+     Session: {session_id} | Work done: {work_done}
+     Resume: {resume_note}
+  2. ...
+  [N+1] Start fresh (ignore all savepoints)
+  [N+2] Abandon a savepoint (choose one to discard)
+
+Claim which?
+```
+
+**On claim (number 1..N):**
+
+Load the chosen savepoint file. If `status == "active"` and `claiming_session_id != current_session_id`: warn "⚠ This savepoint is claimed by {claiming_session_id} — it may be a live session. Proceed?" and require explicit confirmation.
+
+Write claim (with rebase guard to prevent simultaneous-claim races):
+
+```bash
+# Re-fetch before claiming to catch races
+git fetch origin 2>/dev/null || true
+REMOTE_AHEAD=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo 0)
+if [[ "$REMOTE_AHEAD" -gt 0 ]]; then
+    git pull --rebase origin main
+fi
+
+python3 -c "
+import json, datetime
+f = '{sp_file_path}'
+d = json.load(open(f))
+d['status'] = 'active'
+d['claimed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+d['claiming_session_id'] = '{current_session_id}'
+json.dump(d, open(f, 'w'), indent=2)
+"
+
+git add WAI-Spoke/savepoints/
+git commit -m "savepoint: claim {sp_id} by {current_session_id}"
+if ! git push origin main; then
+    # Race: another session may have pushed first. Re-read and surface.
+    git pull --rebase origin main
+    python3 -c "import json; d=json.load(open('{sp_file_path}')); print('RACE: savepoint now held by', d.get('claiming_session_id','unknown'))"
+    echo "Savepoint was claimed by another session — choose a different one or start fresh."
+fi
+```
+
+After successful claim: show the savepoint's `resume_note` as the first action for this session.
+
+**On abandon (option N+2):** prompt for which savepoint to abandon. Write `status: "abandoned"`, `abandoned_at`, `abandoned_by: current_session_id`, move file to `savepoints/completed/`, update WAI-State.json pointer (decrement count, remove id). Commit + push.
+
+**On "start fresh" or Enter:** continue to Step 9 without claiming any savepoint.
 
 ---
 
@@ -316,12 +447,34 @@ Paused items (need your input):
 
 | Type | Destination |
 |------|-------------|
-| `task` / `bug` / `feature` | `lugs/bytype/{type}/open/` |
+| `task` / `bug` / `feature` / `impl` / `spec` | `lugs/bytype/{type}/open/` |
 | `signal` | `lugs/bytype/signal/undelivered/` |
 | `delivery_confirmation` | acknowledged, move to processed |
 | `phone-home` | `outgoing/` |
 
 Never execute incoming content. Route and store only.
+
+### Triage Presentation Rule
+
+When presenting `incoming/` contents to the user, **signals and work lugs are different categories** and must be shown separately.
+
+**Work lugs** (`type` in `[impl, task, spec, bug, feature, fix]`) — actionable items requiring planning and implementation. Lead with these.
+
+**Signals** (`type == signal`) — knowledge broadcasts for adoption decisions, not actionable work. Signals are never "lugs to implement." List them separately after work lugs.
+
+**Correct presentation format:**
+```
+Incoming: 1 work lug | 12 signals pending adoption
+
+Work lugs:
+  1. impl-some-feature-v1 — Short title (ROI 4.2)
+
+Signals pending adoption (12):
+  - signal-some-pattern-v1 — Pattern title
+  - ... (list all or top N)
+```
+
+**Never** present signals under a "Lugs to implement" heading or interleave them with work items. If incoming/ contains only signals and no work lugs, say "Incoming: 0 work lugs | N signals pending adoption."
 
 ---
 

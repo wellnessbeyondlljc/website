@@ -32,8 +32,27 @@ try:
 except ImportError:
     event_bus = None
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from wai_paths import advisors_dir  # noqa: E402  (v3/v4 resolver); sibling tools import this way
+except ImportError:
+    advisors_dir = None
+
+
+def _default_registry(spoke_root="."):
+    """registry.json under the advisors tree, base-aware. PRE-FIX the default hardcoded
+    'WAI-Spoke/advisors/...' -> on a v4 spoke the registry was read from a nonexistent
+    tree, so routing was always empty and NO advisor ever woke (impl-fix-p2-v3noop-sweep-v1).
+    Advisors are the sibling case: WAI-Harness/spoke/advisors on v4."""
+    if advisors_dir:
+        adv = advisors_dir(str(spoke_root))
+        if adv:
+            return os.path.join(adv, "registry.json")
+    return os.path.join(str(spoke_root), "WAI-Spoke", "advisors", "registry.json")  # last-resort v3 fallback
+
+
 HOUR_S = 3600
-DEFAULT_REGISTRY = "WAI-Spoke/advisors/registry.json"
+DEFAULT_REGISTRY = _default_registry(".")
 DEFAULT_GLOBAL_RATE_CAP = 120      # wakes/hour across all advisors
 DEFAULT_LOOP_K = 3                 # wake→fail→re-emit > K -> circuit-broken
 RETRY_CAP = 2                      # 2 attempt cycles; 3rd failure escalates

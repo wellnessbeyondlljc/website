@@ -21,12 +21,32 @@ control plane is itself unit-tested.
 """
 import json
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 REQUIRED_KEYS = ("change_id", "origin", "target", "scope", "what_changed", "why", "files")
 VALID_SCOPES = ("spoke-file", "harness-managed", "harness-hub", "new-spoke")
 # only the native (target) agent may advance to these:
 NATIVE_ONLY_STATUSES = ("accepted", "adapted", "rejected", "maintained")
-DEFAULT_REGISTRY = "WAI-Spoke/runtime/change-registry.jsonl"
+
+
+def _registry_base(spoke_root="."):
+    """The spoke working base holding runtime/, base-aware. On a v4 spoke this
+    resolves to WAI-Harness/spoke/local; PRE-FIX the hardcoded WAI-Spoke default
+    wrote the ledger into a nonexistent tree (impl-fix-p2-v3noop-sweep-v1)."""
+    try:
+        from wai_paths import resolve_wai_root
+        root, mode = resolve_wai_root(str(spoke_root))
+        if root and mode != "none":
+            return Path(root)
+    except Exception:
+        pass
+    return Path(spoke_root) / "WAI-Spoke"  # last-resort v3 fallback
+
+
+DEFAULT_REGISTRY = str(_registry_base() / "runtime" / "change-registry.jsonl")
 
 
 class RegistryError(ValueError):

@@ -188,6 +188,53 @@ def resolve_feed(feed: dict, advisor_dir: Path, shared_context: dict,
                 print(f"    [web_search:{fid}] failed: {e}")
             return ""
 
+    if ftype == "local_files":
+        path_pattern = feed.get("path", "")
+        glob_pattern = feed.get("glob_pattern", "**/*")
+        if not path_pattern:
+            if not quiet:
+                print(f"    [local_files:{fid}] no path specified — skipping")
+            return ""
+        if dry_run:
+            if not quiet:
+                print(f"    [local_files:{fid}] would read: {path_pattern}/{glob_pattern}")
+            return f"[dry-run: local_files {path_pattern}/{glob_pattern}]"
+        try:
+            # Resolve path relative to spoke root (advisor_dir.parent.parent = WAI-Harness/spoke)
+            spoke_root = advisor_dir.parent.parent
+            local_path = spoke_root / path_pattern
+            if not local_path.exists():
+                if not quiet:
+                    print(f"    [local_files:{fid}] path not found: {local_path}")
+                return ""
+
+            # Gather files matching glob pattern
+            if local_path.is_dir():
+                files = sorted(local_path.glob(glob_pattern))
+            else:
+                files = [local_path] if local_path.exists() else []
+
+            if not files:
+                return ""
+
+            # Build content from matching files
+            content_parts = []
+            for file_path in files[:50]:  # Limit to 50 files to avoid bloat
+                try:
+                    if file_path.is_file() and file_path.suffix in ['.json', '.yaml', '.yml', '.md', '.txt', '.teaching']:
+                        content = file_path.read_text(errors='ignore')
+                        if content:
+                            rel_path = file_path.relative_to(spoke_root)
+                            content_parts.append(f"## {rel_path}\n\n```\n{truncate(content, 1500)}\n```")
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+            return "\n\n".join(content_parts) if content_parts else ""
+        except Exception as e:
+            if not quiet:
+                print(f"    [local_files:{fid}] failed: {e}")
+            return ""
+
     if ftype == "ai_synthesis":
         if not HAS_ANTHROPIC:
             if not quiet:

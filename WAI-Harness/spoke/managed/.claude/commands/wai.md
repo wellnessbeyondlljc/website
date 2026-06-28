@@ -49,6 +49,14 @@ Pre-conditions met: hook pre-computed all data, track entry already written by s
 └─ Ready to work.
 ```
 
+**2a. Loose-end surface (no-dead-ends).** Surface any work the LAST session stranded so it is not silently lost (initiative-no-dead-ends-v1):
+
+```bash
+python3 WAI-Harness/spoke/managed/tools/dead_end_scan.py --root . --json
+```
+
+If `clean: false`, add a banner line: `⚠ Carryover: {N} uncommitted, {N} untracked-source, {N} unpushed, {N} stash(es)` and offer to reconcile them (commit / lug / discard-with-reason) before new work. `branches_ahead` → note `↪ {N} session branch(es) unmerged to main — reunify (initiative-fleet-branch-reunification-v1)`. Cheap, read-only; never auto-commits.
+
 **0.5 — Priority Gate (mandatory, runs before intent router and savepoint intercept):**
 
 If a hub base is reachable, OR `TEACH_NEW > 0`, OR `Incoming: N lug(s) pending triage` — execute A → B → C silently, **in that order**, before any other step. Do not present a savepoint prompt or work queue until all complete.

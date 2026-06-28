@@ -31,17 +31,40 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wai_paths import resolve_wai_root  # noqa: E402  (v3/v4 resolver)
 
 DEFAULT_TTL_HOURS = 4
 
 # Default store location, resolved relative to the framework root (this file
 # lives in <root>/tools/lug_lease.py).
 _FRAMEWORK_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_STORE = _FRAMEWORK_ROOT / "WAI-Spoke" / "runtime" / "claims-local.json"
+
+
+def _spoke_base() -> Path:
+    """Resolve the live spoke working-base (v4: WAI-Harness/spoke/local; v3:
+    WAI-Spoke), independent of nesting depth. PRE-FIX the store lived under a
+    hardcoded 'WAI-Spoke/runtime' -> on a v4 spoke every claim/release/sweep hit a
+    phantom store, so leasing silently never persisted (impl-fix-p2-v3noop-sweep-v1)."""
+    start = Path(__file__).resolve()
+    for anc in start.parents:
+        if (anc / "WAI-Harness" / "spoke" / "local").is_dir():
+            base, mode = resolve_wai_root(str(anc))
+            if base and mode != "none":
+                return Path(base)
+    for anc in start.parents:
+        if (anc / "WAI-Spoke").is_dir():
+            return anc / "WAI-Spoke"
+    return _FRAMEWORK_ROOT / "WAI-Spoke"
+
+
+_DEFAULT_STORE = _spoke_base() / "runtime" / "claims-local.json"
 
 _LOCK_TIMEOUT_SECONDS = 5.0
 _LOCK_POLL_SECONDS = 0.02

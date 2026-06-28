@@ -73,10 +73,14 @@ def test_empty_graceful():
 
 
 def test_read_coverage_real_spoke():
-    """Against the real spoke: there are v4 lugs (enriched), so status=ok with a score."""
-    h = C.read_coverage(ROOT)
+    """Against the real spoke ROOT (v4: WAI-Harness/spoke/local), read_coverage resolves the
+    live lug base via wai_paths and finds the enriched v4 lugs -> status=ok with a score.
+    (Pre-fix this pointed at the managed dir, which holds no lugs on v4 -> always no-v4-lugs-yet;
+    impl-fix-p1-silent-dead-v4-paths-v1.)"""
+    spoke_root = os.path.dirname(os.path.dirname(os.path.dirname(ROOT)))  # managed -> spoke -> WAI-Harness -> repo
+    h = C.read_coverage(spoke_root)
     assert h["status"] == "ok"
-    assert h["lug_count"] >= 20  # ~22 enriched v4 lugs
+    assert h["lug_count"] >= 20  # enriched v4 lugs under WAI-Harness/spoke/local
     assert 0.0 <= h["certification_score"] <= 1.0
 
 
