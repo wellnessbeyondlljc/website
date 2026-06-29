@@ -1,4 +1,4 @@
-# Wellness Beyond #LLJC — website
+# Wellness Beyond #LLJC — website 
 
 Static site (no build step). Serve locally with Bun:
 
