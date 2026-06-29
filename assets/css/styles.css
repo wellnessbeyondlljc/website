@@ -132,6 +132,33 @@ section { padding: clamp(48px, 8vw, 88px) 0; }
   width: 64px; height: 3px; border-radius: 3px; background: var(--coral);
 }
 .lead { font-family: var(--font-subhead); font-size: 1.3rem; color: var(--text-muted); max-width: 60ch; }
+
+/* Memorial — Jenzele Couassi. Subtle, respectful: a framed, indented panel
+   holding the portrait beside the memory text. */
+.memorial {
+  display: flex; align-items: center; gap: clamp(1.25rem, 4vw, 2.5rem);
+  margin: 1.75rem 0; margin-inline: clamp(0px, 4vw, 2.5rem); flex-wrap: wrap;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent);
+  border-radius: var(--radius-card);
+}
+.memorial-photo { margin: 0; flex: 0 0 auto; text-align: center; }
+.memorial-photo img {
+  width: clamp(140px, 22vw, 200px); height: auto; aspect-ratio: 4 / 5; object-fit: cover;
+  border-radius: 18px; box-shadow: var(--shadow-soft);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
+}
+.memorial-photo figcaption {
+  margin-top: .7rem; font-family: var(--font-subhead);
+  font-size: .82rem; letter-spacing: .03em; color: var(--text-muted);
+}
+.memorial-text { flex: 1 1 16rem; margin: 0; }
+@media (max-width: 560px) {
+  .memorial { flex-direction: column; text-align: center; }
+  .memorial-text { text-align: left; }
+}
+
 .text-center { text-align: center; }
 .text-center .section-title::after { left: 50%; transform: translateX(-50%); }
 

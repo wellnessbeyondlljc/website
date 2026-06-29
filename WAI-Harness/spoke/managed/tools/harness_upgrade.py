@@ -290,7 +290,34 @@ def pull(spoke_root, master_root=None, side="spoke", dry_run=False, expect_versi
     # Refresh the active slash-command dir from the freshly-pulled canonical so the
     # operator never invokes a stale ceremony (idempotent; best-effort).
     out["commands_deployed"] = _deploy_active_commands(spoke_root)
+    # Record the master's HEAD SHA + version so harness_converge contribute knows
+    # the baseline (P7: cross-spoke convergence base tracking).
+    if out["ok"] and out["pulled"]:
+        _record_harness_base(spoke_root, master_root, out.get("master_version")
+                             or load_manifest(master_managed).get("harness_version"))
     return out
+
+
+def _record_harness_base(spoke_root, master_root, master_version):
+    """Record the master HEAD SHA + version into local runtime after a successful pull.
+    Enables harness_converge.py contribute to compute the correct diff base (P7)."""
+    try:
+        import subprocess as _sp
+        r = _sp.run(["git", "-C", str(master_root), "rev-parse", "HEAD"],
+                    capture_output=True, text=True, timeout=10)
+        sha = r.stdout.strip() if r.returncode == 0 else None
+        from datetime import datetime, timezone as _tz
+        data = {
+            "master_sha": sha,
+            "master_version": master_version,
+            "master_root": str(master_root),
+            "recorded_at": datetime.now(_tz.utc).isoformat(),
+        }
+        base_path = Path(spoke_root) / "WAI-Harness" / "spoke" / "local" / "runtime" / "harness-base.json"
+        base_path.parent.mkdir(parents=True, exist_ok=True)
+        base_path.write_text(json.dumps(data, indent=2) + "\n")
+    except Exception:  # best-effort; never fails a pull
+        pass
 
 
 def _deploy_active_commands(spoke_root):

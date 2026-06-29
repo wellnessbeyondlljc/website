@@ -146,6 +146,40 @@ def get_roi(lug):
     return impact / effort if effort > 0 else impact
 
 
+def load_priority_config(spoke_path: str) -> dict:
+    """Load priority tier config from spec-initiative-priority-v1.json.
+    Returns config dict with tier0_lifecycle_states. Fallback: ['approved','active','measuring']"""
+    spec_path = os.path.join(_base(spoke_path), "lugs", "bytype", "spec", "open", "spec-initiative-priority-v1.json")
+    try:
+        spec = json.load(open(spec_path))
+        config = spec.get("config", {})
+        tier0_states = config.get("tier0_lifecycle_states", ["approved", "active", "measuring"])
+        return {"tier0_lifecycle_states": tier0_states}
+    except (json.JSONDecodeError, OSError):
+        return {"tier0_lifecycle_states": ["approved", "active", "measuring"]}
+
+
+def load_affiliation_map(spoke_path: str, tier0_states: list) -> dict:
+    """Build {epic_id: initiative_id} for initiatives in tier0_lifecycle_states.
+    Returns {} on error."""
+    affiliation: dict = {}
+    idx_path = os.path.join(_base(spoke_path), "initiatives", "index.json")
+    if not os.path.exists(idx_path):
+        return affiliation
+    try:
+        idx = json.load(open(idx_path))
+    except (json.JSONDecodeError, OSError):
+        return affiliation
+    for init in idx.get("initiatives", []):
+        init_state = init.get("lifecycle_state", "proposed")
+        if init_state not in tier0_states:
+            continue
+        init_id = init.get("id")
+        for epic_id in init.get("epics", []):
+            affiliation[epic_id] = init_id
+    return affiliation
+
+
 def load_focus_lock_ids(spoke_path: str) -> set:
     """Return set of lug IDs belonging to any focus-locked active initiative."""
     focus_ids: set = set()
@@ -394,33 +428,28 @@ def assign_execution_mode(lug, quality_score, all_open_lugs, spoke_path):
         return ("subagent", None, f"cross-spoke delivery: routed_to={routed_to}")
 
     if model_fit == "HAIKU" and quality_score >= 7:
-        # Haiku + quality>=7 + unblocked + LOCAL → gastown eligible
-        execution_mode = "gastown"
+        # Haiku + quality>=7 + unblocked + LOCAL → gastown (cheap inline lane)
         execution_substrate = "gastown"
-
-        # Check for convoy hint (parent_epics with siblings)
         siblings = find_sibling_lugs_by_parent(lug, all_open_lugs)
         if siblings:
             parent_epics = lug.get("parent_epics") or []
             if parent_epics:
                 epic_id = parent_epics[0]
-                sibling_count = len(siblings)
-                hint = f"convoy candidate: shares parent {epic_id} with {sibling_count} other lug(s) — sequence together"
-                return (execution_mode, execution_substrate, hint)
+                hint = f"convoy candidate: shares parent {epic_id} with {len(siblings)} other lug(s) — sequence together"
+                return ("gastown", execution_substrate, hint)
+        return ("gastown", execution_substrate, None)
 
-        return (execution_mode, execution_substrate, None)
-
-    if model_fit == "SONNET" and quality_score >= 6:
-        # Sonnet + quality>=6 → subagent
-        return ("subagent", None, None)
-
-    if model_fit == "OPUS" or quality_score < 5:
-        # Opus or quality<5 → tender
-        reason = "opus" if model_fit == "OPUS" else f"quality={quality_score}"
-        return ("tender", None, f"requires review: {reason}")
-
-    # Default fallback: tender
-    return ("tender", None, None)
+    # The 'tender' (human-review) lane is RETIRED: AP absorbs all executable work.
+    # Opus, sonnet, and lower-quality work all run as subagent dispatches. Model
+    # tier and quality no longer gate human attendance — the groom score>=3 gate
+    # (PEV completeness) + risk_tier=critical skip + verify-before-action gate are
+    # the remaining safety rails. Only execution_mode=manual is still user-gated.
+    if model_fit == "OPUS":
+        return ("subagent", None, "opus dispatch (absorbed: was tender)")
+    if quality_score < 5:
+        return ("subagent", None, f"low-quality dispatch (absorbed: was tender, quality={quality_score})")
+    # Default + sonnet → subagent
+    return ("subagent", None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -456,17 +485,74 @@ HYGIENE_STALE_DAYS = 7      # ...or when the last expedition is older than this
 # A sweep also fires when an initiative is added/closed/reprioritized (fingerprint change).
 # Cost is bounded structurally: one expedition report + at most one auto-refinement lug.
 
+# Disposition tiers -- stamped persistently on each lug at score time.
+DISPOSITIONS = frozenset({"auto_build", "needs_you", "review", "blocked"})
+NEEDS_YOU_TYPES = frozenset({"spec", "decide", "decision", "rfc", "policy"})
+CHURN_TYPES = frozenset({"crew-recommend", "crew_recommend", "coverage_eval", "advisor_scout", "crew_provision", "signal", "s", "report", "scout_report", "session-summary", "review"})
+DRAIN_GATE_RATIO = 0.9  # open count must drop by >= 10% for repeat hygiene
+
+
+def groom_eligible(lug):
+    """True iff the lug would clear the autopilot GROOM gate (ozi_autopilot
+    _score_lug >= 3), i.e. it has full PEV: a real title, a non-empty execute,
+    a perceive, and (verify OR acceptance_criteria). Mirrors the engine's gate
+    exactly so 'dispatchable' here means 'would actually dispatch', not just
+    'right type'. This closes the expediter<->groom disconnect that let a spoke
+    advertise dispatchable>0 while the groom rejected every lug (eligible=0)."""
+    title = str(lug.get("title", "") or "")
+    execute = lug.get("execute") or lug.get("e") or ""
+    perceive = lug.get("perceive") or lug.get("p") or ""
+    verify = lug.get("verify") or lug.get("v") or ""
+    ac = lug.get("acceptance_criteria") or lug.get("ac") or []
+    execute_nonempty = bool(execute) and str(execute).strip() != "" and not (
+        isinstance(execute, list) and len(execute) == 0
+    )
+    has_pev = bool(str(perceive).strip()) and execute_nonempty and (
+        bool(str(verify).strip()) or (isinstance(ac, list) and len(ac) > 0) or bool(ac)
+    )
+    return len(title) >= 10 and execute_nonempty and has_pev
+
 
 def count_dispatchable(scored):
     """Lugs that pass the autopilot dispatch filter (model set, not manual, not
-    blocked, dispatchable type)."""
+    blocked, dispatchable type) AND would clear the groom gate (full PEV). The
+    groom-eligibility check keeps this count truthful: a lug AP cannot actually
+    dispatch (missing PEV) no longer inflates 'dispatchable'/has_work."""
     return [
         s for s in scored
         if s.get("model_fit") and str(s.get("model_fit")).lower() != "unset"
         and str(s.get("execution_mode", "")).lower() != "manual"
         and not s.get("blocked")
         and (s.get("type") or "").lower() not in NONDISPATCH_TYPES
+        and groom_eligible(s)
     ]
+
+
+def compute_disposition(lug, quality_score, spoke_path):
+    """Assign persistent 3-tier disposition. Returns (disposition, reason)."""
+    lug_type = get_lug_type(lug)
+    blocked_by = lug.get("blocked_by") or []
+    unresolved = [str(b) for b in blocked_by if not is_blocker_resolved(b, spoke_path)]
+    if unresolved:
+        return "blocked", f"unresolved blocker(s): {', '.join(unresolved[:2])}"
+    if lug_type in NEEDS_YOU_TYPES:
+        return "needs_you", f"type={lug_type} always requires human judgment"
+    if lug_type in CHURN_TYPES:
+        return "review", f"advisory/churn type={lug_type} -- collapse, deliver, or close; not implementation backlog"
+    has_ac = bool(lug.get("acceptance_criteria"))
+    has_targets = bool(lug.get("file_targets") or lug.get("target_files"))
+    has_pev = all(bool(lug.get(f)) for f in ("perceive", "execute", "verify"))
+    if has_ac and has_targets and has_pev and quality_score >= 6:
+        return "auto_build", f"quality={quality_score}, complete spec (AC+targets+PEV)"
+    if has_ac and has_targets:
+        return "review", f"quality={quality_score}, has AC+targets but partial PEV -- add PEV to promote"
+    if not has_targets and not has_ac:
+        return "needs_you", "missing both file_targets and acceptance_criteria -- needs human scoping"
+    if not has_targets:
+        return "review", "has AC but missing file_targets -- add targets to promote to auto_build"
+    if quality_score >= 5:
+        return "review", f"quality={quality_score}, missing acceptance_criteria -- add AC to promote"
+    return "needs_you", f"quality={quality_score}, under-specified -- needs human review to scope"
 
 
 def _scan_state(advisor_dir):
@@ -498,12 +584,11 @@ def initiatives_fingerprint(spoke_path):
 
 def hygiene_due(advisor_dir, dispatchable_count, spoke_path, force=False):
     """Decide whether to run the (heavier) hygiene sweep this pass.
-    Returns (bool, reason). Triggers: forced, low backlog, periodic, never-run,
-    or an initiative was added/closed/reprioritized since the last sweep."""
+    Scout drain-gate: suppress repeat if open count not dropping (kills churn)."""
     if force:
         return True, "forced (--hygiene/--all)"
-    # Initiative add/close/reprioritize → full review (priorities just shifted).
-    stored_fp = _scan_state(advisor_dir).get("initiatives_fingerprint")
+    state = _scan_state(advisor_dir)
+    stored_fp = state.get("initiatives_fingerprint")
     current_fp = initiatives_fingerprint(spoke_path)
     if stored_fp is not None and current_fp != stored_fp:
         return True, "initiative added/closed/reprioritized since last sweep"
@@ -512,6 +597,9 @@ def hygiene_due(advisor_dir, dispatchable_count, spoke_path, force=False):
     last = _last_hygiene_at(advisor_dir)
     if not last:
         return True, "never run"
+    last_open = state.get("last_open_count")
+    if last_open is not None and dispatchable_count >= last_open * DRAIN_GATE_RATIO:
+        return False, f"drain-gate: open={dispatchable_count} not dropping (last={last_open}) -- suppress scout churn"
     try:
         dt = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
         if dt.tzinfo is None:
@@ -522,7 +610,6 @@ def hygiene_due(advisor_dir, dispatchable_count, spoke_path, force=False):
     except (ValueError, TypeError):
         return True, "last_hygiene_at unparseable"
     return False, "fast sort only (backlog healthy, sweep recent)"
-
 
 def _spoke_id(spoke_path):
     try:
@@ -617,6 +704,11 @@ def write_work_availability(spoke_path, scored, needs_refinement_count, spoke_id
     initiatives_active = count_initiatives_active(spoke_path)
     teachings_pending = count_teachings_pending(spoke_path)
 
+    disp_mix = {}
+    for s in scored:
+        d = s.get("disposition", "review")
+        disp_mix[d] = disp_mix.get(d, 0) + 1
+
     summary = {
         "teachings_pending": teachings_pending,
         "initiatives_active": initiatives_active,
@@ -625,6 +717,7 @@ def write_work_availability(spoke_path, scored, needs_refinement_count, spoke_id
         "lugs_needs_refinement": needs_refinement_count,
         "scout_jobs_pending": scout_pending,
         "signals_undelivered": signals_undelivered,
+        "disposition_mix": disp_mix,
     }
     has_work = any((
         teachings_pending, len(dispatchable_ids), scout_pending,
@@ -834,8 +927,10 @@ def _column_for(row, s):
     if row == "teachings":
         return "autonomous" if s.get("safe_to_auto_adopt") else "needs-you"
     if row == "work":
+        # tender retired: any work with a model assigned runs in AP. Quality is
+        # gated downstream by the groom score>=3 (PEV) gate, not here.
         has_model = s.get("model_fit") and str(s.get("model_fit")).lower() != "unset"
-        return "autonomous" if (s["quality_score"] >= 6 and has_model) else "needs-you"
+        return "autonomous" if has_model else "needs-you"
     if row == "refinement":
         return "autonomous" if s.get("auto_groomable") else "needs-you"
     if row == "scouting":
@@ -899,10 +994,9 @@ def build_work_queue(spoke_path, scored, threshold, spoke_id):
             pass
 
     def _col(s):
-        """autonomous if model_fit=haiku (or unset) + no flags; attended otherwise."""
-        mf = str(s.get("model_fit", "haiku") or "haiku").lower()
-        if mf in ("sonnet", "opus"):
-            return "attended"
+        """tender retired: model tier no longer forces attendance. Attended only
+        when genuinely not autonomously runnable: groom-flagged broken
+        (needs_attention), dependency-blocked, or explicitly manual."""
         if s.get("needs_attention") or s.get("blocked"):
             return "attended"
         if str(s.get("execution_mode", "")).lower() == "manual":
@@ -1049,7 +1143,7 @@ def write_ready_queue(spoke_path, scored, threshold, spoke_id):
         "spoke_id": spoke_id,
         "generated_at": now(),
         "priority_sequence": ["teachings", "work(initiative-scoped first)", "scouting", "refinement", "triage"],
-        "priority_source": "WAI-Spoke/tastegraph.json engagement-inbox-first",
+        "priority_source": "tastegraph engagement-inbox-first",
         "columns": {
             "autonomous": autonomous,
             "needs_you": needs_you,
@@ -1082,12 +1176,14 @@ def main():
     parser.add_argument("--signals", action="store_true", help="Also triage undelivered signals")
     parser.add_argument("--dry-run", action="store_true", help="Show routing decisions without writing to lug files")
     parser.add_argument("--hygiene", action="store_true", help="Run the hygiene/PEV scout (flow step 1): flag PEV/verification gaps + emit coverage-gap lugs")
+    parser.add_argument("--triage", action="store_true", help="Run disposition triage: stamp disposition on all open lugs, print breakdown by tier")
     parser.add_argument("--all", action="store_true", help="Full Expediter flow: score + hygiene scout + signal triage + emit work-availability.json + ready-queue.json")
     parser.add_argument("--quiet", action="store_true", help="Suppress verbose display (still writes artifacts)")
     args = parser.parse_args()
     if args.all:
         args.signals = True
         args.hygiene = True
+        args.triage = True
 
     spoke_path = os.path.abspath(args.spoke_path)
     advisor_dir = os.path.join(_advisors_dir(spoke_path), "expediter")
@@ -1105,6 +1201,12 @@ def main():
     if focus_lock_ids:
         print(f"Focus lock active: {len(focus_lock_ids)} lug(s) prioritized 3x")
 
+    priority_config = load_priority_config(spoke_path)
+    tier0_states = priority_config.get("tier0_lifecycle_states", ["approved", "active", "measuring"])
+    affiliation_map = load_affiliation_map(spoke_path, tier0_states)
+    if affiliation_map:
+        print(f"Initiative priority gating active: {len(affiliation_map)} epic(s) in Tier 0 initiatives")
+
     scored = []
     routing_summary = {"gastown": 0, "subagent": 0, "tender": 0}
 
@@ -1118,8 +1220,15 @@ def main():
             roi = roi * 0.5
         dispatch_priority = roi * (10 - quality)
 
+        # Determine priority tier (0 = initiative, 1 = backlog)
+        parent_epic = lug.get("parent_epic") or lug.get("epic_id")
+        priority_tier = 0 if parent_epic and parent_epic in affiliation_map else 1
+
         # Assign execution mode and routing
         exec_mode, exec_substrate, convoy_hint = assign_execution_mode(lug, quality, lugs, spoke_path)
+
+        # Compute persistent disposition (stamped to lug file below)
+        disp, disp_reason = compute_disposition(lug, quality, spoke_path)
 
         # Track routing counts
         if exec_mode in routing_summary:
@@ -1137,6 +1246,9 @@ def main():
                     lug_full["execution_substrate"] = exec_substrate
                     if convoy_hint:
                         lug_full["gt_convoy_hint"] = convoy_hint
+                    lug_full["disposition"] = disp
+                    lug_full["disposition_reason"] = disp_reason
+                    lug_full["disposition_at"] = now()
                     with open(filepath, "w") as f:
                         json.dump(lug_full, f, indent=2)
                 except (json.JSONDecodeError, IOError) as e:
@@ -1149,11 +1261,14 @@ def main():
             "quality_score": quality,
             "roi": round(roi, 2),
             "dispatch_priority": round(dispatch_priority, 2),
+            "priority_tier": priority_tier,
             "missing_fields": missing,
             "model_fit": (lug.get("model_fit") or lug.get("mf") or "unset"),
             "execution_mode": exec_mode,
             "execution_substrate": exec_substrate,
             "gt_convoy_hint": convoy_hint,
+            "disposition": disp,
+            "disposition_reason": disp_reason,
             "suggestions": suggest_improvements(lug, missing),
             "filepath": lug.get("_filepath", ""),
             "scored_at": now(),
@@ -1169,7 +1284,7 @@ def main():
             "target_created_at": lug.get("created_at"),
         })
 
-    scored.sort(key=lambda x: x["dispatch_priority"], reverse=True)
+    scored.sort(key=lambda x: (x.get("priority_tier", 1), -x["dispatch_priority"]))
     needs_refinement = [s for s in scored if s["quality_score"] <= args.threshold]
     acceptable = [s for s in scored if s["quality_score"] > args.threshold]
 
@@ -1185,6 +1300,17 @@ def main():
         print(f"  {q:2d}/10 {label} {bar} ({dist[q]})")
     print(f"\n  Needs refinement (≤{args.threshold}): {len(needs_refinement)}")
     print(f"  Acceptable (>{args.threshold}): {len(acceptable)}")
+
+    # Disposition breakdown
+    disp_counts = {}
+    for s in scored:
+        d = s.get("disposition", "review")
+        disp_counts[d] = disp_counts.get(d, 0) + 1
+    print(f"\nDisposition breakdown:")
+    for d in ("auto_build", "review", "needs_you", "blocked"):
+        n_disp = disp_counts.get(d, 0)
+        if n_disp:
+            print(f"  {d:<12}: {n_disp}")
 
     # Write refinement queue
     queue_path = os.path.join(advisor_dir, "refinement-queue.jsonl")
@@ -1264,6 +1390,8 @@ def main():
 
     state["last_run_at"] = now()
     state["refinement_queue_size"] = len(needs_refinement)
+    state["last_open_count"] = len(scored)
+    state["disposition_mix"] = disp_counts
     # Always record the initiatives fingerprint so an add/close/reprioritize next
     # run is detected; record last_hygiene_at only when a sweep actually ran.
     state["initiatives_fingerprint"] = initiatives_fingerprint(spoke_path)
@@ -1301,6 +1429,8 @@ def main():
     print(f"\n{'='*70}")
     print(f"EXPEDITER COMPLETE")
     print(f"  Lugs scored: {len(scored)}  |  Needs refinement: {len(needs_refinement)}  |  Avg quality: {stats['last_quality_avg']}/10")
+    disp_str = " | ".join(f"{k}={disp_counts.get(k,0)}" for k in ("auto_build", "review", "needs_you", "blocked") if disp_counts.get(k,0))
+    print(f"  Disposition: {disp_str or 'none'}")
     print(f"  Routed: {routing_summary['gastown']} gastown | {routing_summary['subagent']} subagent | {routing_summary['tender']} tender")
     print(f"  Mode: {'FULL (fast sort + scout expedition)' if hygiene else 'FAST sort only'} -- {hyg_reason}")
     if signal_results:

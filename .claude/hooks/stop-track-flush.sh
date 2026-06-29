@@ -133,6 +133,14 @@ if [[ -n "$TRANSCRIPT" ]]; then
     "$STATE" "$TRANSCRIPT" "$PROJECT_DIR" "$BUFFER_PRESENT" 2>/dev/null
 fi
 
+# Layer 3: live-clone this session's transcript into the local archive (file-dumps stripped).
+# Cheap incremental (watermarked) — refreshes WAI-Harness/spoke/local/archive/transcripts/live/.
+# CC_SID is this session's lane key (== transcript basename). Best-effort: never block/fail the turn.
+_ARCHIVER="$PROJECT_DIR/WAI-Harness/spoke/managed/tools/session_transcript_archive.py"
+if [[ -n "$CC_SID" && -f "$_ARCHIVER" ]]; then
+  python3 "$_ARCHIVER" --clone "$CC_SID" --spoke-root "$PROJECT_DIR" >/dev/null 2>&1 || true
+fi
+
 # Positive heartbeat: prove the Stop hook fired and where it routed (success telemetry,
 # complements capture-alarm.log). One line per fire; cheap; never fatal.
 _TURNS=$(grep -c '"event": "turn"' "$TRACK" 2>/dev/null || echo "?")

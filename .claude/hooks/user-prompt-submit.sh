@@ -61,27 +61,114 @@ POST_COMPACT=false
 if [[ -f "$COMPACT_FLAG" ]]; then POST_COMPACT=true; rm -f "$COMPACT_FLAG"; fi
 export POST_COMPACT
 
-# Already ran this session and no compaction to recover → nothing more to do
-# (the heartbeat above already fired, which is the per-turn essential).
-[[ "$GUARD_COMPLETED" == "true" && "$POST_COMPACT" == "false" ]] && exit 0
+# (3) Herald completion-kick -- auto-reconcile incoming completion lugs.
+# Runs every turn (not guarded by GUARD_COMPLETED) so completions surface promptly.
+_KICK_CTX=""
+if [[ "$MODE" == "v4" ]]; then
+  _HERALD="$PROJECT_DIR/WAI-Harness/spoke/managed/tools/herald_poll.py"
+  if [[ -f "$_HERALD" ]]; then
+    _KICK_JSON=$(python3 "$_HERALD" --spoke-root "$PROJECT_DIR" completion-kick 2>/dev/null || true)
+    if [[ -n "$_KICK_JSON" ]]; then
+      _KICK_CTX=$(printf '%s' "$_KICK_JSON" | python3 -c \
+        "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('context',''))" 2>/dev/null || true)
+    fi
+  fi
+fi
+export _KICK_CTX
 
-# Mark protocol triggered (runtime file only — WAI-State.json stays clean).
+# (4) Mid-session inbox notify -- announce NEW incoming lugs (refinements, etc).
+# completion-kick handles type:completion above; this surfaces everything else once per arrival.
+# Marker: runtime/incoming-seen-<sid>.txt (gitignored, per-session).
+_INBOX_CTX=""
+if [[ "$MODE" == "v4" && -d "$BASE/lugs/incoming" ]]; then
+  export _INBOX_DIR="$BASE/lugs/incoming"
+  export _INBOX_MARKER="$RUNTIME_DIR/incoming-seen-${_UPS_SID:-default}.txt"
+  _INBOX_CTX=$(python3 - 2>/dev/null <<'PYEOF_INBOX'
+import json, os, time
+inbox_dir = os.environ.get('_INBOX_DIR', '')
+marker_path = os.environ.get('_INBOX_MARKER', '')
+if not inbox_dir or not os.path.isdir(inbox_dir):
+    raise SystemExit(0)
+last_seen = 0.0
+if os.path.exists(marker_path):
+    try:
+        last_seen = float(open(marker_path).read().strip())
+    except Exception:
+        pass
+now = time.time()
+new_lugs = []
+for fn in sorted(os.listdir(inbox_dir)):
+    if not fn.endswith('.json'):
+        continue
+    fp = os.path.join(inbox_dir, fn)
+    try:
+        mtime = os.path.getmtime(fp)
+    except OSError:
+        continue
+    if mtime <= last_seen:
+        continue
+    try:
+        lug = json.load(open(fp))
+    except Exception:
+        continue
+    if lug.get('type') == 'completion':
+        continue  # completion-kick handles these
+    new_lugs.append(lug)
+try:
+    open(marker_path, 'w').write(str(now))
+except Exception:
+    pass
+if not new_lugs:
+    raise SystemExit(0)
+lines = ['<wai-inbox-notify>',
+         f'{len(new_lugs)} new item(s) in incoming/ since last seen:']
+for lug in new_lugs:
+    lug_type = lug.get('type', '?')
+    title = (lug.get('title') or lug.get('subject') or '')[:80]
+    from_s = lug.get('source_spoke') or lug.get('from_spoke') or '?'
+    tag = (' [REFINEMENT -- answer the questions to re-fire the work]'
+           if lug_type == 'refinement' else '')
+    lines.append(f"  {lug.get('id','?')} ({lug_type}) from {from_s}: {title}{tag}")
+lines.append('</wai-inbox-notify>')
+print('\n'.join(lines))
+PYEOF_INBOX
+)
+fi
+export _INBOX_CTX
+
+# Already ran this session and no compaction, no kick context, no inbox notify -> nothing more to do
+# (the heartbeat above already fired, which is the per-turn essential).
+[[ "$GUARD_COMPLETED" == "true" && "$POST_COMPACT" == "false" && -z "$_KICK_CTX" && -z "$_INBOX_CTX" ]] && exit 0
+
+# Mark protocol triggered (runtime file only -- WAI-State.json stays clean).
 TMP=$(mktemp)
 jq '.protocol_completed = true | .protocol_last_run = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' "$GUARD_FILE" > "$TMP" 2>/dev/null && mv "$TMP" "$GUARD_FILE" || rm -f "$TMP"
 
-# ── v4: brief is owned by SessionStart. Inject ONLY post-compact recovery. ──
+# -- v4: brief is owned by SessionStart. Inject post-compact recovery and/or kick/inbox context. --
 if [[ "$MODE" == "v4" ]]; then
-  if [[ "$POST_COMPACT" == "true" ]]; then
+  if [[ "$POST_COMPACT" == "true" || -n "$_KICK_CTX" || -n "$_INBOX_CTX" ]]; then
     python3 - <<'PYEOF'
-import json
-ctx = ("<wai-post-compact>\n"
-       "Context compaction just occurred. Before responding to the user:\n"
-       "1. Re-read WAI-State.json (WAI-Harness/spoke/local) to restore session context.\n"
-       "2. If mid-closeout: re-read wai-closeout.md and resume from the step you were on.\n"
-       "3. Check recent track entries to understand what was in progress.\n"
-       "P1-Persist and P11-Lug-First are still active.\n"
-       "</wai-post-compact>")
-print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": ctx}}))
+import json, os
+parts = []
+if os.environ.get('POST_COMPACT') == 'true':
+    parts.append(
+        "<wai-post-compact>\n"
+        "Context compaction just occurred. Before responding to the user:\n"
+        "1. Re-read WAI-State.json (WAI-Harness/spoke/local) to restore session context.\n"
+        "2. If mid-closeout: re-read wai-closeout.md and resume from the step you were on.\n"
+        "3. Check recent track entries to understand what was in progress.\n"
+        "P1-Persist and P11-Lug-First are still active.\n"
+        "</wai-post-compact>")
+kick_ctx = os.environ.get('_KICK_CTX', '')
+if kick_ctx:
+    parts.append("<herald-completion-kick>\n" + kick_ctx + "\n</herald-completion-kick>")
+inbox_ctx = os.environ.get('_INBOX_CTX', '')
+if inbox_ctx:
+    parts.append(inbox_ctx)
+ctx = "\n".join(parts)
+if ctx:
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                             "additionalContext": ctx}}))
 PYEOF
   fi
   exit 0

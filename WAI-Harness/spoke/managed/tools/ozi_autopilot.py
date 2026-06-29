@@ -884,6 +884,7 @@ class OziAutopilot:
         self._tokens_per_lug: Dict[str, int] = {}
         self._claimed_this_run: List[str] = []  # lug IDs moved to in_progress this run
         self._stalled_this_run: List[str] = []  # lug IDs elevated to needs_attention this run
+        self._gastown_executed_inline: int = 0  # gastown-lane lugs executed inline this run (lane formerly orphaned)
         self._failed_lug_snapshots: List[Dict[str, Any]] = []  # {id, title, type, model_fit, error_code} for dispatch failures this run
         self._stalled_lug_snapshots: List[Dict[str, Any]] = []  # same shape for stall-gate skips
         self._wheel_mode_flag = wheel_mode_flag
@@ -1740,6 +1741,87 @@ class OziAutopilot:
         return generated
 
     # ------------------------------------------------------------------
+    # Phase 0a — Autonomous intake (incoming/ -> bytype/)
+    # ------------------------------------------------------------------
+
+    # Types intake leaves in incoming/ for their dedicated handlers (phase 1
+    # applies initiative_install/migration; rfc_response is consumed by the
+    # cohort handler). Everything else is a normal work item that must reach
+    # bytype/ to be visible to the expediter + groom + dispatch.
+    _INTAKE_SKIP_TYPES = {
+        "initiative_install", "harness-migration", "harness_migration",
+        "rfc_response",
+    }
+    # Canonical bytype folder for each lug type alias.
+    _INTAKE_TYPE_FOLDER = {
+        "implementation": "implementation", "impl": "implementation",
+        "task": "task", "t": "task",
+        "feature": "feature", "f": "feature",
+        "bug": "bug", "b": "bug",
+        "change": "change",
+        "spec": "spec",
+        "signal": "signal", "s": "signal",
+        "notice": "notice", "report": "report", "challenge_report": "report",
+    }
+
+    def _phase0a_intake(self) -> Dict[str, int]:
+        """Drain delivered lugs from lugs/incoming/ into lugs/bytype/<type>/<status>/
+        so the expediter, groom, and dispatch can see them. This is the autonomous
+        inbox-triage that previously required a human wakeup. Deterministic + idempotent:
+        unknown types and the dedicated-handler types are LEFT in incoming/ (never lost).
+        Returns {moved, skipped, errors}."""
+        summary = {"moved": 0, "skipped": 0, "errors": 0}
+        incoming_dir = self.spoke_wai / "lugs" / "incoming"
+        if not incoming_dir.exists():
+            return summary
+        bytype = self.spoke_wai / "lugs" / "bytype"
+        for f in sorted(incoming_dir.glob("*.json")):
+            try:
+                lug = json.loads(f.read_text())
+            except (OSError, json.JSONDecodeError):
+                summary["errors"] += 1
+                continue
+            ltype = str(lug.get("type", "")).lower()
+            if ltype in self._INTAKE_SKIP_TYPES:
+                summary["skipped"] += 1
+                continue
+            folder = self._INTAKE_TYPE_FOLDER.get(ltype)
+            if not folder:
+                # Unknown type — leave in incoming for manual triage (never lose it).
+                summary["skipped"] += 1
+                continue
+            # Status subfolder: signals live under undelivered; everything else
+            # defaults to open unless it carries a recognized lifecycle status.
+            status = str(lug.get("status", "")).lower()
+            if folder == "signal":
+                sub = "undelivered" if status in ("", "open", "undelivered") else status
+            elif status in ("open", "in_progress", "completed", "needs_attention"):
+                sub = status
+            else:
+                sub = "open"
+            dest_dir = bytype / folder / sub
+            dest = dest_dir / f.name
+            if dest.exists():
+                # Already intaken in a prior pass (idempotent) — drop the incoming copy.
+                if not self.dry_run:
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+                summary["skipped"] += 1
+                continue
+            if self.dry_run:
+                summary["moved"] += 1
+                continue
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                f.rename(dest)
+                summary["moved"] += 1
+            except OSError:
+                summary["errors"] += 1
+        return summary
+
+    # ------------------------------------------------------------------
     # Phase 0b — Expediter routing
     # ------------------------------------------------------------------
 
@@ -2566,12 +2648,17 @@ class OziAutopilot:
                         "detail": _impact.get("detail", ""),
                     })
 
-            # --- Gastown routing ---
-            if str(lug.get("execution_mode", "")).lower() == "gastown":
-                gastown_pending.append(lug_id)
-                gastown_lugs.append(lug)
-                dispatched += 1
-                continue
+            # --- Gastown lane: EXECUTE inline (no longer deferred) ---
+            # Gastown was a batch ("convoy") lane: cheap haiku + quality>=7 +
+            # unblocked + LOCAL work was collected into gastown_queue.json for a
+            # separate batch processor. That processor (convoy) is retired, so the
+            # queue drained to nothing and gastown work was stranded forever
+            # (e.g. 143 lugs on one spoke). Gastown is the SAFEST tier, so AP now
+            # executes it inline like any haiku dispatch — "AP triggers gastown".
+            # We only count it for observability; it then falls through to dispatch.
+            _is_gastown = str(lug.get("execution_mode", "")).lower() == "gastown"
+            if _is_gastown:
+                self._gastown_executed_inline += 1
 
             model_fit = str(lug.get("model_fit", "haiku")).lower()
 
@@ -4050,6 +4137,26 @@ class OziAutopilot:
                 file=sys.stderr,
             )
 
+        # Phase 0a — autonomous intake (incoming/ -> bytype/), before assess + expediter
+        print("[autopilot] phase 0a: intaking delivered lugs…", file=sys.stderr)
+        _ta = time.monotonic()
+        try:
+            intake_summary = self._phase0a_intake()
+            _ea = round(time.monotonic() - _ta, 1)
+            phases["phase_0a_intake"] = (
+                f"ok: moved={intake_summary['moved']}, "
+                f"skipped={intake_summary['skipped']}, "
+                f"errors={intake_summary['errors']} [{_ea}s]"
+            )
+            print(
+                f"[autopilot] phase 0a: done — moved {intake_summary['moved']} "
+                f"incoming lug(s) to bytype ({_ea}s)",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            phases["phase_0a_intake"] = f"error: {exc}"
+            print(f"[autopilot] phase 0a: error (non-fatal, continuing): {exc}", file=sys.stderr)
+
         # Phase 0 — state assessment
         print("[autopilot] phase 0: assessing state…", file=sys.stderr)
         _t0 = time.monotonic()
@@ -4296,9 +4403,15 @@ class OziAutopilot:
                 result.tokens_used = self._tokens_used
                 result.tokens_per_lug = dict(self._tokens_per_lug)
                 phases["phase_3_execute"] = (
-                    f"ok: dispatched={len(completed)}, gastown={len(gastown)}, needs_attention={len(self._stalled_this_run)} [{_e3}s]"
+                    f"ok: dispatched={len(completed)}, gastown_inline={self._gastown_executed_inline}, "
+                    f"gastown_deferred={len(gastown)}, tokens={self._tokens_used}, "
+                    f"needs_attention={len(self._stalled_this_run)} [{_e3}s]"
                 )
-                print(f"[autopilot] phase 3: done ({_e3}s) — dispatched={len(completed)}", file=sys.stderr)
+                print(
+                    f"[autopilot] phase 3: done ({_e3}s) — dispatched={len(completed)} "
+                    f"(gastown_inline={self._gastown_executed_inline}, tokens={self._tokens_used})",
+                    file=sys.stderr,
+                )
             except Exception as exc:
                 phases["phase_3_execute"] = f"error: {exc}"
                 result.errors.append(f"phase_3: {exc}")

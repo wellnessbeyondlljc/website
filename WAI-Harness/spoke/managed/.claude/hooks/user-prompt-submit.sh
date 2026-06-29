@@ -25,6 +25,89 @@ _UPS_SID=$(printf '%s' "$_UPS_INPUT" | python3 -c "import json,sys; print(json.l
 _UPS_TRANSCRIPT=$(printf '%s' "$_UPS_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
 [[ -z "$_UPS_SID" && -n "$_UPS_TRANSCRIPT" ]] && _UPS_SID=$(basename "$_UPS_TRANSCRIPT" .jsonl)
 
+# ── Mid-session inbox notify (impl-basher-mid-session-inbox-notify-v1) ────────
+# Surface lugs that land in lugs/incoming/ DURING a live session so routed-in work
+# gets near-real-time action instead of waiting for the next wakeup. Cheap (listdir +
+# a per-session marker under runtime/, gitignored). First prompt baselines the existing
+# backlog (already shown by the wakeup brief) WITHOUT announcing; thereafter each new
+# arrival is announced exactly once. Silent when nothing new.
+_INBOX_DIR="$BASE/lugs/incoming"
+if [[ -d "$_INBOX_DIR" ]]; then
+  _INBOX_MARK="$RUNTIME_DIR/incoming-seen-${_UPS_SID:-nosid}.txt"
+  if [[ ! -f "$_INBOX_MARK" ]]; then
+    mkdir -p "$RUNTIME_DIR" 2>/dev/null
+    ls "$_INBOX_DIR"/*.json 2>/dev/null | xargs -n1 basename 2>/dev/null > "$_INBOX_MARK" || : > "$_INBOX_MARK"
+  else
+    _INBOX_NEW=""
+    for _ilf in "$_INBOX_DIR"/*.json; do
+      [[ -f "$_ilf" ]] || continue
+      _ibn=$(basename "$_ilf")
+      grep -qxF "$_ibn" "$_INBOX_MARK" 2>/dev/null && continue
+      _iid=$(jq -r '.id // ""' "$_ilf" 2>/dev/null)
+      _ititle=$(jq -r '.title // ""' "$_ilf" 2>/dev/null | head -c 80)
+      _ifrom=$(jq -r '.source_wheel_id // .from // .source_spoke // "?"' "$_ilf" 2>/dev/null)
+      _INBOX_NEW="${_INBOX_NEW}\n  • [${_ifrom}] ${_iid}: ${_ititle}"
+      echo "$_ibn" >> "$_INBOX_MARK"
+    done
+    if [[ -n "$_INBOX_NEW" ]]; then
+      printf '<wai-inbox-notify>\n📥 New lug(s) arrived in incoming/ this session — triage when ready:%b\n</wai-inbox-notify>\n' "$_INBOX_NEW"
+    fi
+  fi
+fi
+
+# (1a) WAI Track per-turn ritual engine (spec-wai-track-collection-v2.0.2). DURABLE trigger:
+# injected EVERY turn (not model memory — the proven-failing design) so BOTH rituals fire:
+#   (i)  the model-authored rich track entry (Layer-1 = the "full-feature" file), and
+#   (ii) the mandatory v2.0.2 statusline.
+# The hook resolves the values that must be REAL and never guessed — turn number (lane guard
+# turn_count + 1 = this turn, == the track turn-event count), wall-clock in America/Los_Angeles
+# (SI1: clock is hook-supplied, never fabricated by the model), and the live model id from the
+# transcript — and leaves the model only what it alone knows: the field content + this turn's
+# Gold count. tz uses %Z (PDT/PST), never hardcoded.
+if [[ -n "$_UPS_SID" ]]; then
+  _TR_GUARD="$BASE/runtime/lanes/$_UPS_SID/session-guard.json"
+  _TR_TC=$(python3 -c "import json;print(json.load(open('$_TR_GUARD')).get('turn_count',0))" 2>/dev/null || echo 0)
+  [[ "$_TR_TC" =~ ^[0-9]+$ ]] || _TR_TC=0
+  _TR_N=$(( _TR_TC + 1 ))
+  _TR_DATE=$(TZ=America/Los_Angeles date '+%a, %b %-d, %Y' 2>/dev/null)
+  _TR_TIME=$(TZ=America/Los_Angeles date '+%-I:%M %p %Z' 2>/dev/null)
+  # Live model id from the transcript's last assistant message; fall back to state, then a
+  # placeholder the model fills from its own system context.
+  _TR_MODEL=$(python3 -c "
+import json,sys
+m=''
+try:
+    for l in open('$_UPS_TRANSCRIPT'):
+        try: d=json.loads(l)
+        except Exception: continue
+        if d.get('type')=='assistant':
+            mm=(d.get('message') or {}).get('model')
+            if mm: m=mm
+except Exception: pass
+print(m)" 2>/dev/null)
+  [[ -z "$_TR_MODEL" ]] && _TR_MODEL=$(python3 -c "import json;print(json.load(open('$STATE_FILE')).get('_session_state',{}).get('ai_id','') or '')" 2>/dev/null)
+  [[ -z "$_TR_MODEL" ]] && _TR_MODEL="<your-model-id>"
+  if [[ "$MODE" == v4 ]]; then _TR_BUF="WAI-Harness/spoke/local/runtime/track-buffer.json"; else _TR_BUF="WAI-Spoke/runtime/track-buffer.json"; fi
+  _TR_SL="Turn ${_TR_N} | ${_TR_DATE} | ${_TR_TIME} | ${_TR_MODEL} | Gold: +{count}"
+  printf '%s\n' "<wai-track-turn>"
+  printf '%s\n' "WAI Track v2.0.2 per-turn obligations (an INSTRUCTION to act on, not a message to acknowledge):"
+  printf '%s\n' "1. RICH ENTRY (Layer-1, full-feature): before your statusline, write ${_TR_BUF} as ONE JSON object."
+  printf '%s\n' "   Envelope: {\"event\":\"turn\",\"turn\":${_TR_N},\"source\":\"model\",\"ts\":\"<iso8601>\",\"ts_source\":\"system_clock\"}"
+  printf '%s\n' "   REQUIRED every turn (never omit): user_msg (verbatim <=500c), user_intent, action, outcome,"
+  printf '%s\n' "   thinking (3-8 sentences: why/tradeoffs/what-was-rejected), focus (one line), phase."
+  printf '%s\n' "   Soft-required unless empty this turn: decisions, insights, open. History is append-only."
+  printf '%s\n' "   INSIGHT CONTRACT (feeds the lens insights view [s], place-awareness): make insights a look-BACK over the WHOLE"
+  printf '%s\n' "   session so far, reconciling loose threads into one ACTIONABLE read for this turn; open = work the user"
+  printf '%s\n' "   requested that is not yet verified or completed. As verbose as possible WHILE brief: dense and skimmable,"
+  printf '%s\n' "   so the reader gets place-awareness here and opens chat for full detail."
+  printf '%s\n' "2. STATUSLINE (mandatory, NON-WAIVABLE — the LAST line of your response, even on a question/options"
+  printf '%s\n' "   list and even if the user says 'no footer'). Emit EXACTLY, replacing {count} with the number of"
+  printf '%s\n' "   durable Gold (project/identity-defining) entries you added this turn (0 if none):"
+  printf '%s\n' "${_TR_SL}"
+  printf '%s\n' "Omit BOTH only in plan mode."
+  printf '%s\n' "</wai-track-turn>"
+fi
+
 # (1) CSRP AC4 — per-turn lane heartbeat (throttled ~5min via marker; fails silent).
 if [[ -n "$_UPS_SID" ]]; then
   _HBM="$BASE/runtime/lanes/$_UPS_SID/.hb"

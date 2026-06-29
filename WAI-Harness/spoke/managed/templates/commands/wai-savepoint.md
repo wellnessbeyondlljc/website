@@ -72,9 +72,26 @@ Exit `0` = no candidates, proceed. NEVER absorb an OPEN lane — only sessions t
 
 **Step 1 (main session): Compose the savepoint strings**
 
-Compose SIX plain-English strings — this is the only step requiring session context:
+Compose the resume contract — this is the only step requiring session context. It MUST satisfy
+`validate_savepoint.py` (spec-savepoint-resume-contract-v1), so compose the structured fields below,
+not just one-liners. Strings:
 
-- `work_done`: one line of what was completed this session (e.g. "Implemented autopilot stall gate and per-lug timeout, patched 4 lugs")
+- `work_done`: one line of what was completed this session (the human-facing summary, written to the
+  savepoint as `work_summary` and reused for the slug/track/commit/staging/report). E.g. "Implemented autopilot stall gate and per-lug timeout, patched 4 lugs"
+
+Structured (emitted into the savepoint file — pre-render each as the JSON value substituted into Step 2's template):
+
+- `work_done_items`: a NON-EMPTY JSON list of `{ "what": "...", "evidence": "...", "verified": true|false }`
+  — one object per real piece of work done (evidence = test/command/file proving it). Any `verified:false`
+  item MUST have a matching `honest_flags` entry — never claim "probably done".
+- `first_actions`: a NON-EMPTY JSON list of `{ "action": "..." }` — the DECIDED first executable step(s)
+  for the resuming agent. `first_actions[0].action` must be executable with no decision (no
+  pick/choose/which/or/"?" — put any alternative in a fallback, not a question). This is the structured
+  counterpart of `resume_note`.
+- `workspace`: JSON `{ "path": "<tree to resume in>", "why": "..." }` — removes framework-vs-spoke ambiguity.
+- `honest_flags`: JSON list of strings naming anything not fully verified (empty list `[]` if all work_done is verified).
+- `inbox_snapshot`: JSON list of the basenames currently in `{BASE}/lugs/incoming/` (`[]` if empty) so the resumer's inbox-first pass surfaces nothing unexpected.
+- `PAPER_TRAIL.topics` / `PAPER_TRAIL.decisions`: JSON lists — NON-EMPTY whenever the session touched any lug (derive from the session's track + lug scan; empty arrays are rejected by the gate).
 - `work_context`: one sentence on what was being worked on — gives the resuming agent a sense of the arc without re-reading the full track
 - `user_next_step`: any action the agent told the user to take before the next session. Omit if no user action is pending.
 - `resume_note`: what the AGENT does first at next `/wai` (max 60 chars). If next step depends on a user action, frame it as: "Ask if [user action] done; if yes, [agent action]".
@@ -199,21 +216,37 @@ Read {BASE}/WAI-State.json. Then in order:
      "initiative_id": "{initiative_id or null}",
      "silo_label": "{silo_label or null}",
      "focus_directive": "{focus_directive or null}",
-     "work_done": "{work_done}",
+     "work_done": {work_done_items},
+     "work_summary": "{work_done}",
      "work_context": "{work_context}",
      "resume_note": "{resume_note}",
+     "first_actions": {first_actions},
+     "workspace": {workspace},
+     "honest_flags": {honest_flags},
      "user_next_step": "{user_next_step or omit key if empty}",
      "lug_id": {lug_id},
      "paper_trail": {
        "lugs_completed": {PAPER_TRAIL.completed},
        "lugs_opened": {PAPER_TRAIL.opened},
        "lugs_in_flight": {LUG_LOCKS},
-       "topics": [],
-       "decisions": []
+       "topics": {PAPER_TRAIL.topics},
+       "decisions": {PAPER_TRAIL.decisions}
      },
+     "inbox_snapshot": {inbox_snapshot},
      "lug_locks": {LUG_LOCKS},
      "conflicts": []
    }
+
+   > RESUME-CONTRACT FIELD SHAPES (validate_savepoint.py / spec-savepoint-resume-contract-v1 — the
+   > savepoint produced here MUST pass that gate with no hand-editing):
+   > - `work_done` is a LIST of objects `{what, evidence, verified}` (NOT a one-line string — the
+   >   `work_summary` key carries the one-liner for commit/track/report). Any item with
+   >   `verified:false` REQUIRES a matching `honest_flags` entry ("probably done" is banned).
+   > - `first_actions` is a non-empty LIST of `{action, ...}`; `first_actions[0].action` must be
+   >   DECIDED and executable (no pick/choose/which/or/"?" fork — list the alternative as a fallback).
+   > - `workspace` is `{path, why}` — which tree to resume in (kills "framework or mywheel?" friction).
+   > - `paper_trail.topics` and `.decisions` must be NON-EMPTY whenever the session touched any lug.
+   > - `inbox_snapshot` = the basenames in `{BASE}/lugs/incoming/` at save time (a list; `[]` if empty).
 
 6. DECLARE ON THE INITIATIVE + UPDATE POINTERS
 
@@ -276,8 +309,14 @@ Output exactly: "Savepoint staged: {sp_id} | {UNCOMMITTED_COUNT} files uncommitt
 A savepoint with a thin/invalid resume contract is worse than none (the next session resumes on bad state). Validate the staged savepoint file BEFORE committing:
 
 ```bash
-python3 {TOOLS}/validate_savepoint.py --base {BASE} --savepoint {sp_file}
+python3 {TOOLS}/validate_savepoint.py {sp_file} --spoke-root {REPO}
 ```
+
+> CLI contract: the savepoint path is the FIRST POSITIONAL arg; the only flag is `--spoke-root DIR`
+> (repo root, so deferred[].where_captured resolves lug ids + base-relative paths). Do NOT pass
+> `--base`/`--savepoint` — `main()` strips all `--`-prefixed tokens, so a `--savepoint`/`--base`
+> value would be consumed as the positional path and the tool would try to open a directory
+> (`IsADirectoryError`). `{REPO}` defaults to `.` when unset (the ceremony runs from repo root).
 
 - exit 0 → contract valid; proceed to Step 2.9.
 - exit non-zero → **STOP. Do NOT commit.** Fix the fields the validator names (workspace, non-empty paper-trail when lugs were touched, resolvable deferred/handoff refs) and re-run. Never commit an invalid savepoint.

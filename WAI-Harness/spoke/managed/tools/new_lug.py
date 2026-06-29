@@ -134,6 +134,9 @@ def build_v4_lug(lug_id, lug_type, title, spoke_path=".", now_iso=None, **fields
         "context_snapshot": resolve_context_snapshot(spoke_path),
         "triggering_session": resolve_triggering_session(spoke_path),
         "origin": resolve_worktree_origin(spoke_path),
+        # Disposition stamped at creation; expediter re-stamps on each score run.
+        "disposition": "review",
+        "disposition_reason": "draft -- awaiting PEV completion, acceptance_criteria, and file_targets",
         # author-fillable skeleton (kept explicit, never "TBD")
         "perceive": fields.get("perceive", []),
         "execute": fields.get("execute", []),
