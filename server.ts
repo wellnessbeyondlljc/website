@@ -48,6 +48,11 @@ function handler(req: Request): Promise<Response> | Response {
   if (pathname === "/") pathname = "/index.html";
   if (pathname.includes("..")) return new Response("Forbidden", { status: 403 });
 
+  // Dev server: never let the browser cache anything. Without this, browsers
+  // apply heuristic caching to cache-header-less responses and keep serving a
+  // stale page even after edits — the #1 "I don't see my changes" trap.
+  const NO_CACHE = { "Cache-Control": "no-store, must-revalidate" };
+
   return (async () => {
     let file = Bun.file(ROOT + pathname);
     if (!(await file.exists()) && !pathname.includes(".")) {
@@ -57,15 +62,15 @@ function handler(req: Request): Promise<Response> | Response {
       // Bun.file infers content-type from most extensions, but not .webmanifest —
       // browsers require application/manifest+json or they ignore the manifest.
       if (pathname.endsWith(".webmanifest")) {
-        return new Response(file, { headers: { "Content-Type": "application/manifest+json" } });
+        return new Response(file, { headers: { ...NO_CACHE, "Content-Type": "application/manifest+json" } });
       }
-      return new Response(file);
+      return new Response(file, { headers: NO_CACHE });
     }
     const notFound = Bun.file(ROOT + "/404.html");
     if (await notFound.exists()) {
-      return new Response(notFound, { status: 404, headers: { "Content-Type": "text/html;charset=utf-8" } });
+      return new Response(notFound, { status: 404, headers: { ...NO_CACHE, "Content-Type": "text/html;charset=utf-8" } });
     }
-    return new Response("404 — Not Found", { status: 404, headers: { "Content-Type": "text/plain" } });
+    return new Response("404 — Not Found", { status: 404, headers: { ...NO_CACHE, "Content-Type": "text/plain" } });
   })();
 }
 

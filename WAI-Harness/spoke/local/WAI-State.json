@@ -2,13 +2,13 @@
   "wheel": {
     "wheel_id": "wellnessbeyondlljc-website",
     "name": "Wellness Beyond LLJC Website",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "structure_version": "v4",
     "status": "active",
     "description": "Static marketing/support website for the Wellness Beyond #LLJC youth-wellness nonprofit. Multi-page (home + crisis resources), light/dark themed, content derived verbatim from the org brochure. Served locally via a Bun static server behind Caddy at http://wbl.local/.",
     "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub",
-    "last_modified_at": "2026-06-28T05:00:48Z",
-    "last_modified_by": "claude-opus-4-8"
+    "last_modified_at": "2026-06-29T06:26:33Z",
+    "last_modified_by": "closeout.sh"
   },
   "_project_foundation": {
     "completed": true,
@@ -46,14 +46,14 @@
     ]
   },
   "_session_state": {
-    "session_count": 2,
-    "last_session_id": "session-20260628-0357",
-    "last_closeout": "2026-06-28T05:00:48Z",
-    "next_session_recommendation": "SEO foundation shipped (sitemap, robots, OG/Twitter, JSON-LD NGO schema, 404, hero social image). Next: (1) submit sitemap in Google Search Console after domain verification; (2) claim/verify Google Business Profile; (3) add EIN + nonprofitStatus to JSON-LD once the 501(c)(3) number is available.",
+    "session_count": 3,
+    "last_session_id": "session-20260629-0416",
+    "last_closeout": "2026-06-29T06:26:33Z",
+    "next_session_recommendation": "Homepage content edits shipped (hero 'Welcome to Wellness Beyond LLJC' line, mission intro paragraphs in loving memory of Jenzele Couassi, and header two-line 'Long Live Jenzele Couassi (#LLJC)' brand). Dev server now sends no-cache headers. NEXT: investigate why live site wellnessbeyondlljc.org returns only ~15 bytes (not serving the built site) and deploy the current index.html/styles.css there.",
     "last_savepoint": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
     "requires_review": false,
     "mode": "execution",
-    "track_path": "WAI-Harness/spoke/local/sessions/session-20260628-0357/track.jsonl"
+    "track_path": "WAI-Harness/spoke/local/sessions/session-20260629-0449/track.jsonl"
   },
   "feature_toggles": {},
   "_work_queue": {
@@ -64,17 +64,16 @@
       "blocked_count": 0,
       "stalled_count": 0
     },
-    "last_scored_at": "2026-06-28T05:00:48.837725+00:00"
+    "last_scored_at": "2026-06-29T06:26:34.172320+00:00"
   },
   "_savepoint": {
-    "active_ids": [
-      "sp-0cc6d5c6-0175-44b8-8098-8dbb47a349e1-built-shipped-wellness"
-    ],
-    "count": 1
+    "active_ids": [],
+    "count": 0
   },
   "_session_status": {
     "status": "clean",
-    "clean_at": "2026-06-28T05:01:33.588801Z",
-    "interrupted_session": null
+    "clean_at": "2026-06-29T06:27:07.126534+00:00",
+    "interrupted_session": null,
+    "interrupted_at": null
   }
 }
