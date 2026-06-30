@@ -7,8 +7,8 @@
     "status": "active",
     "description": "Static marketing/support website for the Wellness Beyond #LLJC youth-wellness nonprofit. Multi-page (home + crisis resources), light/dark themed, content derived verbatim from the org brochure. Served locally via a Bun static server behind Caddy at http://wbl.local/.",
     "hub_path": "/home/mario/projects/wheelwright/mywheel/WAI-Harness/hub",
-    "last_modified_at": "2026-06-29T06:26:33Z",
-    "last_modified_by": "closeout.sh"
+    "last_modified_at": "2026-06-30T01:13:18.845835+00:00",
+    "last_modified_by": "claude-opus-4-8"
   },
   "_project_foundation": {
     "completed": true,
@@ -47,13 +47,13 @@
   },
   "_session_state": {
     "session_count": 3,
-    "last_session_id": "session-20260629-0416",
-    "last_closeout": "2026-06-29T06:26:33Z",
-    "next_session_recommendation": "Homepage content edits shipped (hero 'Welcome to Wellness Beyond LLJC' line, mission intro paragraphs in loving memory of Jenzele Couassi, and header two-line 'Long Live Jenzele Couassi (#LLJC)' brand). Dev server now sends no-cache headers. NEXT: investigate why live site wellnessbeyondlljc.org returns only ~15 bytes (not serving the built site) and deploy the current index.html/styles.css there.",
+    "last_session_id": "session-20260630-0104",
+    "last_closeout": "2026-06-30T01:13:18.845835+00:00",
+    "next_session_recommendation": "Image fix shipped (jenzele.jpg/.webp committed + pushed). Verify on next Vercel deploy that wellnessbeyondlljc.org renders the Jenzele photo in the <picture> element. Earlier open item still stands: confirm the live .org domain serves the full built site (was returning ~15 bytes).",
     "last_savepoint": "0cc6d5c6-0175-44b8-8098-8dbb47a349e1",
     "requires_review": false,
     "mode": "execution",
-    "track_path": "WAI-Harness/spoke/local/sessions/session-20260629-0449/track.jsonl"
+    "track_path": "WAI-Harness/spoke/local/sessions/session-20260630-0104/track.jsonl"
   },
   "feature_toggles": {},
   "_work_queue": {
@@ -72,7 +72,7 @@
   },
   "_session_status": {
     "status": "clean",
-    "clean_at": "2026-06-29T06:27:07.126534+00:00",
+    "clean_at": "2026-06-30T01:13:18.845835+00:00",
     "interrupted_session": null,
     "interrupted_at": null
   }
