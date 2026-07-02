@@ -1,5 +1,5 @@
 {
-  "harness_version": "4.4.3",
+  "harness_version": "4.4.4",
   "is_master": true,
   "generated_at": null,
   "files": {
@@ -748,21 +748,6 @@
       "md5": "43834f802ca6a9b18b2b70a9410d5685",
       "owner": "basher"
     },
-    "WAI-Spoke/WAI-LugIndex.jsonl": {
-      "version": "4.4.3",
-      "md5": "d41d8cd98f00b204e9800998ecf8427e",
-      "owner": "basher"
-    },
-    "WAI-Spoke/managed/events-journal.jsonl": {
-      "version": "4.4.3",
-      "md5": "69171ce7043453be35c3dc36ed97d75d",
-      "owner": "basher"
-    },
-    "WAI-Spoke/reference/scout-job.schema.json": {
-      "version": "4.4.3",
-      "md5": "b287c614405733bdc5ae94192d9e0b39",
-      "owner": "basher"
-    },
     "advisors-framework/.gitignore": {
       "version": "4.4.3",
       "md5": "e0f49c47ef7a54bdd6370030b871474a",
@@ -1271,11 +1256,6 @@
     "reference/scout-job.schema.json": {
       "version": "4.4.3",
       "md5": "b287c614405733bdc5ae94192d9e0b39",
-      "owner": "basher"
-    },
-    "runtime/capabilities-effective.json": {
-      "version": "4.4.3",
-      "md5": "b85ca89aaca54b166ac0059bd77927d2",
       "owner": "basher"
     },
     "schemas/.gitkeep": {
@@ -2695,7 +2675,7 @@
     },
     "templates/spoke/AGENTS.md": {
       "version": "4.4.3",
-      "md5": "036dc1adda7b8b975f8828b4e8cb156d",
+      "md5": "4ffb17890f75ea4733f6c862be778214",
       "owner": "basher"
     },
     "templates/spoke/CLAUDE.md": {
@@ -2746,11 +2726,6 @@
     "templates/spoke/WAI-Spoke/advisors/expediter/feeds.yaml": {
       "version": "4.4.3",
       "md5": "f08f454b2d93ff54fe68ef2c51e09e66",
-      "owner": "basher"
-    },
-    "templates/spoke/WAI-Spoke/advisors/expediter/scan_state.json": {
-      "version": "4.4.3",
-      "md5": "79cc1b12b9321b4592aff79f67003c5a",
       "owner": "basher"
     },
     "templates/spoke/WAI-Spoke/advisors/historian/findings-log.jsonl": {
@@ -4150,7 +4125,7 @@
     },
     "tools/ozi_autopilot.py": {
       "version": "4.4.3",
-      "md5": "c61a25a6c78e05fea8e98d0bfe1cf938",
+      "md5": "d2dabbb586fb030287469c1c19b83dc4",
       "owner": "basher"
     },
     "tools/ozi_headless.py": {

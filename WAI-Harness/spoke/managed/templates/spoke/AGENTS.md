@@ -58,9 +58,13 @@ WAI gives you persistent memory, structured work tracking, and cross-session con
 
 ## Hub Connection
 
-This spoke connects to a hub (path in `WAI-Spoke/WAI-State.json` → `wheel.hub_path`).
-The framework (protocol source of truth) is at `{hub_path}/framework/`.
-Skills and templates flow from framework → hub → spokes.
+This spoke connects to the wheel's hub. The canonical hub lives **inside the master spoke
+(`mywheel`) at `WAI-Harness/hub/`** and is the single maintained home. The standalone
+`/wheelwright/hub` and `/wheelwright/framework` repos are **DEPRECATED** — never point at them.
+Always resolve the hub at runtime from `WAI-State.json` → `wheel.hub_path`; never hardcode an
+absolute hub path. The protocol source of truth is the hub's `managed/` tooling; teachings flow
+from `{hub_path}/teachings_repo/{cross_spoke,spoke}/current/` → hub → spokes
+(`framework/current/` is a LEGACY dead drop, scanned last as fallback only).
 
 ---
 

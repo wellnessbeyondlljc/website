@@ -2554,7 +2554,22 @@ class OziAutopilot:
             except Exception as e:
                 print(f"[autopilot] phase 3: lease sweep error: {e}", file=sys.stderr)
 
-        sorted_lugs = sorted(state.open_lugs, key=self._sort_key)
+        # Defensive: open_lugs must be lug dicts. Upstream stages (scan, advisor
+        # scouting, grooming) can inject a non-dict (e.g. a bare lug-id string),
+        # which crashes _sort_key with "'str' object has no attribute 'get'" and
+        # aborts the entire phase-3 run for the spoke. Drop + log so one bad entry
+        # cannot break autonomous execution (seen fleet-wide: minder, basher —
+        # 10-12 consecutive ERROR rounds). The log surfaces the culprit's source.
+        _clean_lugs = [l for l in state.open_lugs if isinstance(l, dict)]
+        _dropped = len(state.open_lugs) - len(_clean_lugs)
+        if _dropped:
+            _bad = [repr(l)[:60] for l in state.open_lugs if not isinstance(l, dict)][:5]
+            print(
+                f"[autopilot] phase 3: dropped {_dropped} non-dict lug "
+                f"entr{'y' if _dropped == 1 else 'ies'} before dispatch: {_bad}",
+                file=sys.stderr,
+            )
+        sorted_lugs = sorted(_clean_lugs, key=self._sort_key)
         dispatched = 0
 
         # Drain the Expediter ready-queue: never auto-dispatch a needs-you item.
