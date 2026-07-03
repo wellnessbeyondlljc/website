@@ -56,6 +56,27 @@ def _base(spoke_root: str) -> str:
     return os.path.join(spoke_root, "WAI-Spoke")  # last-resort v3 fallback
 
 
+_wai_base = _base  # alias: matches the _wai_base(spoke) convention used elsewhere
+                    # (e.g. spoke_integrity_score.py) so callers/tests can rely on
+                    # a uniform name across the v3-noop-swept tool set.
+
+
+def _resolve_paths(spoke_root: str) -> dict:
+    """Resolve the burn-panel state paths for an arbitrary spoke_root (testable
+    entry point matching the SESSIONS_DIR/USAGE_FILE/LUGS_BYTYPE module
+    constants below, which call this with _spoke_root()). Restored -- this
+    module's OWN _base()-based resolution (already v4-aware) is reused rather
+    than the wai_paths.category()-based approach from the original 8d98c44
+    _resolve_paths, since this file's architecture diverged from that commit's
+    lineage; both are correct, this stays consistent with the current file."""
+    base = _base(spoke_root)
+    return {
+        "SESSIONS_DIR": os.path.join(base, "sessions"),
+        "USAGE_FILE": os.path.join(base, "model-usage", "usage.jsonl"),
+        "LUGS_BYTYPE": os.path.join(base, "lugs", "bytype"),
+    }
+
+
 _BASE = _base(_spoke_root())
 
 SESSIONS_DIR   = os.path.join(_BASE, "sessions")

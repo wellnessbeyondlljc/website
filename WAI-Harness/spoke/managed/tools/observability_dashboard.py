@@ -402,7 +402,17 @@ def build_attention_surface(spoke, now_epoch):
         "automatable": automatable,       # pipeline visibility, not the user's to-do
         "needs_you_count": len(needs_you),
         "automatable_count": len(automatable),
-        "overloaded": len(needs_you) > ATTENTION_MAX_DEPTH,
+        # Both the originating lug (impl-observability-dashboard-surface-v1)
+        # and spec-observability-oversight-v1 define the max-depth alarm over
+        # the WHOLE attention queue ("queue over N items is itself a P1
+        # 'attention overloaded' signal", explicitly including stalled-2x
+        # lugs) -- not the human-only needs_you subset. The needs_you/
+        # automatable disposition split was a later, separate refinement for
+        # display purposes; it had silently narrowed this alarm's scope,
+        # meaning the exact class of gap it was built to surface (backlog
+        # depth as pressure) could go unraised whenever the backlog was
+        # entirely automatable-tagged items, as it always is in the wild.
+        "overloaded": len(items) > ATTENTION_MAX_DEPTH,
         "max_depth": ATTENTION_MAX_DEPTH,
         "_source_ts": source_ts,
     }

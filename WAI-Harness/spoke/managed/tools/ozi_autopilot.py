@@ -35,6 +35,13 @@ from wai_ozi_config import OziConfig  # noqa: E402
 from wai_ozi_scanner import OziScanner  # noqa: E402
 from wai_ozi_dispatch import OziDispatch  # noqa: E402
 from lug_utils import evaluate_execute_when  # noqa: E402
+
+try:
+    import capgraph_blocks  # P0 keystone: AP block-memory as CapabilitiesGraph antipatterns
+    import goal_planner     # P1: bounded replan-on-block ladder
+    _CAPGRAPH_AVAILABLE = True
+except Exception:  # never let a missing/broken tool break AP
+    _CAPGRAPH_AVAILABLE = False
 from wai_paths import resolve_wai_root, advisors_dir  # noqa: E402  (v3/v4 resolver)
 
 
@@ -902,6 +909,7 @@ class OziAutopilot:
         self._advisor_scouting = advisor_scouting  # force-enable Phase 2.5 regardless of counter
         self._scout_if_empty = scout_if_empty    # run Phase 2.5 after Phase 3 dispatches 0 lugs
         self.spoke_name: str = "unknown"      # populated in Phase 0 from WAI-State.json
+        self.wheel_goal: Optional[Dict[str, Any]] = None  # populated in Phase 0 from WAI-State.json wheel.goal
         self.run_id: str = str(uuid.uuid4())
         self.run_start_ts: str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self._grooming_result: Optional[GroomingResult] = None
@@ -936,6 +944,79 @@ class OziAutopilot:
         # GitNexus integration state
         self._gitnexus_freshness_checked: bool = False
         self._gitnexus_impact_warnings: List[Dict[str, Any]] = []
+
+    # ------------------------------------------------------------------
+    # Backlog-aware execution override (impl-decouple-ap-execution-from-
+    # investment-urgency-v1) — self-contained mirror of conductor.py's
+    # dispatchable_lugs() ground-truth scan, duplicated rather than imported
+    # since conductor.py is a hub-local script not distributed to spokes'
+    # managed/tools. Cheap (stat+parse of open/ready lugs only).
+    # ------------------------------------------------------------------
+
+    _DISPATCHABLE_SKIP_TYPES = {"feature", "epic", "spec", "idea", "review", "notation",
+                                 "question", "notice", "session-summary"}
+
+    def _dispatchable_lugs_ground_truth(self) -> int:
+        """Count actionable open/ready lugs carrying non-empty file_targets —
+        read straight from the lug store, independent of any scoring pass
+        (which hasn't run yet at Phase 0)."""
+        try:
+            base = self._config.bytype_dir
+        except Exception:
+            return 0
+        n = 0
+        for status in ("open", "ready"):
+            for f in base.glob(f"*/{status}/*.json"):
+                try:
+                    d = json.loads(f.read_text())
+                except Exception:
+                    continue
+                if d.get("type") in self._DISPATCHABLE_SKIP_TYPES:
+                    continue
+                if str(d.get("risk_tier", "")).lower() == "critical":
+                    continue
+                ft = d.get("target_files") or d.get("file_targets") or []
+                if ft and any(str(x).strip() for x in ft):
+                    n += 1
+        return n
+
+    def _resolve_teachings_only_mode(self, urgency: int) -> bool:
+        """urgency < 2 (extreme urgency signal from hub) used to hard-veto ALL
+        lug dispatch unconditionally. BUT urgency is a static business-priority
+        signal (e.g. "website = low-priority maintenance" -> 1), not a backlog
+        signal, so it must not veto execution when real dispatchable work
+        exists — that starved low-priority spokes indefinitely, mitigated only
+        by an external Conductor stopgap (ensure_executable in conductor.py)
+        that never ran for standalone AP invocations outside Conductor's wave
+        loop. Backlog-aware override, in the engine itself, so it applies
+        everywhere: keep urgency as a prioritization input, never an execution
+        veto. impl-decouple-ap-execution-from-investment-urgency-v1."""
+        veto = urgency < 2
+        if veto:
+            disp = self._dispatchable_lugs_ground_truth()
+            if disp >= 1:
+                print(
+                    f"[autopilot] phase 0: teachings_only_mode override -> False "
+                    f"(hub urgency={urgency} < 2, but {disp} dispatchable lug(s) "
+                    f"exist — urgency is priority, not a veto)",
+                    file=sys.stderr,
+                )
+                return False
+            print(
+                f"[autopilot] phase 0: teachings_only_mode=True "
+                f"(hub urgency={urgency} < 2 — critical threshold)",
+                file=sys.stderr,
+            )
+        return veto
+
+    @staticmethod
+    def _extract_wheel_goal(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Pure extraction of wheel.goal from a parsed WAI-State.json dict —
+        separated from _assess_state's file-reading so it's directly
+        unit-testable without the rest of Phase 0's heavier machinery
+        (impl-wheel-goal-field-and-ap-bias-v1)."""
+        goal = (state.get("wheel") or {}).get("goal")
+        return goal or None
 
     # ------------------------------------------------------------------
     # Hub directive loader
@@ -1207,11 +1288,17 @@ class OziAutopilot:
             return _default_claude
 
         if mid.startswith("deepseek-"):
-            # Check hub tools first, then repo-relative fallback
+            # Check hub tools first, then repo-relative fallback. deepseek_dispatch.py
+            # lives at <hub_root>/local/tools/ (== <hub_root>/managed/tools/, kept in
+            # sync -- neither candidate here previously included the "local" segment,
+            # so BOTH always missed and dispatch silently fell back to Claude, never
+            # actually invoking DeepSeek regardless of the tier-map wiring.
             candidates = []
             if hub_path:
-                candidates.append(hub_path / "tools" / "deepseek_dispatch.py")
-            candidates.append(Path(__file__).resolve().parent.parent / "hub" / "tools" / "deepseek_dispatch.py")
+                candidates.append(hub_path / "local" / "tools" / "deepseek_dispatch.py")
+            candidates.append(
+                Path(__file__).resolve().parents[3] / "hub" / "local" / "tools" / "deepseek_dispatch.py"
+            )
             for dispatch_path in candidates:
                 if dispatch_path.exists():
                     return ["python3", str(dispatch_path), "--model", model_id]
@@ -1904,6 +1991,12 @@ class OziAutopilot:
                     or state.get("wheel_id")
                     or "unknown"
                 )
+                # Goal-linkage (impl-wheel-goal-field-and-ap-bias-v1): read this
+                # spoke's own north-star, if set, and log it every run so goal
+                # presence/absence is finally observable in AP's own output —
+                # every prior "AP rolls toward goal" claim was unverifiable
+                # because nothing ever read the field at all.
+                self.wheel_goal = self._extract_wheel_goal(state)
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -1938,6 +2031,14 @@ class OziAutopilot:
             f"nav_token_limits={self.nav_token_limits}  "
             f"nav_profile_stale={self.nav_profile_stale}  "
             f"goal_queue_available={_GOAL_QUEUE_AVAILABLE}",
+            file=sys.stderr,
+        )
+        # Goal-linkage (impl-wheel-goal-field-and-ap-bias-v1): make goal presence
+        # observable in AP's own output every run -- previously nothing read
+        # wheel.goal at all, so "AP rolls toward goal" was an unfounded claim.
+        print(
+            f"[autopilot] phase 0: goal_linkage="
+            f"{'set: ' + repr(self.wheel_goal.get('north_star', ''))[:100] if self.wheel_goal else 'NONE (wheel.goal not set in WAI-State.json)'}",
             file=sys.stderr,
         )
         # Work queue
@@ -2009,15 +2110,7 @@ class OziAutopilot:
         if len(undelivered_signals) > 5:
             self.hub_directive["signal_overload"] = True
 
-        # teachings_only_mode: if urgency < 2 (extreme urgency signal from hub),
-        # skip lug dispatch — only Phase 1 teachings run
-        self.teachings_only_mode = self.hub_directive["urgency"] < 2
-        if self.teachings_only_mode:
-            print(
-                f"[autopilot] phase 0: teachings_only_mode=True "
-                f"(hub urgency={self.hub_directive['urgency']} < 2 — critical threshold)",
-                file=sys.stderr,
-            )
+        self.teachings_only_mode = self._resolve_teachings_only_mode(self.hub_directive["urgency"])
 
         print(
             f"[autopilot] phase 0: hub_directive loaded: "
@@ -2285,8 +2378,9 @@ class OziAutopilot:
                 result.ineligible.append(lug_id)
         return eligible, result
 
-    def _sort_key(self, lug: Dict[str, Any]) -> Tuple[int, float, int]:
-        """Sort: urgency asc (critical=0), ROI desc (negated × hub priority_score), wave asc.
+    def _sort_key(self, lug: Dict[str, Any]) -> Tuple[int, float, float, int, int]:
+        """Sort: urgency asc, ROI desc, initiative weight desc (P4 tiebreaker),
+        expediter portfolio rank asc (refine-ap-dispatch-portfolio-order-v1), wave asc.
 
         hub_directive.priority_score is a global multiplier applied to the effective
         ROI of every lug before sorting.  A score of 1.0 (default) has no effect.
@@ -2308,7 +2402,59 @@ class OziAutopilot:
                 wave = int(raw)
             except (TypeError, ValueError):
                 wave = 99
-        return (urgency, roi, wave)
+        # P4: initiative weight as a tiebreaker — among equal urgency/roi, the
+        # higher-weighted initiative (focus_lock × impact_rank × lifecycle) goes first,
+        # plus a critical-path boost so a blocker that unblocks N lugs runs ahead.
+        weight = self._initiative_weight(lug)
+        boost = getattr(self, "_critical_boost", {}).get(lug.get("id") or lug.get("lug_id") or "", 0)
+        # refine-ap-dispatch-portfolio-order-v1: the expediter already computes a
+        # portfolio-aware autonomous order (ready-queue.json columns.autonomous,
+        # sorted by initiative-scoped-first + dispatch score) but dispatch used to
+        # consume that queue ONLY for the needs-you exclusion set, discarding the
+        # order itself. Feed the expediter's own rank in as a further tiebreak so
+        # top-of-queue tracks what the expediter already decided, instead of two
+        # portfolio-aware systems silently disagreeing.
+        exp_rank = self._expediter_portfolio_rank(lug)
+        return (urgency, roi, -(weight + boost), exp_rank, wave)
+
+    def _expediter_portfolio_rank(self, lug: Dict[str, Any]) -> int:
+        """0-indexed position of this lug in the expediter's ready-queue.json
+        columns.autonomous order (cached per run); len(list) if the lug isn't
+        present or the queue is missing/unreadable — a neutral tiebreak that
+        never advantages an untracked lug over one the expediter actually ranked."""
+        cache = getattr(self, "_expediter_rank_cache", None)
+        if cache is None:
+            cache = {}
+            try:
+                rq_path = self.spoke_advisors / "expediter" / "ready-queue.json"
+                if rq_path.exists():
+                    rq = json.loads(rq_path.read_text())
+                    for i, row in enumerate((rq.get("columns") or {}).get("autonomous", [])):
+                        if row.get("id"):
+                            cache[row["id"]] = i
+            except (OSError, json.JSONDecodeError):
+                cache = {}
+            self._expediter_rank_cache = cache
+        lug_id = lug.get("id") or lug.get("lug_id") or ""
+        return cache.get(lug_id, len(cache))
+
+    def _initiative_weight(self, lug: Dict[str, Any]) -> float:
+        """P4: cached initiative weight (load the index once per run). Guarded → 1.0 default."""
+        try:
+            cache = getattr(self, "_init_weight_cache", None)
+            if cache is None:
+                cache = {}
+                idx_path = self.spoke_wai / "initiatives" / "index.json"
+                if idx_path.exists():
+                    for it in json.loads(idx_path.read_text()).get("initiatives", []):
+                        if it.get("id"):
+                            cache[it["id"]] = it
+                self._init_weight_cache = cache
+            import portfolio
+            iid = lug.get("initiative") or lug.get("initiative_id")
+            return portfolio.initiative_weight(cache.get(iid))
+        except Exception:
+            return 1.0
 
     def _verify_before_action_gate(self, lug: Dict[str, Any]) -> Tuple[bool, str]:
         """Pre-action gate (verify-before-action). Returns (allowed, reason).
@@ -2554,6 +2700,17 @@ class OziAutopilot:
             except Exception as e:
                 print(f"[autopilot] phase 3: lease sweep error: {e}", file=sys.stderr)
 
+        # P4+: critical-path boost — compute, once per run, which blockers unblock the
+        # most downstream work, so the sort runs the highest-leverage blocker FIRST
+        # (the complement to replan's route-around). Guarded; empty on any error.
+        self._critical_boost = {}
+        try:
+            import critical_path
+            for _r in critical_path.blocker_leverage(state.open_lugs, set()):
+                self._critical_boost[_r["blocker"]] = _r["total_unblocks"]
+        except Exception:
+            self._critical_boost = {}
+
         # Defensive: open_lugs must be lug dicts. Upstream stages (scan, advisor
         # scouting, grooming) can inject a non-dict (e.g. a bare lug-id string),
         # which crashes _sort_key with "'str' object has no attribute 'get'" and
@@ -2571,6 +2728,8 @@ class OziAutopilot:
             )
         sorted_lugs = sorted(_clean_lugs, key=self._sort_key)
         dispatched = 0
+        # P1: per-run replan context (loop-safety: one ladder pass per block per run)
+        _replan_ctx = goal_planner.new_ctx() if _CAPGRAPH_AVAILABLE else None
 
         # Drain the Expediter ready-queue: never auto-dispatch a needs-you item.
         # When ready-queue.json is absent, this set is empty and dispatch falls
@@ -2583,6 +2742,17 @@ class OziAutopilot:
 
             lug_id = lug.get("id") or lug.get("i") or "unknown"
             lug_type = str(lug.get("type") or lug.get("_fs_type") or "unknown")
+
+            # --- P0: consult block-memory (read-only; attach known antipatterns) ---
+            if _CAPGRAPH_AVAILABLE:
+                _known = capgraph_blocks.consult(lug, spoke_local=str(self.spoke_wai))
+                if _known:
+                    lug["_known_blocks"] = _known
+                    print(
+                        f"[autopilot]   ⓘ {lug_id} — {len(_known)} known block(s) from memory: "
+                        f"{', '.join(k.get('block_class', '?') for k in _known)}",
+                        file=sys.stderr,
+                    )
 
             # --- Skip rules ---
             if lug_type in self.SKIP_TYPES:
@@ -2604,6 +2774,11 @@ class OziAutopilot:
             # --- Execute-when gate ---
             can_run, _reason = evaluate_execute_when(lug)
             if not can_run:
+                if _CAPGRAPH_AVAILABLE:
+                    _rp = goal_planner.replan_on_block(
+                        lug, "execute_when", _reason, ctx=_replan_ctx, spoke_local=str(self.spoke_wai)
+                    )
+                    print(f"[replan]   {lug_id} execute_when → rung{_rp['rung']}:{_rp['action']} ({_rp['detail']})", file=sys.stderr)
                 continue
 
             # --- Verify-before-action gate ---
@@ -2613,6 +2788,12 @@ class OziAutopilot:
             gate_ok, gate_reason = self._verify_before_action_gate(lug)
             self._log_gate_decision(lug_id, gate_ok, gate_reason)
             if not gate_ok:
+                if _CAPGRAPH_AVAILABLE and not str(gate_reason).startswith("leased:"):
+                    _bc = "precondition_unmet" if "precondition" in str(gate_reason).lower() else "qc_error"
+                    _rp = goal_planner.replan_on_block(
+                        lug, _bc, str(gate_reason), ctx=_replan_ctx, spoke_local=str(self.spoke_wai)
+                    )
+                    print(f"[replan]   {lug_id} {_bc} → rung{_rp['rung']}:{_rp['action']} ({_rp['detail']})", file=sys.stderr)
                 continue
 
             # --- Stall gate: skip lugs that have failed too many times ---
@@ -2622,6 +2803,11 @@ class OziAutopilot:
                     f"[autopilot]   ⏭ {lug_id} — stalled after {lug_failures} failures, elevating to needs_attention",
                     file=sys.stderr,
                 )
+                if _CAPGRAPH_AVAILABLE:
+                    _rp = goal_planner.replan_on_block(
+                        lug, "stall", f"{lug_failures} prior failures", ctx=_replan_ctx, spoke_local=str(self.spoke_wai)
+                    )
+                    print(f"[replan]   {lug_id} stall → rung{_rp['rung']}:{_rp['action']} ({_rp['detail']})", file=sys.stderr)
                 if not self.dry_run:
                     self._dispatch.update_lug_status(lug_id, "needs_attention", {
                         "needs_attention_reason": f"stalled: {lug_failures} autopilot failures with no resolution",
@@ -2721,6 +2907,12 @@ class OziAutopilot:
                     "last_autopilot_error": error_code,
                     "last_autopilot_error_at": datetime.now(timezone.utc).isoformat(),
                 })
+                if _CAPGRAPH_AVAILABLE:
+                    _rp = goal_planner.replan_on_block(
+                        lug, "dispatch_failure", str(error_code or ""),
+                        error_code=error_code, ctx=_replan_ctx, spoke_local=str(self.spoke_wai),
+                    )
+                    print(f"[replan]   {lug_id} dispatch_failure → rung{_rp['rung']}:{_rp['action']} ({_rp['detail']})", file=sys.stderr)
                 self._failed_lug_snapshots.append({
                     "id": lug_id,
                     "title": lug.get("title") or lug.get("t") or lug_id,
@@ -2865,6 +3057,19 @@ class OziAutopilot:
             return False, "dispatch_error"
         self._claimed_this_run.append(lug_id)  # track for SIGINT rollback
 
+        # --- Grounded loop-close gate (before-snapshot) ---
+        # Capture the "before" reading of the lug's declared metric ONLY if it carries a
+        # grounded_loop contract. Fully fail-safe: any error leaves _gl_before None and the
+        # close-gate degrades to a normal 'completed'. Lugs without a contract cost nothing.
+        _gl_before = None
+        try:
+            _gl = lug.get("grounded_loop") if isinstance(lug, dict) else None
+            if isinstance(_gl, dict) and isinstance(_gl.get("metric_target"), dict):
+                from grounded_oracle_map import get_oracle
+                _gl_before = get_oracle(_gl["metric_target"].get("oracle"))["capture"]()
+        except Exception:
+            _gl_before = None
+
         prompt = self._dispatch.create_implementation_prompt(lug_id, lug)
 
         # Per-lug timeout: use estimated_seconds if set, fall back to DEFAULT_TIMEOUT_SECS
@@ -2952,11 +3157,34 @@ class OziAutopilot:
             if lug_id.startswith("impl-harness-migration-"):
                 self._write_challenge_report(lug_id, lug)
             self._append_trace("lug_complete", lug_id, "success")
-            self._dispatch.update_lug_status(lug_id, "completed", {
+            # --- Grounded loop-close gate (verdict) ---
+            # Only stamp 'completed' if the lug's declared metric actually moved; a metric
+            # that did not move is 'flagged' (advisory, non-destructive) with a human-readable
+            # reason. No grounded_loop contract -> pass-through 'completed' (backward compatible).
+            # Fully fail-safe: any gate error falls back to a plain 'completed', never a crash.
+            _gl_status = "completed"
+            _gl_extra = {
                 "completed_at": datetime.now(timezone.utc).isoformat(),
                 "dispatch_method": "autopilot-subprocess",
-            })
-            print(f"[autopilot]   ✓ {lug_id} done ({_elapsed_lug}s, tokens={lug_tokens})", file=sys.stderr)
+            }
+            try:
+                _gl = lug.get("grounded_loop") if isinstance(lug, dict) else None
+                if isinstance(_gl, dict) and isinstance(_gl.get("metric_target"), dict):
+                    from grounded_loop_gate import close_gate
+                    from grounded_oracle_map import get_oracle
+                    _gl_after = get_oracle(_gl["metric_target"].get("oracle"))["capture"]()
+                    _verdict = close_gate(lug, _gl_before, _gl_after,
+                                          allow_revert=getattr(self, "_grounded_allow_revert", False))
+                    # reverted -> re-open for another attempt (still non-destructive: no git revert here)
+                    _gl_status = _verdict["verdict"] if _verdict["verdict"] != "reverted" else "open"
+                    _gl_extra["grounded_verdict"] = _verdict
+                    if _verdict["verdict"] != "completed":
+                        print(f"[autopilot]   ⚑ {lug_id} grounded gate: {_verdict['verdict']} — {_verdict['reason']}",
+                              file=sys.stderr)
+            except Exception as _gexc:
+                print(f"[autopilot]   grounded gate skipped for {lug_id}: {_gexc}", file=sys.stderr)
+            self._dispatch.update_lug_status(lug_id, _gl_status, _gl_extra)
+            print(f"[autopilot]   ✓ {lug_id} done ({_elapsed_lug}s, tokens={lug_tokens}) [{_gl_status}]", file=sys.stderr)
             return True, ""
         else:
             print(
@@ -3024,6 +3252,7 @@ class OziAutopilot:
                 "run_id": self.run_id,
                 "spoke_id": spoke_id,
                 "spoke_name": self.spoke_name,
+                "wheel_goal_north_star": (self.wheel_goal or {}).get("north_star", "")[:200] or None,
                 "completed_at": completed_at,
                 "lugs_completed": result.completed,
                 "lugs_failed": result.errors,

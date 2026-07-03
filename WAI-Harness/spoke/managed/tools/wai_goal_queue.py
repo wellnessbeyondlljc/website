@@ -54,6 +54,7 @@ class QueueItem:
     children_total: int
     children_completed: int
     children_remaining: int
+    goal_id: Optional[str] = None  # links this chain to a specific initiative goal
 
 
 @dataclass
@@ -178,17 +179,28 @@ def _compute_priority(chain: Dict[str, Any], initiatives: List[Dict[str, Any]]) 
       focus_lock=true  → 100
       lifecycle_state="approved" → 50
       default          → 10
+
+    When a chain carries goal_id, its linked goal's status is also factored in:
+    a chain linked to an already-met goal is deprioritized to PRIORITY_DEFAULT
+    so unmet goals get the initiative-level boost.
     """
     chain_gb = chain.get("gb")
+    goal_id = chain.get("goal_id")
     if not chain_gb or not initiatives:
         return PRIORITY_DEFAULT
     for initiative in initiatives:
-        if initiative.get("id") == chain_gb:
-            if initiative.get("focus_lock"):
-                return PRIORITY_FOCUS_LOCK
-            if initiative.get("lifecycle_state") == "approved":
-                return PRIORITY_APPROVED
-            return PRIORITY_DEFAULT
+        if initiative.get("id") != chain_gb:
+            continue
+        # If goal_id is present and the goal is already met, deprioritize
+        if goal_id:
+            for g in initiative.get("goals", []):
+                if isinstance(g, dict) and g.get("id") == goal_id and g.get("status") == "met":
+                    return PRIORITY_DEFAULT
+        if initiative.get("focus_lock"):
+            return PRIORITY_FOCUS_LOCK
+        if initiative.get("lifecycle_state") == "approved":
+            return PRIORITY_APPROVED
+        return PRIORITY_DEFAULT
     return PRIORITY_DEFAULT
 
 
@@ -315,6 +327,7 @@ def queue_query(
             children_total=children_total,
             children_completed=children_completed,
             children_remaining=children_remaining,
+            goal_id=chain.get("goal_id"),
         )
         items.append(item)
 

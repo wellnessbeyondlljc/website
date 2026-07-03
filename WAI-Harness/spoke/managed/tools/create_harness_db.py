@@ -11,7 +11,7 @@ Idempotent, migration-versioned creation of harness.db:
 Usage:
   python3 tools/create_harness_db.py [--db-path PATH] [--migrations-dir DIR]
 Defaults: --db-path <base>/managed/harness.db (v4: WAI-Harness/spoke/local/managed)
-          --migrations-dir managed/migrations
+          --migrations-dir <this file's dir>/../managed-migrations
 """
 import argparse
 import datetime
@@ -39,6 +39,13 @@ def _managed_base(spoke_root="."):
 
 
 DEFAULT_DB = str(_managed_base() / "harness.db")
+# Migrations are source (distributed via managed/), not per-spoke runtime state,
+# so this resolves relative to THIS FILE, not CWD or _managed_base()'s v4-aware
+# runtime base. The old default "managed/migrations" only worked if invoked from
+# exactly spoke/ (one specific CWD) and even then pointed at a directory that
+# was never created -- migrations actually live at the hyphenated sibling
+# managed-migrations/, not a nested managed/migrations/.
+DEFAULT_MIGRATIONS_DIR = str(Path(__file__).resolve().parent.parent / "managed-migrations")
 
 VECTOR_DIM = 384  # bge-small/MiniLM class (spec-storage-layer-v1)
 VECTOR_TABLES = ("cg_embeddings", "session_embeddings", "pattern_embeddings")
@@ -96,7 +103,7 @@ def _try_vector_tables(con):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--db-path", default=DEFAULT_DB)
-    ap.add_argument("--migrations-dir", default="managed/migrations")
+    ap.add_argument("--migrations-dir", default=DEFAULT_MIGRATIONS_DIR)
     args = ap.parse_args(argv)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.db_path)), exist_ok=True)

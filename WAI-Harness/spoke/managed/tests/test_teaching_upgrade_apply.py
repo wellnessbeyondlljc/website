@@ -5,13 +5,23 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-from teaching_upgrade_apply import apply_upgrade, UPGRADE_FAILURES_FILE, BASE_VERSION_FILE
+from teaching_upgrade_apply import apply_upgrade, UPGRADE_FAILURES_FILE, BASE_VERSION_FILE, _spoke_base
 
 
 def _make_spoke(tmp: Path) -> Path:
     spoke = tmp / "spoke"
     (spoke / "WAI-Spoke" / "lugs" / "incoming").mkdir(parents=True, exist_ok=True)
     return spoke
+
+
+def _wb(spoke: Path) -> Path:
+    """The resolved working base apply_upgrade actually writes under (matches
+    its own `base = _spoke_base(spoke_path)`). c2c40c2 (P2 v3-noop sweep) made
+    BASE_VERSION_FILE/UPGRADE_FAILURES_FILE resolve relative to this base
+    instead of a hardcoded "WAI-Spoke/..." prefix, but this test file wasn't
+    updated to match -- it kept checking bare `spoke / X_FILE`, which only
+    coincidentally worked before the sweep shortened the constants."""
+    return _spoke_base(spoke)
 
 
 def _make_consolidated(tmp: Path, teachings: list[dict]) -> Path:
@@ -57,7 +67,7 @@ def test_skip_when_verification_already_passes(tmp_path):
     assert result["outcomes"][0]["outcome"] == "SKIP"
     assert result["failure_count"] == 0
     assert result["version_written"] is True
-    assert (spoke / BASE_VERSION_FILE).read_text().strip() == "1.1.0"
+    assert (_wb(spoke) / BASE_VERSION_FILE).read_text().strip() == "1.1.0"
 
 
 # --- ACCEPTED path: missing teaching applied and verified ---
@@ -78,7 +88,7 @@ def test_accepted_when_apply_fixes_verification(tmp_path):
     assert result["outcomes"][0]["outcome"] == "ACCEPTED"
     assert result["failure_count"] == 0
     assert marker.exists()
-    assert (spoke / BASE_VERSION_FILE).read_text().strip() == "1.1.0"
+    assert (_wb(spoke) / BASE_VERSION_FILE).read_text().strip() == "1.1.0"
 
 
 # --- FAILED path: apply cannot satisfy verification ---
@@ -100,13 +110,13 @@ def test_failed_when_apply_does_not_fix(tmp_path):
     assert result["failure_count"] == 1
 
     # Failure logged
-    failures_path = spoke / UPGRADE_FAILURES_FILE
+    failures_path = _wb(spoke) / UPGRADE_FAILURES_FILE
     assert failures_path.exists()
     lines = [json.loads(l) for l in failures_path.read_text().strip().splitlines()]
     assert any(l["id"] == "t-fail" for l in lines)
 
     # base_version NOT written when there are failures
-    assert not (spoke / BASE_VERSION_FILE).exists()
+    assert not (_wb(spoke) / BASE_VERSION_FILE).exists()
 
 
 # --- Failure continues to next teaching ---
@@ -169,7 +179,7 @@ def test_dry_run_does_not_write_anything(tmp_path):
     result = apply_upgrade(spoke, tf, dry_run=True)
     assert result["dry_run"] is True
     assert not marker.exists()
-    assert not (spoke / BASE_VERSION_FILE).exists()
+    assert not (_wb(spoke) / BASE_VERSION_FILE).exists()
     assert result["outcomes"][0]["outcome"] == "WOULD_APPLY"
 
 
@@ -184,7 +194,7 @@ def test_base_version_updated_on_full_success(tmp_path):
     tf = _make_consolidated(tmp_path, [teaching])
 
     apply_upgrade(spoke, tf)
-    bv = (spoke / BASE_VERSION_FILE).read_text().strip()
+    bv = (_wb(spoke) / BASE_VERSION_FILE).read_text().strip()
     assert bv == "1.1.0"
 
 

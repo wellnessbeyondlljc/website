@@ -265,6 +265,8 @@ def test_count_dispatchable_excludes_capgraph_blocked(local):
             "id": "b", "model_fit": "sonnet", "execution_mode": "subagent",
             "blocked": False,
             "type": "impl",
+            "title": "a normal dispatchable lug",  # groom_eligible (added after this test) requires len>=10
+            "missing_fields": [],
         },
     ]
     dispatchable = se.count_dispatchable(scored)

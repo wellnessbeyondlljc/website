@@ -219,5 +219,37 @@ class TestAbsorptionCandidates(ConvergeBase):
         self.assertNotIn("sidGone", wg.live_lanes(self.base))
 
 
+class TestDetectTestCmd(unittest.TestCase):
+    """WHEEL RULE (2026-07-01): tests/critical_paths.sh, when present, is the
+    gate — it must take priority over generic pytest-dir detection so
+    /wai-converge defaults to it without any spoke-side --test-cmd wiring."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="detect-test-cmd-")
+
+    def tearDown(self):
+        subprocess.run(["rm", "-rf", self.tmp])
+
+    def test_prefers_critical_paths_sh_over_pytest_dir(self):
+        tests_dir = os.path.join(self.tmp, "tests")
+        os.makedirs(tests_dir)
+        cp = os.path.join(tests_dir, "critical_paths.sh")
+        with open(cp, "w") as f:
+            f.write("#!/usr/bin/env bash\nexit 0\n")
+        os.chmod(cp, 0o755)
+        cmd = cc._detect_test_cmd(self.tmp)
+        self.assertEqual(cmd, ["bash", cp])
+
+    def test_falls_back_to_pytest_dir_when_absent(self):
+        tests_dir = os.path.join(self.tmp, "tests")
+        os.makedirs(tests_dir)
+        cmd = cc._detect_test_cmd(self.tmp)
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertIn("pytest", cmd)
+
+    def test_none_when_nothing_detected(self):
+        self.assertIsNone(cc._detect_test_cmd(self.tmp))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

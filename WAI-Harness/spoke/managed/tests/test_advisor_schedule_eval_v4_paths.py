@@ -62,9 +62,25 @@ def _make_v4_tree(tmp_path: Path) -> Path:
 
 
 def _make_coexist_tree(tmp_path: Path) -> Path:
-    """Both v3 and v4 trees present."""
+    """Both v3 and v4 trees present, but UNACTIVATED.
+
+    wai_paths._v4_activated() treats a real v4 local/WAI-State.json as an
+    explicit v4-cutover signal (mirrors .claude/hooks/harness_mode.sh) -- so
+    reusing _make_v4_tree() here (which writes that file) would itself BE the
+    activation trigger, making this fixture accidentally represent an
+    ALREADY-ACTIVATED spoke while every caller's test name/docstring claims
+    "coexist, no mode, defaults to v3" (i.e. UNactivated). Build the v4
+    schedule-index/advisors content directly (needed so tests can assert v3
+    resolution isn't accidentally reading the v4 copy) but omit the v4
+    WAI-State.json specifically."""
     _make_v3_tree(tmp_path)
-    _make_v4_tree(tmp_path)
+    local = tmp_path / "WAI-Harness" / "spoke" / "local"
+    local.mkdir(parents=True)
+    advisors = tmp_path / "WAI-Harness" / "spoke" / "advisors"
+    advisors.mkdir(parents=True)
+    (advisors / "schedule-index.json").write_text(json.dumps([]))
+    (advisors / "tool-advisor").mkdir()
+    (advisors / "tool-advisor" / "scan_state.json").write_text(json.dumps({}))
     return tmp_path
 
 

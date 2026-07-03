@@ -21,9 +21,19 @@ from unittest.mock import MagicMock, patch
 # Path helpers
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
-HUB_TOOLS = REPO_ROOT / "hub" / "tools"
-ADAPTER_DIR = REPO_ROOT / "hub" / "WAI-Hub" / "advisors" / "navigator" / "adapters"
 TOOLS_DIR = REPO_ROOT / "tools"
+# REPO_ROOT here is WAI-Harness/spoke/managed (correct for TOOLS_DIR above, since
+# that's where this file's sibling tools/ lives) -- but the hub tree is a SIBLING
+# of spoke/, not nested under spoke/managed/, so hub paths need WAI_HARNESS_ROOT
+# (2 more levels up: managed -> spoke -> WAI-Harness), not REPO_ROOT. The old
+# `REPO_ROOT / "hub" / "tools"` always resolved to a nonexistent
+# spoke/managed/hub/tools and silently broke every test that used it (either a
+# hard FileNotFoundError via _load_module, or a self.skipTest() masking it --
+# same root cause as the matching bug fixed in ozi_autopilot.py's own deepseek
+# dispatch-path resolution).
+WAI_HARNESS_ROOT = REPO_ROOT.parent.parent
+HUB_TOOLS = WAI_HARNESS_ROOT / "hub" / "local" / "tools"
+ADAPTER_DIR = WAI_HARNESS_ROOT / "hub" / "local" / "WAI-Hub" / "advisors" / "navigator" / "adapters"
 
 
 def _load_module(path: Path, name: str):
@@ -48,8 +58,10 @@ _FAKE_DEEPSEEK_RESPONSE = {
 
 
 class _FakeHTTPResp:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, status: int = 200):
         self._data = json.dumps(payload).encode("utf-8")
+        self.status = status
+        self.headers = {}  # _shared.py's http_post_json/http_json call .headers.items()
 
     def read(self):
         return self._data
@@ -228,10 +240,31 @@ class TestOziAutopilotDeepseekProviderWiring(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Group 3 — Navigator adapter contract (mocked HTTP)
 # ---------------------------------------------------------------------------
+def _load_deepseek_adapter_instance():
+    """Load adapters.deepseek.DeepSeekAdapter as a real instance.
+
+    _load_module()'s spec_from_file_location approach loads the file as a
+    STANDALONE module with no package context, which crashes deepseek.py's
+    `from ._base import ProviderAdapter` (relative import needs a real parent
+    package). adapters/ has an __init__.py (a real package) -- putting its
+    PARENT (navigator/) on sys.path and importing the dotted path lets Python
+    set up the package context correctly, so the relative import resolves.
+
+    All Navigator adapters (deepseek.py included) are classes implementing
+    the ProviderAdapter ABC (_base.py) -- there is no module-level function
+    API on any adapter. Returns an instance so callers can call its methods
+    directly (mod.is_available() etc, unchanged from callers' perspective)."""
+    navigator_dir = str(ADAPTER_DIR.parent)
+    if navigator_dir not in sys.path:
+        sys.path.insert(0, navigator_dir)
+    import importlib
+    module = importlib.import_module("adapters.deepseek")
+    return module.DeepSeekAdapter()
+
+
 class TestDeepseekNavigatorAdapter(unittest.TestCase):
     def _load_adapter(self):
-        adapter_path = ADAPTER_DIR / "deepseek.py"
-        return _load_module(adapter_path, "deepseek_adapter")
+        return _load_deepseek_adapter_instance()
 
     def test_is_available_false_without_key(self):
         mod = self._load_adapter()
@@ -309,7 +342,7 @@ class TestDeepseekLiveIntegration(unittest.TestCase):
     """Live API tests. Run with: DEEPSEEK_API_KEY=<key> python3 -m pytest tests/test_deepseek_integration.py -k live -v"""
 
     def _load_adapter(self):
-        return _load_module(ADAPTER_DIR / "deepseek.py", "deepseek_live")
+        return _load_deepseek_adapter_instance()
 
     def test_deepseek_chat_responds_to_simple_prompt(self):
         mod = self._load_adapter()

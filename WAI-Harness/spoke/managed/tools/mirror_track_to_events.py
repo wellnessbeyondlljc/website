@@ -25,9 +25,48 @@ _REPO_ROOT = os.path.dirname(_HERE)
 # Resolve the active spoke working base (v4: WAI-Harness/spoke/local; v3: WAI-Spoke).
 # _REPO_ROOT is WAI-Harness/spoke/managed, so the spoke root is three dirnames up.
 sys.path.insert(0, _HERE)
-from wai_paths import resolve_wai_root  # noqa: E402  harness-mode root resolver
+from wai_paths import resolve_wai_root, category  # noqa: E402  harness-mode root resolver
 
 _SPOKE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_REPO_ROOT)))
+
+
+def _resolve_paths(spoke_root: str, session_id) -> dict:
+    """Resolve sessions_dir / track_path / state_path under the active harness base.
+
+    v4 (WAI_HARNESS_MODE=v4-only): <root>/WAI-Harness/spoke/local/{sessions,WAI-State.json}.
+    v3: <root>/WAI-Spoke/{sessions,WAI-State.json} (guarded fallback only).
+
+    Restored verbatim from 8d98c44 (P2 v3-noop sweep) -- was genuinely wired
+    into main() there but lost from this file's ancestry in a later merge,
+    with main()'s equivalent inline _BASE-based logic surviving in its place
+    (so runtime behavior stayed correct; only this dedicated, testable
+    function regressed)."""
+    sessions_dir = (category(spoke_root, "sessions")
+                    or os.path.join(spoke_root, "WAI-Spoke", "sessions"))
+    state_path = (category(spoke_root, "WAI-State.json")
+                  or os.path.join(spoke_root, "WAI-Spoke", "WAI-State.json"))
+    track_path = (os.path.join(sessions_dir, session_id, "track.jsonl")
+                  if session_id else None)
+    return {
+        "sessions_dir": sessions_dir,
+        "track_path": track_path,
+        "state_path": state_path,
+    }
+
+
+def _wai_base(spoke_root=None):
+    """Resolve the spoke working base, base-aware, for an arbitrary spoke_root
+    (matches the _wai_base(spoke) convention used elsewhere, e.g.
+    spoke_integrity_score.py). Defaults to _SPOKE_ROOT (this module's own
+    real repo location) when called with no argument, preserving the
+    existing _BASE behavior below; parameterized so callers/tests can
+    resolve against a different root without needing this module to be
+    re-imported from a different cwd."""
+    root = spoke_root if spoke_root is not None else _SPOKE_ROOT
+    r, mode = resolve_wai_root(str(root))
+    return r if (r and mode != "none") else os.path.join(str(root), "WAI-Spoke")
+
+
 _root, _mode = resolve_wai_root(_SPOKE_ROOT)
 _BASE = _root if (_root and _mode != "none") else os.path.join(_SPOKE_ROOT, "WAI-Spoke")
 

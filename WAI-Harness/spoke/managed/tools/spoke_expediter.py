@@ -37,6 +37,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lug_utils import get_lug_id, get_lug_type, get_lug_status, get_lug_title, resolve_attribution
 import wai_paths  # noqa: E402  harness-mode root resolver (single source of truth)
 
+try:
+    import capgraph_blocks  # P2: remember blocks caught at the expediter layer (pre-phase-3)
+    import goal_planner     # P2: run the replan ladder where all_open_lugs is available
+    _CAPGRAPH_AVAILABLE = True
+except Exception:
+    _CAPGRAPH_AVAILABLE = False
+
 
 def _v4_activated(spoke_path):
     """True when the spoke is v4-activated — has WAI-Harness/spoke/local or the
@@ -67,6 +74,23 @@ def _advisors_dir(spoke_path):
     if _v4_activated(spoke_path):
         return os.path.join(str(spoke_path), "WAI-Harness", "spoke", "advisors")
     return os.path.join(str(spoke_path), "WAI-Spoke", "advisors")
+
+
+def expedition_report_path(spoke_path, report_id):
+    """Resolve the on-disk path of an expedition report for the given spoke.
+
+    Mirrors where run_hygiene_scout WRITES the report (advisors/expediter/
+    expeditions/<report_id>.json) so emitted refinement lugs point a downstream
+    agent at the REAL path — v4 spokes have no WAI-Spoke/advisors tree.
+
+    Restored from 8d98c44 (P2 v3-noop sweep) -- was genuinely a dedicated,
+    testable function there, calling into run_hygiene_scout's own report_path
+    construction; got inlined back into run_hygiene_scout in a later merge
+    (same identical logic survives there, just not as a callable), losing
+    testability without losing correctness."""
+    return os.path.join(
+        _advisors_dir(spoke_path), "expediter", "expeditions", f"{report_id}.json"
+    )
 
 
 def now():
@@ -414,6 +438,21 @@ def assign_execution_mode(lug, quality_score, all_open_lugs, spoke_path):
     routed_to = lug.get("routed_to") or "LOCAL"
     blocked_by = lug.get("blocked_by") or []
 
+    # P2: pre-empt dispatch if a known UNRESOLVED CapabilitiesGraph antipattern exists for
+    # this lug. Checked BEFORE blocked_by so we don't waste a dispatch slot on a lug that
+    # has a structural pattern history (or a fleet-distributed antipattern on this lug type).
+    if _CAPGRAPH_AVAILABLE:
+        try:
+            cap_hits = capgraph_blocks.consult(lug, spoke_path)
+            if cap_hits:
+                first = cap_hits[0]
+                bc = first.get("block_class", "?")
+                sig = first.get("id", "?")
+                lug["_capgraph_blocked"] = True  # propagated to scored["blocked"] below
+                return ("tender", None, f"capgraph preempt: {bc} ({sig})")
+        except Exception:
+            pass
+
     # Check if any blocker is still unresolved
     unresolved_blockers = [b for b in blocked_by if not is_blocker_resolved(b, spoke_path)]
 
@@ -421,6 +460,26 @@ def assign_execution_mode(lug, quality_score, all_open_lugs, spoke_path):
     if unresolved_blockers:
         # Blocked by unresolved deps → tender
         hint = f"blocked: {', '.join(unresolved_blockers[:2])}"
+        # P2: remember the block + run the replan ladder HERE (where all_open_lugs is
+        # available, so rung-2 substitute toward a sibling is actually reachable —
+        # blocked lugs are pre-filtered out of ozi phase 3 at ozi:1870).
+        if _CAPGRAPH_AVAILABLE:
+            def _sibling(l):
+                gid = l.get("goal_id")
+                init = l.get("initiative") or l.get("initiative_id")
+                for o in (all_open_lugs or []):
+                    if get_lug_id(o) == get_lug_id(l) or (o.get("blocked_by") or []):
+                        continue
+                    if (gid and o.get("goal_id") == gid) or (init and (o.get("initiative") or o.get("initiative_id")) == init):
+                        return get_lug_id(o)
+                return None
+            try:
+                goal_planner.replan_on_block(
+                    lug, "blocked_by", hint, ctx=goal_planner.new_ctx(),
+                    spoke_local=spoke_path, sibling_lookup=_sibling,
+                )
+            except Exception:
+                pass
         return ("tender", None, hint)
 
     if routed_to != "LOCAL":
@@ -498,8 +557,21 @@ def groom_eligible(lug):
     a perceive, and (verify OR acceptance_criteria). Mirrors the engine's gate
     exactly so 'dispatchable' here means 'would actually dispatch', not just
     'right type'. This closes the expediter<->groom disconnect that let a spoke
-    advertise dispatchable>0 while the groom rejected every lug (eligible=0)."""
+    advertise dispatchable>0 while the groom rejected every lug (eligible=0).
+
+    Accepts EITHER a raw lug (with perceive/execute/verify on it) OR a SCORED
+    SUMMARY dict (from scan/scoring — carries `missing_fields` but NOT the raw PEV
+    bodies). The scored-summary path was a silent zero-ROI bug: count_dispatchable
+    passes scored summaries here, so re-reading the absent perceive/execute/verify
+    made groom_eligible return False for EVERY lug → dispatchable always 0 even when
+    the underlying lugs had full PEV. When `missing_fields` is present, decide from it."""
     title = str(lug.get("title", "") or "")
+    if len(title) < 10:
+        return False
+    if "missing_fields" in lug:
+        missing = set(lug.get("missing_fields") or [])
+        execute_bad = bool({"execute", "execute_too_vague"} & missing)
+        return not (("perceive" in missing) or execute_bad or ("verify" in missing))
     execute = lug.get("execute") or lug.get("e") or ""
     perceive = lug.get("perceive") or lug.get("p") or ""
     verify = lug.get("verify") or lug.get("v") or ""
@@ -510,14 +582,19 @@ def groom_eligible(lug):
     has_pev = bool(str(perceive).strip()) and execute_nonempty and (
         bool(str(verify).strip()) or (isinstance(ac, list) and len(ac) > 0) or bool(ac)
     )
-    return len(title) >= 10 and execute_nonempty and has_pev
+    return execute_nonempty and has_pev
 
 
 def count_dispatchable(scored):
     """Lugs that pass the autopilot dispatch filter (model set, not manual, not
     blocked, dispatchable type) AND would clear the groom gate (full PEV). The
     groom-eligibility check keeps this count truthful: a lug AP cannot actually
-    dispatch (missing PEV) no longer inflates 'dispatchable'/has_work."""
+    dispatch (missing PEV) no longer inflates 'dispatchable'/has_work.
+
+    P2: scored["blocked"] is True for both explicit blocked_by deps AND
+    CapabilitiesGraph-preempted lugs (capgraph_blocked set in assign_execution_mode),
+    so both are excluded from the dispatchable count automatically.
+    """
     return [
         s for s in scored
         if s.get("model_fit") and str(s.get("model_fit")).lower() != "unset"
@@ -669,21 +746,34 @@ def list_signals_undelivered(spoke_path):
 
 def count_teachings_pending(spoke_path):
     """Best-effort: hub current teachings not yet in this spoke's processed dirs.
-    Returns 0 on any path miss (never raises)."""
+    Returns 0 on any path miss (never raises).
+
+    Path history: the two original candidates were both dead --
+    "spoke/base/teachings/current" was a guessed nesting that never existed
+    (real path is "spoke/current"), and "framework/teachings" was the
+    pre-disambiguation path (signal-hub-teaching-path-disambiguation-v1:
+    framework teachings moved to "teachings_repo/framework/current"). So this
+    function always returned 0 regardless of actual pending teachings.
+
+    hub_path (wheel.hub_path) resolves to the bare hub root; the real
+    teachings_repo content is checked under BOTH hub/local/ (live working
+    copy) and hub/managed/ (canonical/distributed) -- these two trees are
+    presently diverged in both directions (managed has more framework
+    teachings, local has more spoke teachings; a reconciliation gap outside
+    this function's scope to resolve) so this unions across every category
+    AND every root that actually exists rather than picking one as
+    authoritative, to avoid silently under-counting from either side."""
     hub = _hub_path(spoke_path)
     if not hub:
         return 0
-    cur = None
-    for cand in (
-        os.path.join(hub, "teachings_repo", "spoke", "base", "teachings", "current"),
-        os.path.join(hub, "framework", "teachings"),
-    ):
-        if os.path.isdir(cand):
-            cur = cand
-            break
-    if not cur:
+    available = set()
+    for root in ("local", "managed"):
+        for category in ("spoke", "framework"):
+            cand = os.path.join(hub, root, "teachings_repo", category, "current")
+            if os.path.isdir(cand):
+                available |= {os.path.basename(f) for f in glob.glob(os.path.join(cand, "*.teaching"))}
+    if not available:
         return 0
-    available = {os.path.basename(f) for f in glob.glob(os.path.join(cur, "*.teaching"))}
     processed = set()
     for sub in ("seed", "ingest", "processed"):
         pd = os.path.join(_base(spoke_path), "teachings", sub)
@@ -1273,7 +1363,9 @@ def main():
             "filepath": lug.get("_filepath", ""),
             "scored_at": now(),
             # Enrichment for manifest + ready-queue matrix categorization.
-            "blocked": _is_blocked(lug, spoke_path),
+            # capgraph_blocked: a known unresolved CapabilitiesGraph antipattern pre-empted
+            # this lug at the assign_execution_mode seam (P2 fleet-immunization).
+            "blocked": _is_blocked(lug, spoke_path) or lug.get("_capgraph_blocked", False),
             "scout": _is_scout(lug),
             "initiative_scoped": (lug_id_for_focus in focus_lock_ids) or bool(lug.get("initiative")),
             "safe_to_auto_adopt": bool(lug.get("safe_to_auto_adopt")),

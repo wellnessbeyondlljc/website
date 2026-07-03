@@ -27,6 +27,7 @@ def _load(mod):
 V = _load("validate_lug_v4")
 LU = _load("lug_utils")
 CR = _load("change_registry")
+WP = _load("wai_paths")
 
 
 def _valid_v4_lug(**over):
@@ -170,16 +171,23 @@ def test_v3_gets_migrate_prompt():
 
 def test_this_lug_is_valid_v4():
     """Dogfood: the impl lug driving this work validates as a conformant v4 lug."""
-    p = os.path.join(
-        ROOT, "WAI-Spoke", "lugs", "bytype", "implementation", "in_progress",
-        "impl-lug-schema-v4-validator-v1.json",
-    )
-    if not os.path.exists(p):
-        # may already be completed
-        p = os.path.join(
-            ROOT, "WAI-Spoke", "lugs", "bytype", "implementation", "completed",
-            "impl-lug-schema-v4-validator-v1.json",
-        )
+    # ROOT is spoke/managed; the real repo root (needed for wai_paths' v4-aware
+    # lugs resolution) is 2 more levels up (spoke -> WAI-Harness -> repo root).
+    spoke_root = os.path.dirname(os.path.dirname(os.path.dirname(ROOT)))
+    lugs_root = WP.category(spoke_root, "lugs") or os.path.join(spoke_root, "WAI-Spoke", "lugs")
+    candidates = [
+        os.path.join(lugs_root, "bytype", "implementation", "in_progress",
+                      "impl-lug-schema-v4-validator-v1.json"),
+        os.path.join(lugs_root, "bytype", "implementation", "completed",
+                      "impl-lug-schema-v4-validator-v1.json"),
+        # legacy WAI-Spoke fallback, in case the active harness ever reverts to v3
+        os.path.join(ROOT, "WAI-Spoke", "lugs", "bytype", "implementation", "in_progress",
+                      "impl-lug-schema-v4-validator-v1.json"),
+        os.path.join(ROOT, "WAI-Spoke", "lugs", "bytype", "implementation", "completed",
+                      "impl-lug-schema-v4-validator-v1.json"),
+    ]
+    p = next((c for c in candidates if os.path.exists(c)), None)
+    assert p, f"impl-lug-schema-v4-validator-v1.json not found in any candidate: {candidates}"
     lug = json.load(open(p))
     r = V.validate_lug_v4(lug)
     assert r["ok"], r["failures"]

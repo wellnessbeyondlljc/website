@@ -22,11 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 RANK_TIER = {1: 3.0, 2: 2.0, 3: 1.5}
 LIFECYCLE_FACTOR = {"dormant": 0.05, "complete": 0.0, "approved": 1.0,
                     "active": 1.0, "measuring": 1.0, "proposed": 0.5}
-# Lifecycle states whose lugs are treated as weight ~0 — never dispatched.
-INERT_STATES = ("dormant", "complete")
-# Policy defaults (overridable via spec-initiative-priority-v1.json config block).
-DEFAULT_HEALTH_FLOOR_PCT = 20      # reserve UP TO this % of the budget for health (a CAP)
-DEFAULT_CONCENTRATION_MAX_PCT = 70  # one aspirational initiative may take AT MOST this % of the budget
 
 
 def initiative_weight(it: Optional[Dict[str, Any]]) -> float:
@@ -53,95 +48,38 @@ def top_aspirational(initiatives: Dict[str, Dict[str, Any]]) -> Optional[str]:
     return max(cand, key=lambda x: x[1])[0]
 
 
-def _iid_of(l: Dict[str, Any]) -> Optional[str]:
-    return l.get("initiative") or l.get("initiative_id")
-
-
-def _is_dispatchable(it: Optional[Dict[str, Any]]) -> bool:
-    """A lug is inert (never dispatched) iff its initiative is dormant/complete.
-    Lugs with no initiative (it is None) are dispatchable — they are not inert."""
-    return (it or {}).get("lifecycle_state") not in INERT_STATES
-
-
-def _ordered_plan(lugs: List[Dict[str, Any]], initiatives: Dict[str, Dict[str, Any]],
-                  budget: int, health_floor_pct: int = DEFAULT_HEALTH_FLOOR_PCT,
-                  concentration_max_pct: int = DEFAULT_CONCENTRATION_MAX_PCT
-                  ) -> List[Tuple[Dict[str, Any], str]]:
-    """Full portfolio dispatch order (NOT trimmed to budget — the caller's budget
-    gate trims). Order:
-      1. health, up to the health-floor cap (the reservation — a CAP, not a floor)
-      2. the single top aspirational initiative, up to the concentration cap
-      3. all other aspirational work (so no one initiative starves the rest)
-      4. top-aspirational overflow (concentrate leftover budget, don't waste it)
-      5. health overflow (only after aspirational work is exhausted)
-    Lugs tied to a dormant/complete initiative are excluded entirely (weight ~0).
-    """
-    def w(l):
-        return initiative_weight(initiatives.get(_iid_of(l)))
-
-    live = [l for l in lugs if _is_dispatchable(initiatives.get(_iid_of(l)))]
-    top = top_aspirational(initiatives)
-    health = sorted([l for l in live if _flavor(initiatives.get(_iid_of(l))) == "health"],
-                    key=w, reverse=True)
-    aspir = [l for l in live if _flavor(initiatives.get(_iid_of(l))) != "health"]
-    top_lugs = sorted([l for l in aspir if _iid_of(l) == top], key=w, reverse=True)
-    other = sorted([l for l in aspir if _iid_of(l) != top], key=w, reverse=True)
-
-    health_cap = math.ceil(budget * health_floor_pct / 100.0) if budget > 0 else 0
-    conc_cap = math.ceil(budget * concentration_max_pct / 100.0) if budget > 0 else 0
-
-    plan: List[Tuple[Dict[str, Any], str]] = []
-    plan += [(l, "health-floor") for l in health[:health_cap]]
-    plan += [(l, f"top-aspirational:{top}") for l in top_lugs[:conc_cap]]
-    plan += [(l, "aspirational-other") for l in other]
-    plan += [(l, "top-aspirational-overflow") for l in top_lugs[conc_cap:]]
-    plan += [(l, "health-overflow") for l in health[health_cap:]]
-    return plan
-
-
-def reorder_for_dispatch(lugs: List[Dict[str, Any]], initiatives: Dict[str, Dict[str, Any]],
-                         budget: int, health_floor_pct: int = DEFAULT_HEALTH_FLOOR_PCT,
-                         concentration_max_pct: int = DEFAULT_CONCENTRATION_MAX_PCT
-                         ) -> List[Dict[str, Any]]:
-    """Reorder open lugs for portfolio dispatch (returns lug objects, untrimmed).
-
-    The caller iterates and stops at its own budget gate; this only decides the
-    ORDER (health-floor first, then concentrate on the top aspirational initiative)
-    and DROPS dormant/complete-initiative lugs. Pure — never reads disk."""
-    return [l for l, _ in _ordered_plan(lugs, initiatives, budget,
-                                        health_floor_pct, concentration_max_pct)]
-
-
 def allocate(lugs: List[Dict[str, Any]], initiatives: Dict[str, Dict[str, Any]],
-             budget: int, health_floor_pct: int = DEFAULT_HEALTH_FLOOR_PCT,
-             concentration_max_pct: int = DEFAULT_CONCENTRATION_MAX_PCT) -> Dict[str, Any]:
-    """Return an ordered dispatch plan trimmed to budget: health up to the floor
-    (cap), then the single top aspirational initiative (bounded by the concentration
-    max), then other aspirational, then overflow."""
-    plan = _ordered_plan(lugs, initiatives, budget, health_floor_pct,
-                         concentration_max_pct)[: max(budget, 0)]
-    health_cap = math.ceil(budget * health_floor_pct / 100.0) if budget > 0 else 0
-    conc_cap = math.ceil(budget * concentration_max_pct / 100.0) if budget > 0 else 0
-    return {"chosen_initiative": top_aspirational(initiatives),
-            "health_cap": health_cap, "concentration_cap": conc_cap,
-            "plan": [(_lid(l), r) for l, r in plan],
+             budget: int, health_floor_pct: int = 20) -> Dict[str, Any]:
+    """Return an ordered dispatch plan: health up to the floor (cap), then the top
+    aspirational initiative, then remaining aspirational by weight."""
+    def iid_of(l):
+        return l.get("initiative") or l.get("initiative_id")
+
+    def w(l):
+        return initiative_weight(initiatives.get(iid_of(l)))
+
+    top = top_aspirational(initiatives)
+    health = sorted([l for l in lugs if _flavor(initiatives.get(iid_of(l))) == "health"],
+                    key=w, reverse=True)
+    aspir = [l for l in lugs if _flavor(initiatives.get(iid_of(l))) != "health"]
+    top_lugs = sorted([l for l in aspir if iid_of(l) == top], key=w, reverse=True)
+    other = sorted([l for l in aspir if iid_of(l) != top], key=w, reverse=True)
+
+    health_cap = math.ceil(budget * health_floor_pct / 100.0)
+    plan, reasons = [], []
+    for l in health[:health_cap]:
+        plan.append(l); reasons.append("health-floor")
+    for l in top_lugs:
+        if len(plan) >= budget:
+            break
+        plan.append(l); reasons.append(f"top-aspirational:{top}")
+    for l in other:
+        if len(plan) >= budget:
+            break
+        plan.append(l); reasons.append("aspirational-overflow")
+    return {"chosen_initiative": top, "health_cap": health_cap,
+            "plan": [(_lid(l), r) for l, r in zip(plan, reasons)],
             "dispatched": len(plan), "budget": budget}
-
-
-def load_policy(spec_path: Optional[str] = None) -> Tuple[int, int]:
-    """Read (health_floor_pct, concentration_max_pct) from the initiative-priority
-    spec config block. Fail-open to the module defaults if the spec is absent/bad."""
-    floor, conc = DEFAULT_HEALTH_FLOOR_PCT, DEFAULT_CONCENTRATION_MAX_PCT
-    try:
-        if spec_path is None:
-            spec_path = (Path(__file__).resolve().parent.parent / "knowledge" /
-                         "spec" / "open" / "spec-initiative-priority-v1.json")
-        cfg = json.loads(Path(spec_path).read_text()).get("config", {})
-        floor = int(cfg.get("health_floor_pct", floor))
-        conc = int(cfg.get("concentration_max_pct", conc))
-    except Exception:
-        pass
-    return floor, conc
 
 
 def _lid(l):

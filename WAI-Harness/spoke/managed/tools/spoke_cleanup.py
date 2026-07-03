@@ -64,13 +64,34 @@ def _spoke_base(spoke_root="."):
     return "WAI-Spoke"  # last-resort v3 fallback
 
 
-SPOKE_DIR = _spoke_base()
-LUGS_DIR = os.path.join(SPOKE_DIR, "lugs")
-BYTYPE_DIR = os.path.join(LUGS_DIR, "bytype")
-ACTIVE_FILE = os.path.join(LUGS_DIR, "active", "WAI-Lugs-active.jsonl")
-INDEX_FILE = os.path.join(SPOKE_DIR, "WAI-LugIndex.jsonl")
-SESSIONS_DIR = os.path.join(SPOKE_DIR, "sessions")
-ARCHIVE_DIR = os.path.join(SPOKE_DIR, "archive")
+def _refresh_paths(spoke_root="."):
+    """(Re)compute the module-level path globals against spoke_root.
+
+    These used to be computed ONCE at import time (SPOKE_DIR = _spoke_base()
+    with no argument, i.e. against cwd at the moment `import spoke_cleanup`
+    first ran). That is correct for the tool's normal invocation (run as a
+    script with cwd already set to the target spoke) but breaks the moment
+    this module is imported into a longer-lived process that later changes
+    cwd -- e.g. pytest: the module is imported once at collection time
+    against the real repo root, then a test's `monkeypatch.chdir(tmp_path)`
+    has NO effect on these already-frozen globals, so phase_3/phase_5 (the
+    real v3 restructure/route logic) silently operate on the REAL spoke's
+    lugs/sessions trees instead of the test fixture -- verified as the root
+    cause of bug-managed-test-suite-deletes-tracked-lug-index-files-v1
+    (reproduced identically in two independent worktrees). Called fresh at
+    the top of main() so every invocation resolves paths against ITS OWN
+    actual target, not whatever cwd happened to be at first import."""
+    global SPOKE_DIR, LUGS_DIR, BYTYPE_DIR, ACTIVE_FILE, INDEX_FILE, SESSIONS_DIR, ARCHIVE_DIR
+    SPOKE_DIR = _spoke_base(spoke_root)
+    LUGS_DIR = os.path.join(SPOKE_DIR, "lugs")
+    BYTYPE_DIR = os.path.join(LUGS_DIR, "bytype")
+    ACTIVE_FILE = os.path.join(LUGS_DIR, "active", "WAI-Lugs-active.jsonl")
+    INDEX_FILE = os.path.join(SPOKE_DIR, "WAI-LugIndex.jsonl")
+    SESSIONS_DIR = os.path.join(SPOKE_DIR, "sessions")
+    ARCHIVE_DIR = os.path.join(SPOKE_DIR, "archive")
+
+
+_refresh_paths()
 
 # Types that get their own top-level folder in bytype/
 PROMOTED_TYPES = {"epic", "task", "feature", "bug", "implementation", "signal", "session-summary"}
@@ -513,9 +534,18 @@ def phase_7():
 
 def _is_v4_only(root="."):
     """True when this spoke runs on the v4 harness with no legacy WAI-Spoke/ tree.
-    This restructure tool only ever operated on WAI-Spoke/; on v4 it is a no-op."""
+    This restructure tool only ever operated on WAI-Spoke/; on v4 it is a no-op.
+
+    Checks for the literal legacy "WAI-Spoke" directory's absence -- NOT the
+    module-level SPOKE_DIR global, which in v4 mode resolves to the v4 tree
+    itself (WAI-Harness/spoke/local) and would always exist whenever mode is
+    "v4", making the old `not os.path.isdir(os.path.join(root, SPOKE_DIR))`
+    check structurally unable to ever return True."""
     _, mode = wai_paths.resolve_wai_root(root)
-    return mode == "v4" and not os.path.isdir(os.path.join(root, SPOKE_DIR))
+    return mode == "v4" and not os.path.isdir(os.path.join(root, "WAI-Spoke"))
+
+
+is_v4_only = _is_v4_only  # public alias for external callers/tests
 
 
 def main():
@@ -524,15 +554,20 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show changes without writing")
     dry_run = parser.parse_args().dry_run
 
+    # Re-resolve paths against the CURRENT cwd every call -- see _refresh_paths
+    # docstring. Critical when this module is imported once and main() is
+    # invoked later from a different cwd (tests; any long-lived process).
+    _refresh_paths()
+
     # v4 short-circuit: this is a v3-era restructure tool keyed entirely to WAI-Spoke/.
     # On a v4-only spoke that tree is gone, so the phases below would silently no-op.
     # Emit an explicit notice and exit cleanly instead (no phantom-tree work).
     if _is_v4_only():
-        print("=== SPOKE CLEANUP: NO-OP (v4-only harness) ===")
+        print("=== NO-OP (v4-only harness) ===")
         print("This tool restructures the legacy WAI-Spoke/ tree, which does not exist on a")
         print("v4-only spoke. The v4 lug store under WAI-Harness/spoke/local is already")
-        print("organized by harness_activate.py — nothing to restructure. Exiting 0.")
-        return
+        print("organized by harness_activate.py. Nothing to clean. Exiting 0.")
+        return 0
 
     print(f"=== SPOKE CLEANUP {'(DRY RUN)' if dry_run else ''} ===")
 

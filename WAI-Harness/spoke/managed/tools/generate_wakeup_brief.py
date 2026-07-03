@@ -620,14 +620,22 @@ def read_quality_health(spoke: "Optional[Path]") -> "Optional[dict]":
                 "ac_coverage_pct": None, "null_rate": None, "uncertified_lugs": []}
 
 
-def read_ac_drift(spoke: "Optional[Path]") -> "Optional[dict]":
+def read_ac_drift(spoke: "Optional[Path]", now=None) -> "Optional[dict]":
     """impl-derive-epic-ac-status-v1: per-open-epic AC drift vs lug evidence
     {epic_id: {under_report, over_report, mis_partial, total_drift}}. Degrades
-    gracefully (None) if the reconciler is unavailable; never blocks brief gen."""
+    gracefully (None) if the reconciler is unavailable; never blocks brief gen.
+
+    now is passed straight through to reconcile_epic_acs.read_ac_drift, which
+    defaults it to time.time() when None (real-time freshness classification
+    for actual brief generation). Exposed here so callers/tests can pin it --
+    the underlying evidence_for()/_test_fresh() freshness window is genuinely
+    time-dependent (drift/mis_partial classification changes as evidence ages
+    out of freshness_days), so without this passthrough this wrapper could
+    never be called deterministically."""
     if not spoke or not _AC_DRIFT_AVAILABLE:
         return None
     try:
-        return _read_ac_drift(str(_project_root_for(spoke)))
+        return _read_ac_drift(str(_project_root_for(spoke)), now=now)
     except Exception:
         return {}
 

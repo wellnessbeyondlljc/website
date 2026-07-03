@@ -22,6 +22,18 @@ else
   echo "WAI pre-commit: secret_precommit_scan.py not found — secret scan SKIPPED." >&2
 fi
 
+# Manifest integrity (blocking): a staged managed/ edit without a MANIFEST recut
+# strands the fleet on distribution ("corrupt master") — catch it here, not at push.
+manifest_gate=""
+for cand in \
+  "$repo_root/WAI-Harness/spoke/managed/tools/manifest_integrity_precommit.py" \
+  "$repo_root/tools/manifest_integrity_precommit.py"; do
+  if [ -f "$cand" ]; then manifest_gate="$cand"; break; fi
+done
+if [ -n "$manifest_gate" ]; then
+  python3 "$manifest_gate" --repo-root "$repo_root" || rc=1
+fi
+
 # Chain the existing health gate if present (non-fatal: it guards drift, not secrets).
 health=""
 for cand in \
@@ -30,10 +42,10 @@ for cand in \
   if [ -f "$cand" ]; then health="$cand"; break; fi
 done
 if [ -n "$health" ]; then
-  python3 "$health" "$repo_root" || echo "WAI pre-commit: health gate reported drift (non-blocking)." >&2
+  python3 "$health" --spoke-path "$repo_root" || echo "WAI pre-commit: health gate reported drift (non-blocking)." >&2
 fi
 
 if [ "$rc" -ne 0 ]; then
-  echo "WAI pre-commit: commit blocked by secret scan. Fix or rotate the secret above." >&2
+  echo "WAI pre-commit: commit blocked (secret scan and/or manifest integrity above). Bypass with --no-verify (sparingly)." >&2
 fi
 exit "$rc"

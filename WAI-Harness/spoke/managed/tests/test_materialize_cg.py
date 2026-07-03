@@ -29,7 +29,13 @@ CREATE = _load("create_harness_db")
 
 def _fresh_db(d):
     db = os.path.join(d, "harness.db")
-    CREATE.main(["--db-path", db, "--migrations-dir", os.path.join(ROOT, "managed", "migrations")])
+    # ROOT is already .../spoke/managed (2 dirname() calls from this test file),
+    # so "managed/migrations" doubled the segment into a nonexistent
+    # spoke/managed/managed/migrations. supabase/migrations is Postgres DDL
+    # (fails on SQLite with a syntax error) -- the real SQLite-compatible
+    # migrations (cg_entries/cg_fts and friends) live at the hyphenated
+    # spoke/managed/managed-migrations/ directory.
+    CREATE.main(["--db-path", db, "--migrations-dir", os.path.join(ROOT, "managed-migrations")])
     return db
 
 

@@ -63,6 +63,22 @@ def _base(spoke_root: str) -> str:
     return os.path.join(spoke_root, "WAI-Spoke")  # last-resort v3 fallback
 
 
+_wai_base = _base  # alias: matches the _wai_base(spoke) convention used elsewhere
+                    # (e.g. spoke_integrity_score.py) so callers/tests can rely on
+                    # a uniform name across the v3-noop-swept tool set.
+
+
+def _resolve_paths(spoke_root: str) -> tuple:
+    """(queue_path, state_path) for an arbitrary spoke_root -- testable entry
+    point matching QUEUE_PATH/the inline WAI-State.json join below, which both
+    call this with _spoke_root()."""
+    base = _base(spoke_root)
+    return (
+        os.path.join(base, "runtime", "activity-events-queue.jsonl"),
+        os.path.join(base, "WAI-State.json"),
+    )
+
+
 _BASE      = _base(_spoke_root())
 QUEUE_PATH = os.path.join(_BASE, "runtime/activity-events-queue.jsonl")
 

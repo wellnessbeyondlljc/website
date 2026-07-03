@@ -11,8 +11,15 @@ The gate under test is the deterministic tools/validate_savepoint.py
 """
 import importlib.util
 import os
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ROOT (WAI-Harness/spoke/managed) is correct for _load()'s tools/ lookup below,
+# but resolve_capture()/_lug_dirs() need the actual REPO root (they call
+# wai_paths.category(spoke_root, "lugs"), which checks for a "WAI-Harness"
+# child dir -- passing ROOT itself always failed to resolve any real lug,
+# masking every test that exercises a genuinely-captured deferred item).
+SPOKE_ROOT = str(Path(ROOT).parents[2])
 
 
 def _load(mod):
@@ -72,14 +79,14 @@ def _complete_savepoint():
 
 
 def test_complete_savepoint_passes():
-    r = VS.validate_resume_contract(_complete_savepoint(), spoke_root=ROOT)
+    r = VS.validate_resume_contract(_complete_savepoint(), spoke_root=SPOKE_ROOT)
     assert r["ok"], r["failures"]
 
 
 def test_thin_savepoint_rejected():
     """vt-thin-rejected: a one-line work_done + empty first_actions fails."""
     sp = {"work_done": "did some stuff", "first_actions": [], "paper_trail": {}}
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("first_actions empty" in f for f in r["failures"])
     assert any("work_done" in f for f in r["failures"])
@@ -89,18 +96,18 @@ def test_deferred_requires_capture():
     """vt-deferred-capture: a non-resolving where_captured fails; a real one passes."""
     sp = _complete_savepoint()
     sp["deferred"][0]["where_captured"] = "lug-does-not-exist-anywhere-v9"
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("does not resolve" in f for f in r["failures"])
 
     sp["deferred"][0]["where_captured"] = "spec-capabilitiesgraph-v1"  # exists in repo
-    assert VS.validate_resume_contract(sp, spoke_root=ROOT)["ok"]
+    assert VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)["ok"]
 
 
 def test_deferred_missing_capture():
     sp = _complete_savepoint()
     del sp["deferred"][0]["where_captured"]
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("LOST item" in f for f in r["failures"])
 
@@ -109,7 +116,7 @@ def test_handoff_needs_fallback():
     """vt-handoff-fallback: a handoff missing fallback_if_not_done fails."""
     sp = _complete_savepoint()
     del sp["pending_handoffs"][0]["fallback_if_not_done"]
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("fallback_if_not_done" in f for f in r["failures"])
 
@@ -117,7 +124,7 @@ def test_handoff_needs_fallback():
 def test_handoff_needs_verify():
     sp = _complete_savepoint()
     del sp["pending_handoffs"][0]["how_to_verify"]
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("how_to_verify" in f for f in r["failures"])
 
@@ -127,20 +134,20 @@ def test_unverified_needs_flag():
     sp = _complete_savepoint()
     sp["work_done"].append({"what": "edited a thing", "evidence": "?", "verified": False})
     sp["honest_flags"] = []
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("probably done" in f for f in r["failures"])
 
     # with a matching honest_flag it passes
     sp["honest_flags"] = [{"flag": "edit unverified", "why_it_matters": "x", "where_recorded": None}]
-    assert VS.validate_resume_contract(sp, spoke_root=ROOT)["ok"]
+    assert VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)["ok"]
 
 
 def test_paper_trail_nonempty():
     """vt-nonempty-paper-trail: topics=[] for a lug-touching session fails."""
     sp = _complete_savepoint()
     sp["paper_trail"]["topics"] = []
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("topics empty" in f for f in r["failures"])
 
@@ -150,14 +157,14 @@ def test_paper_trail_empty_session_ok():
     sp = _complete_savepoint()
     sp["paper_trail"] = {"lugs_completed": [], "lugs_opened": [], "lugs_in_flight": [],
                          "topics": [], "decisions": []}
-    assert VS.validate_resume_contract(sp, spoke_root=ROOT)["ok"]
+    assert VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)["ok"]
 
 
 def test_no_resume_char_cap():
     """vt-no-60-cap: a 200-char first action is accepted (v3 cap removed)."""
     sp = _complete_savepoint()
     sp["first_actions"][0]["action"] = "x" * 200
-    assert VS.validate_resume_contract(sp, spoke_root=ROOT)["ok"]
+    assert VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)["ok"]
 
 
 def test_handfeed_regression_structural():
@@ -166,7 +173,7 @@ def test_handfeed_regression_structural():
     agent has every input the user had to hand-feed. The attested end-to-end (a subagent
     asking zero questions) is recorded in the impl lug as an attested-tier check."""
     sp = _complete_savepoint()
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert r["ok"], r["failures"]
     assert sp["pending_handoffs"], "S45 needed the pending handoff present"
     assert sp["deferred"], "S45 needed the deferred item present"
@@ -177,7 +184,7 @@ def test_missing_workspace_fails():
     """Hardened S45: a savepoint must say WHERE to work (framework vs mywheel)."""
     sp = _complete_savepoint()
     del sp["workspace"]
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not r["ok"]
     assert any("workspace missing" in f for f in r["failures"])
 
@@ -186,7 +193,7 @@ def test_decision_fork_in_first_action_warns():
     """first_actions[0] must be DECIDED, not a fork — warned, not failed."""
     sp = _complete_savepoint()
     sp["first_actions"][0]["action"] = "Pick the hub Postgres tier OR the dashboard, then build it"
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert r["ok"], "a fork warns but does not block"
     assert any("decision/fork" in w for w in r["warnings"])
 
@@ -194,7 +201,7 @@ def test_decision_fork_in_first_action_warns():
 def test_missing_inbox_snapshot_warns():
     sp = _complete_savepoint()
     del sp["inbox_snapshot"]
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert r["ok"]
     assert any("inbox_snapshot" in w for w in r["warnings"])
 
@@ -202,15 +209,15 @@ def test_missing_inbox_snapshot_warns():
 def test_decided_first_action_no_warning():
     sp = _complete_savepoint()
     sp["first_actions"][0]["action"] = "Build tools/reconcile_epic_acs.py per its lug, test-at-birth"
-    r = VS.validate_resume_contract(sp, spoke_root=ROOT)
+    r = VS.validate_resume_contract(sp, spoke_root=SPOKE_ROOT)
     assert not any("decision/fork" in w for w in r["warnings"])
 
 
 def test_resolve_capture_path_and_lug():
-    assert VS.resolve_capture("spec-lug-schema-v4-v1", spoke_root=ROOT)
-    assert VS.resolve_capture("CLAUDE.md", spoke_root=ROOT)
-    assert not VS.resolve_capture("totally-made-up-id-zzz", spoke_root=ROOT)
-    assert not VS.resolve_capture("", spoke_root=ROOT)
+    assert VS.resolve_capture("spec-lug-schema-v4-v1", spoke_root=SPOKE_ROOT)
+    assert VS.resolve_capture("CLAUDE.md", spoke_root=SPOKE_ROOT)
+    assert not VS.resolve_capture("totally-made-up-id-zzz", spoke_root=SPOKE_ROOT)
+    assert not VS.resolve_capture("", spoke_root=SPOKE_ROOT)
 
 
 def test_resolve_capture_v4_only_isolates_to_v4_tree(tmp_path, monkeypatch):

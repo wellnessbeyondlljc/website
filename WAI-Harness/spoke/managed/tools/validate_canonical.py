@@ -30,6 +30,8 @@ import sys
 from pathlib import Path
 
 SPEC_REL = "lugs/bytype/spec/active/spec-canonical-object-contract-v1.json"
+# Canonical distribution path (Basher puts it here; takes precedence over local copy)
+MANAGED_SPEC_FROM_ROOT = "WAI-Harness/spoke/managed/knowledge/spec/active/spec-canonical-object-contract-v1.json"
 OPEN_STATUSES = {"open", "o"}
 INPROGRESS_STATUSES = {"in-progress", "in_progress", "p"}
 DONE_STATUSES = {"closed", "resolved", "c", "done", "completed"}
@@ -61,10 +63,37 @@ def _load_json(path):
         return None
 
 
+# Path of the canonical contract spec RELATIVE to the lugs root (resolved per-mode).
+# Restores a v3-noop-sweep function pair (_lugs_root/_spec_path) that shipped in
+# f7842fa but was lost from this file's ancestry in a later merge -- re-applied
+# here rather than invented; SPEC_SUFFIX/behavior match the original exactly.
+SPEC_SUFFIX = SPEC_REL[len("lugs/"):]
+
+
+def _lugs_root(spoke):
+    """v4-aware lugs root (WAI-Harness/spoke/local/lugs in v4; WAI-Spoke/lugs in v3
+    fallback). spoke may be a raw spoke_path OR an already-resolved base; _base()
+    is idempotent (short-circuits when p.name is already "WAI-Spoke"/"local")."""
+    return _base(spoke) / "lugs"
+
+
+def _spec_path(spoke):
+    """Absolute path of the canonical contract spec for the active harness."""
+    return _lugs_root(spoke) / SPEC_SUFFIX
+
+
 def _all_lug_ids(spoke):
-    """Every lug id known to the spoke (any type/status) — for cross-link resolution."""
+    """Every lug id known to the spoke (any type/status) — for cross-link resolution.
+
+    Accepts either a raw spoke_root (str/Path) or an already-resolved working
+    base -- _lugs_root()/_base() are idempotent on an already-resolved base
+    (short-circuit when p.name is "WAI-Spoke"/"local"), so this is safe for
+    run()'s existing base-argument callers AND a raw spoke_root passed
+    directly (was previously str-only-unsafe: `spoke / "lugs"` crashed with
+    TypeError when spoke was a plain string, e.g. called directly by a test
+    instead of through run())."""
     ids = set()
-    for f in (spoke / "lugs").rglob("*.json"):
+    for f in _lugs_root(spoke).rglob("*.json"):
         d = _load_json(f)
         if isinstance(d, dict):
             lid = d.get("id") or d.get("i")
@@ -75,7 +104,7 @@ def _all_lug_ids(spoke):
 
 def _active_spec_ids(spoke):
     ids = set()
-    for f in (spoke / "lugs/bytype/spec/active").glob("*.json"):
+    for f in (_lugs_root(spoke) / "bytype" / "spec" / "active").glob("*.json"):
         d = _load_json(f)
         if isinstance(d, dict) and d.get("id"):
             ids.add(d["id"])
@@ -286,11 +315,13 @@ def validate_spec(path, spec):
 def run(spoke):
     spoke_root = Path(spoke).resolve()
     base = _base(spoke_root)  # working base (v4: WAI-Harness/spoke/local), base-aware
-    contract = _load_json(base / SPEC_REL)
+    # Canonical managed location (Basher distributes here) takes precedence over local lugs copy
+    contract = (_load_json(spoke_root / MANAGED_SPEC_FROM_ROOT) or
+                _load_json(base / SPEC_REL))
     if not contract:
-        return [{"object": "<contract>", "path": SPEC_REL, "dimension": "behavior",
+        return [{"object": "<contract>", "path": MANAGED_SPEC_FROM_ROOT, "dimension": "behavior",
                  "rule": "contract_present", "severity": "error",
-                 "detail": "canonical contract spec not found"}], 0
+                 "detail": "canonical contract spec not found — expected at WAI-Harness/spoke/managed/knowledge/spec/active/"}], 0
     lug_rules = contract.get("contract", {}).get("lug", {})
     lug_ids = _all_lug_ids(base)
     spec_ids = _active_spec_ids(base)
@@ -341,8 +372,11 @@ def main():
     warns = [v for v in violations if v["severity"] == "warn"]
 
     if args.json:
-        print(json.dumps({"checked": checked, "errors": len(errors),
-                          "warnings": len(warns), "violations": violations}, indent=2))
+        out = {"checked": checked, "errors": len(errors),
+               "warnings": len(warns), "violations": violations}
+        if checked == 0 and not errors:
+            out["status"] = "unverified"
+        print(json.dumps(out, indent=2))
     else:
         print(f"Canonical validation: {checked} objects checked, "
               f"{len(errors)} error(s), {len(warns)} warning(s)")

@@ -204,7 +204,12 @@ def test_wakeup_surface_ac_drift(tmp_path):
     gwb = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gwb)
     assert hasattr(gwb, "read_ac_drift")
-    assert gwb.read_ac_drift(spoke) == drift
+    # now must be pinned to match rec.read_ac_drift's call above -- the
+    # underlying freshness classification (evidence_for/_test_fresh) is
+    # genuinely time-dependent, so calling without now=NOW compares against
+    # real wall-clock time and drifts out of sync with the fixture as real
+    # time moves away from NOW.
+    assert gwb.read_ac_drift(spoke, now=NOW) == drift
 
 
 def test_closeout_gate_blocks_on_drift(tmp_path):

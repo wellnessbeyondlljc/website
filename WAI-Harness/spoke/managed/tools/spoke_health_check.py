@@ -31,6 +31,7 @@ from tools.wai_validate import (
     validate_skill_entry,
     validate_wai_state,
 )
+from tools import critical_paths_gate as _cpg
 
 
 class Check:
@@ -216,6 +217,44 @@ def check_stale_files(report: HealthReport, wai_spoke: Path):
         report.add("stale-lugs-active", cat, "FAIL", "lugs/active/ exists (retired — use bytype/)")
     else:
         report.add("stale-lugs-active", cat, "PASS", "lugs/active/ correctly absent")
+
+
+def check_critical_paths_gate(report: HealthReport, wai_spoke: Path):
+    """Category: WHEEL RULE (Mario, 2026-07-01) — a spoke may not close/converge
+    without proving its critical paths via a REAL gate (tests/critical_paths.sh).
+    Cheap, read-only: reports presence + the last recorded check result (written
+    by tools/critical_paths_gate.py check, run at closeout/converge) — does NOT
+    re-run the gate itself, so this stays wakeup-weight."""
+    cat = "critical-paths-gate"
+    project_root = wai_spoke.parent
+    st = _cpg.status(str(project_root), base=str(wai_spoke))
+
+    if not st["present"]:
+        report.add("gate-presence", cat, "FAIL",
+                   "tests/critical_paths.sh not adopted yet — run "
+                   "`critical_paths_gate.py scaffold` (WHEEL RULE 2026-07-01; "
+                   "reference: pathfinder's tests/critical_paths.sh)")
+        return
+
+    report.add("gate-presence", cat, "PASS", "tests/critical_paths.sh present")
+
+    last = st["last_result"]
+    if not last:
+        report.add("gate-last-result", cat, "WARN",
+                   "gate present but never recorded a run — closeout/converge will "
+                   "record one on next run")
+        return
+
+    status_val = last.get("status")
+    checked_at = last.get("checked_at", "unknown")
+    if status_val == "green":
+        report.add("gate-last-result", cat, "PASS", f"last run GREEN at {checked_at}")
+    elif status_val == "RED":
+        report.add("gate-last-result", cat, "FAIL",
+                   f"last run RED at {checked_at} — {last.get('detail', '')} "
+                   f"(closeout/converge HARD-BLOCK until green)")
+    else:
+        report.add("gate-last-result", cat, "WARN", f"unexpected last status '{status_val}' at {checked_at}")
 
 
 def check_skill_registry(report: HealthReport, wai_spoke: Path):
@@ -600,6 +639,7 @@ def run_health_check(spoke_path: str, mode: str = "full") -> HealthReport:
     # Always run: structure, stale files, skill registry
     check_structure(report, wai_spoke)
     check_stale_files(report, wai_spoke)
+    check_critical_paths_gate(report, wai_spoke)
     check_skill_registry(report, wai_spoke)
 
     # Always run: CC hook configuration

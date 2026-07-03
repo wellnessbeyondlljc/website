@@ -29,6 +29,15 @@ v3/v4 data tree via harness_mode.sh and exports WAI_TRACK_PATH / WAI_RUNTIME_DIR
 WAI_BASE_DIR. The track, cursor, provider_usage, session-guard, and autosave all write
 under that resolved tree (WAI-Spoke/ in v3, WAI-Harness/spoke/local/ in v4). When the
 env is unset (direct invocation) every helper falls back to the legacy v3 layout.
+
+Embedded enrichment (opt-in, WAI_TRACK_ENRICH=1):
+    When WAI_TRACK_ENRICH=1 is set, each turn entry is enriched with `insight`
+    (a dense session-aware paragraph) and `open` (unresolved user-requested work)
+    via a gated embedded `claude --print` call using the enrichment addendum from
+    the spoke's reference dir. The enrichment is a single-writer RMW applied before
+    the entry is appended to track.jsonl, so the CSRP lane heartbeat is never raced.
+    The addendum is authored in track-prompt-lab and distributed via
+    track_prompt_publish.py -> track_prompt_spoke_sync.py (fleet-wide).
 """
 import json
 import os
@@ -36,6 +45,119 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+
+_ADDENDUM_FILENAME = "track-prompt-enrichment-addendum.md"
+
+
+def _find_addendum(project_dir: str) -> "Path | None":
+    """Locate the enrichment addendum file. Checks harness-resolved dirs first (v4),
+    then v3 fallback. Returns None if not found."""
+    base = os.environ.get("WAI_BASE_DIR", "")
+    candidates = []
+    if base:
+        candidates.append(Path(base) / "reference" / _ADDENDUM_FILENAME)
+    root = Path(project_dir)
+    candidates.append(root / "WAI-Harness" / "spoke" / "local" / "reference" / _ADDENDUM_FILENAME)
+    candidates.append(root / "WAI-Spoke" / "reference" / _ADDENDUM_FILENAME)
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def _load_initiative_index(project_dir: str) -> list:
+    """Load a compact [{id, label}] list from the spoke's initiative index, or []."""
+    base = os.environ.get("WAI_BASE_DIR", "")
+    candidates = []
+    if base:
+        candidates.append(Path(base) / "initiatives" / "index.json")
+    root = Path(project_dir)
+    candidates.append(root / "WAI-Harness" / "spoke" / "local" / "initiatives" / "index.json")
+    candidates.append(root / "WAI-Spoke" / "initiatives" / "index.json")
+    for c in candidates:
+        if c.exists():
+            try:
+                raw = json.loads(c.read_text())
+                items = raw.get("initiatives", raw) if isinstance(raw, dict) else raw
+                return [
+                    {"id": i.get("id"), "label": i.get("label")}
+                    for i in (items if isinstance(items, list) else [])
+                    if isinstance(i, dict)
+                ]
+            except Exception:
+                pass
+    return []
+
+
+def _enrich_turn(track_path: "Path", project_dir: str, turn_entry: dict) -> dict:
+    """Enrich a turn entry with `insight` + `open` via an embedded claude --print call.
+
+    Gated to WAI_TRACK_ENRICH=1 — off by default so interactive Stop-hook fires never
+    spawn a per-turn claude subprocess. Ozi or other headless callers set this to activate.
+    Returns a dict with `insight` and/or `open` keys, or {} on any failure.
+
+    Single-writer contract: the caller must merge the returned fields INTO the entry
+    BEFORE writing to track.jsonl. This function is read-only (never writes the track).
+    """
+    if os.environ.get("WAI_TRACK_ENRICH") != "1":
+        return {}
+    try:
+        addendum_path = _find_addendum(project_dir)
+        if addendum_path is None:
+            return {}
+
+        addendum = addendum_path.read_text(encoding="utf-8")
+
+        # Last 20 turn entries as session context (bound cost).
+        session_history: list = []
+        try:
+            all_rows = _load_jsonl(track_path)
+            session_history = [r for r in all_rows if r.get("event") == "turn"][-20:]
+        except Exception:
+            pass
+
+        initiative_index = _load_initiative_index(project_dir)
+
+        context = {
+            "session_history": session_history,
+            "current_turn": turn_entry,
+            "initiative_index": initiative_index,
+        }
+        prompt = addendum + "\n\n--- CONTEXT:\n" + json.dumps(context, separators=(",", ":"))
+
+        result = subprocess.run(
+            ["claude", "--print", "--no-interactive", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=project_dir,
+        )
+        if result.returncode != 0:
+            return {}
+
+        output = result.stdout.strip()
+        start = output.find("{")
+        end = output.rfind("}") + 1
+        if start < 0 or end <= start:
+            return {}
+
+        enrichment = json.loads(output[start:end])
+        out: dict = {}
+        if enrichment.get("insight"):
+            out["insight"] = str(enrichment["insight"])
+        if enrichment.get("open") is not None:
+            out["open"] = enrichment["open"]
+        return out
+    except Exception:
+        return {}
+
+
+def _apply_enrichment(entry: dict, enrichment: dict) -> None:
+    """Merge enrichment fields into entry, only filling missing/empty values."""
+    for key in ("insight", "open"):
+        if key in enrichment and not entry.get(key):
+            entry[key] = enrichment[key]
 
 
 def _runtime_dir(project_dir):
@@ -79,6 +201,50 @@ def _load_jsonl(path):
 def _is_typed_user(entry):
     """Genuine user turn boundary: type==user AND promptSource=='typed'."""
     return entry.get("type") == "user" and entry.get("promptSource") == "typed"
+
+
+def _is_sdk_user(entry):
+    """Headless turn boundary: a user entry from an SDK / headless invocation
+    (promptSource=='sdk'). Herald responders and any `claude -p` one-shot land here."""
+    return entry.get("type") == "user" and entry.get("promptSource") == "sdk"
+
+
+def _session_entrypoint(rows):
+    """The session's entrypoint marker ('sdk-cli', 'cli', ...) — first non-empty wins."""
+    for e in rows:
+        ep = e.get("entrypoint")
+        if ep:
+            return ep
+    return ""
+
+
+def _is_headless_session(rows):
+    """True when the session was launched headless (SDK / `claude -p`), never as an
+    interactive TTY. Discriminator: an 'sdk*' entrypoint is present and no 'cli'
+    entrypoint is. These sessions have no typed turns, so without a dedicated record
+    they leave a 0-byte phantom track that later reads as INTERRUPTED."""
+    eps = {e.get("entrypoint") for e in rows if e.get("entrypoint")}
+    if not eps:
+        return False
+    if "cli" in eps:
+        return False
+    return any(ep and ep.startswith("sdk") for ep in eps)
+
+
+def _sdk_initiator(user_text):
+    """Best-effort label for WHAT headless tool initiated the session, parsed from the
+    first sdk prompt. Recognizes known callers (herald); else a slugged lead token.
+    This is the provenance handle that lets a headless run's changes trace back to a
+    record (every session must minimally record who called it)."""
+    head = (user_text or "").strip()
+    low = head.lower()
+    for known in ("herald", "expediter", "autopilot", "tender", "ozi"):
+        if known in low[:160]:
+            return known
+    m = re.match(r"\s*\[?\s*([A-Za-z][\w\- ]{2,40})", head)
+    if m:
+        return re.sub(r"\s+", "-", m.group(1).strip().lower())
+    return "sdk"
 
 
 def _text_of(content):
@@ -426,6 +592,8 @@ def live(state_path, transcript_path, project_dir, buffer_was_present):
                         for field in ("model", "input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens"):
                             if not last.get(field):
                                 last[field] = synth.get(field)
+                        # Enrich model-authored entry with insight/open if missing.
+                        _apply_enrichment(last, _enrich_turn(track, project_dir, last))
                         lines[-1] = json.dumps(last)
                         track.write_text("\n".join(lines) + "\n")
                         _append_provider_usage(project_dir, synth)
@@ -450,8 +618,18 @@ def live(state_path, transcript_path, project_dir, buffer_was_present):
     # dedup is. (bug-live-track-capture-nonfunctional-20260619: Layer-2 floor must never depend
     # on the model writing a buffer, and must recover any turns a missed fire left behind.)
     starts = [i for i, e in enumerate(rows) if _is_typed_user(e)]
+    headless = False
     if not starts:
-        return
+        # No typed turns. If this is a headless (SDK / `claude -p`) session, capture its
+        # turn(s) as an sdk_session record so the track is never a 0-byte phantom AND the
+        # run's changes trace back to the initiating tool. Interactive sessions with no
+        # typed turn (truly nothing to record) still return.
+        if _is_headless_session(rows):
+            starts = [i for i, e in enumerate(rows) if _is_sdk_user(e)]
+            headless = True
+        if not starts:
+            return
+    entrypoint = _session_entrypoint(rows) if headless else ""
     bounds = starts + [len(rows)]
     seen = {r.get("user_uuid") for r in _load_jsonl(track) if r.get("user_uuid")}
     turn_no = _existing_turn_count(track)
@@ -466,16 +644,37 @@ def live(state_path, transcript_path, project_dir, buffer_was_present):
         if not _has_meaning(entry):
             turn_no -= 1
             continue
-        correction = _detect_correction(entry.get("user_intent", ""), prior_assistant)
+        if headless:
+            # Tag as a headless record with provenance. event != "turn" so wakeup's
+            # INTERRUPTED-detection treats it as terminal (HEADLESS), not a crash.
+            entry["event"] = "sdk_session"
+            entry["source"] = "sdk-synth"
+            entry["headless"] = True
+            entry["entrypoint"] = entrypoint
+            entry["initiator"] = _sdk_initiator(entry.get("user_intent", ""))
+            correction = None
+        else:
+            correction = _detect_correction(entry.get("user_intent", ""), prior_assistant)
         to_write.append((entry, correction))
         prior_assistant = entry.get("assistant_text", "") or prior_assistant
     if not to_write:
         return
 
     # Git enrichment only on the newest entry (bounded cost; older turns' spans are noise).
-    git = _git_info(project_dir, last_sha)
-    to_write[-1][0]["commits_since_last"] = git["commits_since_last"]
-    to_write[-1][0]["files_changed"] = git["files_changed"]
+    # Skip for headless records: the repo delta since the cursor is misleading there (it is
+    # NOT what the one-shot did) — files_touched/tools_used are the accurate provenance of
+    # what a headless run changed.
+    if not headless:
+        git = _git_info(project_dir, last_sha)
+        to_write[-1][0]["commits_since_last"] = git["commits_since_last"]
+        to_write[-1][0]["files_changed"] = git["files_changed"]
+
+    # Embedded enrichment (WAI_TRACK_ENRICH=1): patch insight+open onto each entry
+    # before writing. Only the most recent turn of a run is enriched (bounded cost).
+    # Non-headless session turns with no existing insight are the primary target.
+    if not headless and to_write:
+        last_entry = to_write[-1][0]
+        _apply_enrichment(last_entry, _enrich_turn(track, project_dir, last_entry))
 
     with track.open("a") as f:
         for entry, correction in to_write:

@@ -237,7 +237,14 @@ def status(base, session_id, repo=".", active_window=ACTIVE_WINDOW_S):
 # ── unified-tree re-verification (the gate the operator demanded) ───────────
 
 def _detect_test_cmd(repo):
-    """The closeout-style test gate: prefer an explicit harness test dir."""
+    """The closeout-style test gate. WHEEL RULE (Mario, 2026-07-01): a spoke's
+    tests/critical_paths.sh, when present, IS the gate — it takes priority over
+    generic pytest-dir detection (reference implementation: pathfinder's
+    tests/critical_paths.sh, 81 real deterministic tests). Falls back to an
+    explicit harness test dir when the spoke hasn't adopted the gate yet."""
+    cp = os.path.join(repo, "tests", "critical_paths.sh")
+    if os.path.isfile(cp):
+        return ["bash", cp]
     for rel in ("WAI-Harness/spoke/managed/tests", "tests"):
         if os.path.isdir(os.path.join(repo, rel)):
             return [sys.executable, "-m", "pytest", rel, "-q", "-p", "no:cacheprovider"]

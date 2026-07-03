@@ -25,6 +25,89 @@ _UPS_SID=$(printf '%s' "$_UPS_INPUT" | python3 -c "import json,sys; print(json.l
 _UPS_TRANSCRIPT=$(printf '%s' "$_UPS_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
 [[ -z "$_UPS_SID" && -n "$_UPS_TRANSCRIPT" ]] && _UPS_SID=$(basename "$_UPS_TRANSCRIPT" .jsonl)
 
+# ── Mid-session inbox notify (impl-basher-mid-session-inbox-notify-v1) ────────
+# Surface lugs that land in lugs/incoming/ DURING a live session so routed-in work
+# gets near-real-time action instead of waiting for the next wakeup. Cheap (listdir +
+# a per-session marker under runtime/, gitignored). First prompt baselines the existing
+# backlog (already shown by the wakeup brief) WITHOUT announcing; thereafter each new
+# arrival is announced exactly once. Silent when nothing new.
+_INBOX_DIR="$BASE/lugs/incoming"
+if [[ -d "$_INBOX_DIR" ]]; then
+  _INBOX_MARK="$RUNTIME_DIR/incoming-seen-${_UPS_SID:-nosid}.txt"
+  if [[ ! -f "$_INBOX_MARK" ]]; then
+    mkdir -p "$RUNTIME_DIR" 2>/dev/null
+    ls "$_INBOX_DIR"/*.json 2>/dev/null | xargs -n1 basename 2>/dev/null > "$_INBOX_MARK" || : > "$_INBOX_MARK"
+  else
+    _INBOX_NEW=""
+    for _ilf in "$_INBOX_DIR"/*.json; do
+      [[ -f "$_ilf" ]] || continue
+      _ibn=$(basename "$_ilf")
+      grep -qxF "$_ibn" "$_INBOX_MARK" 2>/dev/null && continue
+      _iid=$(jq -r '.id // ""' "$_ilf" 2>/dev/null)
+      _ititle=$(jq -r '.title // ""' "$_ilf" 2>/dev/null | head -c 80)
+      _ifrom=$(jq -r '.source_wheel_id // .from // .source_spoke // "?"' "$_ilf" 2>/dev/null)
+      _INBOX_NEW="${_INBOX_NEW}\n  • [${_ifrom}] ${_iid}: ${_ititle}"
+      echo "$_ibn" >> "$_INBOX_MARK"
+    done
+    if [[ -n "$_INBOX_NEW" ]]; then
+      printf '<wai-inbox-notify>\n📥 New lug(s) arrived in incoming/ this session — triage when ready:%b\n</wai-inbox-notify>\n' "$_INBOX_NEW"
+    fi
+  fi
+fi
+
+# (1a) WAI Track per-turn ritual engine (spec-wai-track-collection-v2.0.2). DURABLE trigger:
+# injected EVERY turn (not model memory — the proven-failing design) so BOTH rituals fire:
+#   (i)  the model-authored rich track entry (Layer-1 = the "full-feature" file), and
+#   (ii) the mandatory v2.0.2 statusline.
+# The hook resolves the values that must be REAL and never guessed — turn number (lane guard
+# turn_count + 1 = this turn, == the track turn-event count), wall-clock in America/Los_Angeles
+# (SI1: clock is hook-supplied, never fabricated by the model), and the live model id from the
+# transcript — and leaves the model only what it alone knows: the field content + this turn's
+# Gold count. tz uses %Z (PDT/PST), never hardcoded.
+if [[ -n "$_UPS_SID" ]]; then
+  _TR_GUARD="$BASE/runtime/lanes/$_UPS_SID/session-guard.json"
+  _TR_TC=$(python3 -c "import json;print(json.load(open('$_TR_GUARD')).get('turn_count',0))" 2>/dev/null || echo 0)
+  [[ "$_TR_TC" =~ ^[0-9]+$ ]] || _TR_TC=0
+  _TR_N=$(( _TR_TC + 1 ))
+  _TR_DATE=$(TZ=America/Los_Angeles date '+%a, %b %-d, %Y' 2>/dev/null)
+  _TR_TIME=$(TZ=America/Los_Angeles date '+%-I:%M %p %Z' 2>/dev/null)
+  # Live model id from the transcript's last assistant message; fall back to state, then a
+  # placeholder the model fills from its own system context.
+  _TR_MODEL=$(python3 -c "
+import json,sys
+m=''
+try:
+    for l in open('$_UPS_TRANSCRIPT'):
+        try: d=json.loads(l)
+        except Exception: continue
+        if d.get('type')=='assistant':
+            mm=(d.get('message') or {}).get('model')
+            if mm: m=mm
+except Exception: pass
+print(m)" 2>/dev/null)
+  [[ -z "$_TR_MODEL" ]] && _TR_MODEL=$(python3 -c "import json;print(json.load(open('$STATE_FILE')).get('_session_state',{}).get('ai_id','') or '')" 2>/dev/null)
+  [[ -z "$_TR_MODEL" ]] && _TR_MODEL="<your-model-id>"
+  if [[ "$MODE" == v4 ]]; then _TR_BUF="WAI-Harness/spoke/local/runtime/track-buffer.json"; else _TR_BUF="WAI-Spoke/runtime/track-buffer.json"; fi
+  _TR_SL="Turn ${_TR_N} | ${_TR_DATE} | ${_TR_TIME} | ${_TR_MODEL} | Gold: +{count}"
+  printf '%s\n' "<wai-track-turn>"
+  printf '%s\n' "WAI Track v2.0.2 per-turn obligations (an INSTRUCTION to act on, not a message to acknowledge):"
+  printf '%s\n' "1. RICH ENTRY (Layer-1, full-feature): before your statusline, write ${_TR_BUF} as ONE JSON object."
+  printf '%s\n' "   Envelope: {\"event\":\"turn\",\"turn\":${_TR_N},\"source\":\"model\",\"ts\":\"<iso8601>\",\"ts_source\":\"system_clock\"}"
+  printf '%s\n' "   REQUIRED every turn (never omit): user_msg (verbatim <=500c), user_intent, action, outcome,"
+  printf '%s\n' "   thinking (3-8 sentences: why/tradeoffs/what-was-rejected), focus (one line), phase."
+  printf '%s\n' "   Soft-required unless empty this turn: decisions, insights, open. History is append-only."
+  printf '%s\n' "   INSIGHT CONTRACT (feeds the lens insights view [s], place-awareness): make insights a look-BACK over the WHOLE"
+  printf '%s\n' "   session so far, reconciling loose threads into one ACTIONABLE read for this turn; open = work the user"
+  printf '%s\n' "   requested that is not yet verified or completed. As verbose as possible WHILE brief: dense and skimmable,"
+  printf '%s\n' "   so the reader gets place-awareness here and opens chat for full detail."
+  printf '%s\n' "2. STATUSLINE (mandatory, NON-WAIVABLE — the LAST line of your response, even on a question/options"
+  printf '%s\n' "   list and even if the user says 'no footer'). Emit EXACTLY, replacing {count} with the number of"
+  printf '%s\n' "   durable Gold (project/identity-defining) entries you added this turn (0 if none):"
+  printf '%s\n' "${_TR_SL}"
+  printf '%s\n' "Omit BOTH only in plan mode."
+  printf '%s\n' "</wai-track-turn>"
+fi
+
 # (1) CSRP AC4 — per-turn lane heartbeat (throttled ~5min via marker; fails silent).
 if [[ -n "$_UPS_SID" ]]; then
   _HBM="$BASE/runtime/lanes/$_UPS_SID/.hb"
@@ -61,114 +144,27 @@ POST_COMPACT=false
 if [[ -f "$COMPACT_FLAG" ]]; then POST_COMPACT=true; rm -f "$COMPACT_FLAG"; fi
 export POST_COMPACT
 
-# (3) Herald completion-kick -- auto-reconcile incoming completion lugs.
-# Runs every turn (not guarded by GUARD_COMPLETED) so completions surface promptly.
-_KICK_CTX=""
-if [[ "$MODE" == "v4" ]]; then
-  _HERALD="$PROJECT_DIR/WAI-Harness/spoke/managed/tools/herald_poll.py"
-  if [[ -f "$_HERALD" ]]; then
-    _KICK_JSON=$(python3 "$_HERALD" --spoke-root "$PROJECT_DIR" completion-kick 2>/dev/null || true)
-    if [[ -n "$_KICK_JSON" ]]; then
-      _KICK_CTX=$(printf '%s' "$_KICK_JSON" | python3 -c \
-        "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('context',''))" 2>/dev/null || true)
-    fi
-  fi
-fi
-export _KICK_CTX
-
-# (4) Mid-session inbox notify -- announce NEW incoming lugs (refinements, etc).
-# completion-kick handles type:completion above; this surfaces everything else once per arrival.
-# Marker: runtime/incoming-seen-<sid>.txt (gitignored, per-session).
-_INBOX_CTX=""
-if [[ "$MODE" == "v4" && -d "$BASE/lugs/incoming" ]]; then
-  export _INBOX_DIR="$BASE/lugs/incoming"
-  export _INBOX_MARKER="$RUNTIME_DIR/incoming-seen-${_UPS_SID:-default}.txt"
-  _INBOX_CTX=$(python3 - 2>/dev/null <<'PYEOF_INBOX'
-import json, os, time
-inbox_dir = os.environ.get('_INBOX_DIR', '')
-marker_path = os.environ.get('_INBOX_MARKER', '')
-if not inbox_dir or not os.path.isdir(inbox_dir):
-    raise SystemExit(0)
-last_seen = 0.0
-if os.path.exists(marker_path):
-    try:
-        last_seen = float(open(marker_path).read().strip())
-    except Exception:
-        pass
-now = time.time()
-new_lugs = []
-for fn in sorted(os.listdir(inbox_dir)):
-    if not fn.endswith('.json'):
-        continue
-    fp = os.path.join(inbox_dir, fn)
-    try:
-        mtime = os.path.getmtime(fp)
-    except OSError:
-        continue
-    if mtime <= last_seen:
-        continue
-    try:
-        lug = json.load(open(fp))
-    except Exception:
-        continue
-    if lug.get('type') == 'completion':
-        continue  # completion-kick handles these
-    new_lugs.append(lug)
-try:
-    open(marker_path, 'w').write(str(now))
-except Exception:
-    pass
-if not new_lugs:
-    raise SystemExit(0)
-lines = ['<wai-inbox-notify>',
-         f'{len(new_lugs)} new item(s) in incoming/ since last seen:']
-for lug in new_lugs:
-    lug_type = lug.get('type', '?')
-    title = (lug.get('title') or lug.get('subject') or '')[:80]
-    from_s = lug.get('source_spoke') or lug.get('from_spoke') or '?'
-    tag = (' [REFINEMENT -- answer the questions to re-fire the work]'
-           if lug_type == 'refinement' else '')
-    lines.append(f"  {lug.get('id','?')} ({lug_type}) from {from_s}: {title}{tag}")
-lines.append('</wai-inbox-notify>')
-print('\n'.join(lines))
-PYEOF_INBOX
-)
-fi
-export _INBOX_CTX
-
-# Already ran this session and no compaction, no kick context, no inbox notify -> nothing more to do
+# Already ran this session and no compaction to recover → nothing more to do
 # (the heartbeat above already fired, which is the per-turn essential).
-[[ "$GUARD_COMPLETED" == "true" && "$POST_COMPACT" == "false" && -z "$_KICK_CTX" && -z "$_INBOX_CTX" ]] && exit 0
+[[ "$GUARD_COMPLETED" == "true" && "$POST_COMPACT" == "false" ]] && exit 0
 
-# Mark protocol triggered (runtime file only -- WAI-State.json stays clean).
+# Mark protocol triggered (runtime file only — WAI-State.json stays clean).
 TMP=$(mktemp)
 jq '.protocol_completed = true | .protocol_last_run = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' "$GUARD_FILE" > "$TMP" 2>/dev/null && mv "$TMP" "$GUARD_FILE" || rm -f "$TMP"
 
-# -- v4: brief is owned by SessionStart. Inject post-compact recovery and/or kick/inbox context. --
+# ── v4: brief is owned by SessionStart. Inject ONLY post-compact recovery. ──
 if [[ "$MODE" == "v4" ]]; then
-  if [[ "$POST_COMPACT" == "true" || -n "$_KICK_CTX" || -n "$_INBOX_CTX" ]]; then
+  if [[ "$POST_COMPACT" == "true" ]]; then
     python3 - <<'PYEOF'
-import json, os
-parts = []
-if os.environ.get('POST_COMPACT') == 'true':
-    parts.append(
-        "<wai-post-compact>\n"
-        "Context compaction just occurred. Before responding to the user:\n"
-        "1. Re-read WAI-State.json (WAI-Harness/spoke/local) to restore session context.\n"
-        "2. If mid-closeout: re-read wai-closeout.md and resume from the step you were on.\n"
-        "3. Check recent track entries to understand what was in progress.\n"
-        "P1-Persist and P11-Lug-First are still active.\n"
-        "</wai-post-compact>")
-kick_ctx = os.environ.get('_KICK_CTX', '')
-if kick_ctx:
-    parts.append("<herald-completion-kick>\n" + kick_ctx + "\n</herald-completion-kick>")
-inbox_ctx = os.environ.get('_INBOX_CTX', '')
-if inbox_ctx:
-    parts.append(inbox_ctx)
-ctx = "\n".join(parts)
-if ctx:
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                             "additionalContext": ctx}}))
+import json
+ctx = ("<wai-post-compact>\n"
+       "Context compaction just occurred. Before responding to the user:\n"
+       "1. Re-read WAI-State.json (WAI-Harness/spoke/local) to restore session context.\n"
+       "2. If mid-closeout: re-read wai-closeout.md and resume from the step you were on.\n"
+       "3. Check recent track entries to understand what was in progress.\n"
+       "P1-Persist and P11-Lug-First are still active.\n"
+       "</wai-post-compact>")
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": ctx}}))
 PYEOF
   fi
   exit 0

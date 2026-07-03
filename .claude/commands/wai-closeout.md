@@ -123,6 +123,49 @@ DISRUPTION_DETAILS+="[STEP 0] Tests failed before closeout — proceeded with kn
 
 ---
 
+### 0a. Critical-Paths Gate (WHEEL RULE — Mario, 2026-07-01 — HARD BLOCK, no skip)
+
+A spoke may not close out without proving its critical paths still work via a REAL,
+deterministic gate — no fakes, no "proceed anyway." Reference implementation:
+pathfinder's `tests/critical_paths.sh` (81 real deterministic tests, green). This
+is a **separate, stricter** gate than Step 0 above: Step 0 runs whatever generic
+test suite matches changed file extensions and offers Fix/Proceed/Abort; this step
+enforces the ONE specific mission-critical-path gate the wheel rule requires, and
+red here has **no Proceed option**.
+
+```bash
+python3 {TOOLS}/critical_paths_gate.py check --repo . --base {BASE} --json
+```
+
+Read the JSON:
+
+- `present: false` — this spoke has not adopted the gate yet. **Do not block.**
+  Scaffold it now so the gap is never silent (NO FAKES — the stub fails until
+  real tests replace it):
+  ```bash
+  python3 {TOOLS}/critical_paths_gate.py scaffold --repo .
+  ```
+  Note in the session summary: "critical-paths gate scaffolded at
+  `tests/critical_paths.sh` — intentionally RED, real tests still needed."
+  `wai-health` surfaces this every run until real tests replace the stub.
+
+  **Bootstrap obligation (same closeout):** "Do not block" means don't
+  hard-stop at *this* step — it does NOT exempt the stub from Step 10i.
+  Step 10i re-runs the test gate (Step 0) on the merged HEAD; a RED
+  critical-paths gate blocks there just as hard. Before this closeout can
+  complete: add at least one real test so `bash tests/critical_paths.sh`
+  exits 0, re-run Step 0a, confirm `status: green`, then proceed.
+
+- `present: true`, `status: green` — proceed to Step 2.
+- `present: true`, `status: RED` — **STOP. HARD BLOCK.** Do not proceed past
+  this step, do not record a disruption-and-continue. Fix-forward until
+  `bash tests/critical_paths.sh` exits 0 (or a scoped, honest fix), then
+  re-run this step. If the failure is genuinely outside this session's reach,
+  leave the session open and escalate — a red critical-paths gate is never
+  something closeout proceeds past.
+
+---
+
 ### 2. Intent Ceremony Gate
 
 Read `{BASE}/runtime/session-intent.json` if it exists. Map `intent` to ceremony level:

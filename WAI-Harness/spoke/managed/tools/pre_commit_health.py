@@ -24,6 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools.spoke_health_check import run_health_check
+from tools import wai_paths
+from tools.lug_json_parse_gate import sweep as sweep_lug_json
 
 
 def run_security_scan(spoke_path):
@@ -71,9 +73,10 @@ def main():
     args = parser.parse_args()
     spoke_path = args.spoke_path
 
-    # Skip silently if not a WAI project
-    wai_spoke = Path(spoke_path) / "WAI-Spoke"
-    if not wai_spoke.exists():
+    # Skip silently if not a WAI project (v3 WAI-Spoke/ OR v4 WAI-Harness/, not v3-only —
+    # a v3-only check here silently no-ops this gate on every v4-only spoke, see
+    # reference-v3-lint-undercounts-broken-tools)
+    if wai_paths.detect(spoke_path)["active"] == "none":
         sys.exit(0)
 
     # Run structural health check
@@ -89,6 +92,15 @@ def main():
 
     # Run security scan on prompt surfaces
     if not run_security_scan(spoke_path):
+        sys.exit(1)
+
+    # Reject lugs with unresolved conflict markers or broken JSON before they land
+    bad_lugs = sweep_lug_json(spoke_path)
+    if bad_lugs:
+        print(f"WAI pre-commit: {len(bad_lugs)} unparseable/conflicted lug(s)")
+        for p, reason in bad_lugs:
+            print(f"  FAIL: {p} — {reason}")
+        print("Fix by re-cutting/dropping the conflicted lug — never hand-splice JSON.")
         sys.exit(1)
 
     # Healthy — exit silently for clean pre-commit experience

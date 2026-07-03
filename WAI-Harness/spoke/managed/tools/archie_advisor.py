@@ -76,6 +76,20 @@ def _as_advisor_list(data) -> list:
     return data if isinstance(data, list) else []
 
 
+# Aliases matching the various naming conventions used across this suite's
+# tests (test_v3noop_sweep_v4_paths.py vs test_archie_advisor_v4_paths.py) --
+# no behavior change, just multiple names for the same v4-aware functions.
+_advisors = _advisors_base
+_advisors_dir = _advisors_base
+_state_path = _wai_state_file
+_wai_state_path = _wai_state_file
+_advisor_entries = _as_advisor_list
+_registry_path = _registry_file
+_schedule_index_path = _schedule_index_file
+_archie_state_path = _archie_state_file
+_archie_runs_path = _archie_runs_file
+
+
 @dataclass
 class Finding:
     category: str

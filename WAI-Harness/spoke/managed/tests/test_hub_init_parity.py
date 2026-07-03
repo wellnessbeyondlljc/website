@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-HUB_PATH = Path(__file__).resolve().parents[2] / "hub"
+# harness_init.py's _seed_from_latest_hub_base reads
+# <hub_path>/teachings_repo/hub-only/base -- that payload lives at
+# WAI-Harness/hub/local/teachings_repo/hub-only/base, so hub_path must be
+# hub/local, not the bare hub root. parents[2] (spoke) was also one level
+# too shallow to reach the hub tree at all (a sibling of spoke/, not nested
+# under it) -- needs parents[3] (WAI-Harness).
+HUB_PATH = Path(__file__).resolve().parents[3] / "hub" / "local"
 TOOL = REPO / "tools" / "harness_init.py"
 
 

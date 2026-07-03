@@ -38,6 +38,24 @@ If `STEP0_CODE` non-empty: run test suite (`pytest` / `bun test` / `npm test` / 
 
 ---
 
+## Step 0a. Critical-Paths Gate (WHEEL RULE — 2026-07-01 — HARD BLOCK, never skip)
+
+Separate from Step 0 and stricter: no Proceed option. Reference implementation:
+pathfinder's `tests/critical_paths.sh` (81 real deterministic tests, green).
+
+```bash
+python3 {TOOLS}/critical_paths_gate.py check --repo . --base {BASE} --json
+```
+
+- `present: false` → not blocking; scaffold the stub so the gap isn't silent:
+  `python3 {TOOLS}/critical_paths_gate.py scaffold --repo .` (stub is
+  intentionally RED — no fakes). Note it in the session summary.
+- `status: green` → proceed.
+- `status: RED` → **STOP. HARD BLOCK.** No Fix/Proceed/Abort choice — fix-forward
+  until green, or leave the session open. Never close out on a red critical-paths gate.
+
+---
+
 ## Pre-Flight
 
 ```bash

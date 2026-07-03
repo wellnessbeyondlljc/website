@@ -65,14 +65,20 @@ class TestSpokeParityCheckV4Paths:
         spoke_root = tmp_path / "spoke"
 
         hub_root_v3 = tmp_path / "hub_v3"
-        hub_root_v4 = tmp_path / "hub_v4"
 
-        # Both trees present
+        # Both trees present, but UNACTIVATED. wai_paths._v4_activated() treats
+        # either a .activated marker OR a real v4 WAI-State.json as an explicit
+        # v4-cutover signal (mirrors .claude/hooks/harness_mode.sh) -- writing a
+        # real v4 WAI-State.json here (as this test used to) IS itself the
+        # activation trigger, so the fixture was accidentally testing an
+        # ALREADY-ACTIVATED spoke while claiming to test an unactivated one.
+        # Create only the v4 directory structure (so has_v4=True) with no
+        # WAI-State.json in it, to represent a genuinely unactivated coexist.
         v3_state = spoke_root / "WAI-Spoke" / "WAI-State.json"
-        v4_state = spoke_root / "WAI-Harness" / "spoke" / "local" / "WAI-State.json"
+        v4_dir = spoke_root / "WAI-Harness" / "spoke" / "local"
 
         _write_state(v3_state, str(hub_root_v3))
-        _write_state(v4_state, str(hub_root_v4))
+        v4_dir.mkdir(parents=True, exist_ok=True)
 
         # Clear any lingering override
         monkeypatch.delenv("WAI_HARNESS_MODE", raising=False)

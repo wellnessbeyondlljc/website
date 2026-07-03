@@ -16,7 +16,11 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
-DEF = os.path.join(ROOT, "WAI-Spoke/lugs/outgoing/pattern-gate.md")
+# The deployed definition lives at .claude/agents/ (matches the docstring above:
+# "framework AUTHORS ... and delivers it" to that exact path). The old
+# WAI-Spoke/lugs/outgoing/pattern-gate.md path never existed in this repo's
+# history (git log -S confirms) -- this test always pointed at the wrong file.
+DEF = os.path.join(ROOT, ".claude/agents/pattern-gate.md")
 
 
 def _body():
